@@ -154,7 +154,7 @@ jobs:
           release_keystore="$RUNNER_TEMP/yunke-local-release.jks"
           release_store_password="yunke-local-store"
           release_key_alias="yunke-local"
-          release_key_password="yunke-local-key"
+          release_key_password="$release_store_password"
           keytool -genkeypair -v \
             -keystore "$release_keystore" \
             -storetype PKCS12 \
@@ -175,9 +175,9 @@ jobs:
           {
             echo "sdk.dir=$ANDROID_HOME"
             echo "RELEASE_STORE_FILE=$release_keystore"
-            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
-            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
-            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+            echo "RELEASE_STORE_PASSWORD=$release_store_password"
+            echo "RELEASE_KEY_ALIAS=$release_key_alias"
+            echo "RELEASE_KEY_PASSWORD=$release_key_password"
           } > local.properties
 
       - name: Run Gradle build and checks
