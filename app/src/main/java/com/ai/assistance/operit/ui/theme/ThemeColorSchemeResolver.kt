@@ -88,7 +88,10 @@ private val RainyLightColorScheme =
         inverseSurface = RainyDarkPanel,
         inverseOnSurface = RainyDarkText,
         outline = RainyLightBorder,
-        outlineVariant = RainyLightHover,
+        // YUNKe local patch: the divider/outline variant was the pale pink RainyLightHover
+        // (#FFD1DC), so every separator carried a pink cast. A light grey keeps the line visible
+        // without the wash.
+        outlineVariant = Color(0xFFE0E0E0),
         surfaceBright = Color.White,
         surfaceDim = Color.White,
         surfaceContainerLowest = Color.White,

@@ -8,6 +8,9 @@
         <item name="colorSecondaryVariant">@color/rainy_variant</item>
         <item name="colorOnSecondary">@color/black</item>
         <item name="android:windowBackground">@color/rainy_background</item>
+        <!-- YUNKe local patch: the splash window used to inherit the Rainy pink wash
+             (rainy_background = #FFFFF0F5), which showed as a pink flash before the first
+             Compose frame. It is plain white now, matching the light page surfaces. -->
         <!-- Declare support for drawing into the status bar / display cutout area. -->
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         <!-- Customize your theme here. -->

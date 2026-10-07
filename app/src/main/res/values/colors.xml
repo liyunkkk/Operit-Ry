@@ -8,7 +8,8 @@
     <color name="rainy_primary">#FFFF6B8E</color>
     <color name="rainy_secondary">#FFFF85A2</color>
     <color name="rainy_variant">#FFE91E63</color>
-    <color name="rainy_background">#FFFFF0F5</color>
+    <!-- YUNKe local patch: the splash window colour, white instead of the Rainy pink wash. -->
+    <color name="rainy_background">#FFFFFFFF</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>
