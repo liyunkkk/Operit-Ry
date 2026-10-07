@@ -2380,4 +2380,19 @@ class UserPreferencesManager private constructor(private val context: Context) {
             showInputProcessingStatus = booleanValue(KEY_SHOW_INPUT_PROCESSING_STATUS, true)
         )
     }
+
+    // YUNKe local patch: the first-frame theme seed. resolveThemePreferenceSnapshot() is a suspend
+    // DataStore read, and the theme composable used to fall back to hardcoded defaults while that
+    // read was still in flight, which painted the product's pink accent for one frame before the
+    // stored colour appeared. Read it once per process instead: the very first frame is already
+    // correct, and later compositions do not each pay for another disk read.
+    @Volatile private var firstFrameThemeSnapshotCache: ThemePreferenceSnapshot? = null
+
+    fun firstFrameThemeSnapshot(): ThemePreferenceSnapshot? {
+        firstFrameThemeSnapshotCache?.let { return it }
+        val resolved =
+                runBlocking { runCatching { resolveThemePreferenceSnapshot() }.getOrNull() }
+        if (resolved != null) firstFrameThemeSnapshotCache = resolved
+        return resolved
+    }
 }

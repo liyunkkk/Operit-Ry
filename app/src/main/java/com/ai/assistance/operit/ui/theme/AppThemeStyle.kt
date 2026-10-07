@@ -17,17 +17,38 @@ data class AppThemeStyle(val colorScheme: ColorScheme, val typography: Typograph
 fun rememberAppThemeStyle(): AppThemeStyle {
     val context = LocalContext.current
     val preferencesManager = remember(context) { UserPreferencesManager.getInstance(context) }
+    // YUNKe local patch: the theme used to be seeded with hardcoded defaults, so the very first
+    // frame painted the product's pink accent and the UI visibly flashed to the user's colour once
+    // DataStore answered. Seed the first frame with the values that are actually stored. The read
+    // is cached per process, so only the first composition pays for it; the flows below then take
+    // over as usual.
+    val initialSnapshot = remember(context) { preferencesManager.firstFrameThemeSnapshot() }
     // 获取主题设置
-    val useSystemTheme by preferencesManager.useSystemTheme.collectAsState(initial = true)
+    val useSystemTheme by
+            preferencesManager.useSystemTheme.collectAsState(
+                    initial = initialSnapshot?.useSystemTheme ?: true
+            )
     val themeMode by
             preferencesManager.themeMode.collectAsState(
-                    initial = UserPreferencesManager.THEME_MODE_LIGHT
+                    initial = initialSnapshot?.themeMode
+                            ?: UserPreferencesManager.THEME_MODE_LIGHT
             )
-    val useCustomColors by preferencesManager.useCustomColors.collectAsState(initial = false)
-    val customPrimaryColor by preferencesManager.customPrimaryColor.collectAsState(initial = null)
+    val useCustomColors by
+            preferencesManager.useCustomColors.collectAsState(
+                    initial = initialSnapshot?.useCustomColors ?: false
+            )
+    val customPrimaryColor by
+            preferencesManager.customPrimaryColor.collectAsState(
+                    initial = initialSnapshot?.customPrimaryColor
+            )
     val customSecondaryColor by
-            preferencesManager.customSecondaryColor.collectAsState(initial = null)
-    val onColorMode by preferencesManager.onColorMode.collectAsState(initial = ON_COLOR_MODE_AUTO)
+            preferencesManager.customSecondaryColor.collectAsState(
+                    initial = initialSnapshot?.customSecondaryColor
+            )
+    val onColorMode by
+            preferencesManager.onColorMode.collectAsState(
+                    initial = initialSnapshot?.onColorMode ?: ON_COLOR_MODE_AUTO
+            )
 
     // 获取字体设置
     val useCustomFont by preferencesManager.useCustomFont.collectAsState(initial = false)

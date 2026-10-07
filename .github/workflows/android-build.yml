@@ -6,7 +6,7 @@ on:
       gradle_task:
         description: Gradle task to run
         required: true
-        default: ':app:assembleDebug'
+        default: ':app:assembleRelease'
         type: choice
         options:
           - ':app:assembleDebug'
@@ -147,37 +147,38 @@ jobs:
 
       - name: Configure Android build
         shell: bash
+        env:
+          # YUNKe local patch: a persistent release key stored as repository secrets, so every
+          # build is signed with the same certificate and new APKs can upgrade the installed app
+          # in place instead of forcing an uninstall (which would wipe the user's data).
+          YUNKE_KEYSTORE_BASE64: ${{ secrets.YUNKE_KEYSTORE_BASE64 }}
+          YUNKE_STORE_PASSWORD: ${{ secrets.YUNKE_STORE_PASSWORD }}
+          YUNKE_KEY_ALIAS: ${{ secrets.YUNKE_KEY_ALIAS }}
+          YUNKE_KEY_PASSWORD: ${{ secrets.YUNKE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          # YUNKe local patch: sign with a throwaway self-signed certificate instead of the Operit
-          # Ry release key, which this repository does not own.
-          release_keystore="$RUNNER_TEMP/yunke-local-release.jks"
-          release_store_password="yunke-local-store"
-          release_key_alias="yunke-local"
-          release_key_password="$release_store_password"
-          keytool -genkeypair -v \
-            -keystore "$release_keystore" \
-            -storetype PKCS12 \
-            -storepass "$release_store_password" \
-            -keypass "$release_key_password" \
-            -alias "$release_key_alias" \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=YUNKe Local Build, OU=Local, O=Local, L=Local, ST=Local, C=CN"
+          release_keystore="$RUNNER_TEMP/yunke-release.jks"
+
+          if [[ -z "${YUNKE_KEYSTORE_BASE64:-}" ]]; then
+            echo 'The YUNKE_KEYSTORE_BASE64 secret is not configured.' >&2
+            exit 1
+          fi
+          printf '%s' "$YUNKE_KEYSTORE_BASE64" | base64 -d > "$release_keystore"
           chmod 600 "$release_keystore"
 
           keytool -list -v \
             -keystore "$release_keystore" \
-            -storepass "$release_store_password" \
-            -alias "$release_key_alias" \
+            -storepass "$YUNKE_STORE_PASSWORD" \
+            -alias "$YUNKE_KEY_ALIAS" \
             | sed -n 's/^[[:space:]]*SHA256: //p' > "$RUNNER_TEMP/yunke-cert-sha256.txt"
 
           umask 077
           {
             echo "sdk.dir=$ANDROID_HOME"
             echo "RELEASE_STORE_FILE=$release_keystore"
-            echo "RELEASE_STORE_PASSWORD=$release_store_password"
-            echo "RELEASE_KEY_ALIAS=$release_key_alias"
-            echo "RELEASE_KEY_PASSWORD=$release_key_password"
+            echo "RELEASE_STORE_PASSWORD=$YUNKE_STORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$YUNKE_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$YUNKE_KEY_PASSWORD"
           } > local.properties
 
       - name: Run Gradle build and checks
