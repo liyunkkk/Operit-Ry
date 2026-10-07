@@ -24,9 +24,10 @@ class ThemeColorSchemeResolverTest {
         assertEquals(RainyPink, scheme.secondary)
         assertEquals(RainyLightHover, scheme.primaryContainer)
         assertEquals(RainyLightText, scheme.onPrimaryContainer)
-        assertEquals(RainyLightBackground, scheme.background)
-        assertEquals(RainyLightPanel, scheme.surface)
-        assertEquals(RainyLightElement, scheme.surfaceVariant)
+        // YUNKe local patch: the light page and its containers are plain white, not the Rainy wash.
+        assertEquals(Color.White, scheme.background)
+        assertEquals(Color.White, scheme.surface)
+        assertEquals(Color.White, scheme.surfaceVariant)
     }
 
     @Test

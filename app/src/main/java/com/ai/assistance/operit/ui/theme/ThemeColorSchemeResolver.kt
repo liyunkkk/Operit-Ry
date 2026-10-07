@@ -73,24 +73,29 @@ private val RainyLightColorScheme =
         onError = RainyLightBackground,
         errorContainer = Color(0xFFFDE8EF),
         onErrorContainer = RainyLightText,
-        background = RainyLightBackground,
+        // YUNKe local patch: the light theme's page/container surfaces are plain white instead of
+        // the Rainy pink wash (RainyLightBackground / RainyLightElement / RainyLightHover). The
+        // accent colours above are untouched, so the pink identity survives on controls only.
+        background = Color.White,
         onBackground = RainyLightText,
-        surface = RainyLightPanel,
+        surface = Color.White,
         onSurface = RainyLightText,
-        surfaceVariant = RainyLightElement,
+        surfaceVariant = Color.White,
         onSurfaceVariant = RainyLightMuted,
-        surfaceTint = RainyPinkHover,
+        // YUNKe local patch: a pink surfaceTint would re-tint every elevated white surface back
+        // towards the Rainy wash, so the tint is dropped for the light theme.
+        surfaceTint = Color.Transparent,
         inverseSurface = RainyDarkPanel,
         inverseOnSurface = RainyDarkText,
         outline = RainyLightBorder,
         outlineVariant = RainyLightHover,
-        surfaceBright = RainyLightPanel,
-        surfaceDim = RainyLightBackground,
-        surfaceContainerLowest = RainyLightPanel,
-        surfaceContainerLow = RainyLightPanel,
-        surfaceContainer = RainyLightElement,
-        surfaceContainerHigh = RainyLightBackground,
-        surfaceContainerHighest = RainyLightHover,
+        surfaceBright = Color.White,
+        surfaceDim = Color.White,
+        surfaceContainerLowest = Color.White,
+        surfaceContainerLow = Color.White,
+        surfaceContainer = Color.White,
+        surfaceContainerHigh = Color.White,
+        surfaceContainerHighest = Color.White,
     )
 
 internal fun rainyBaseColorScheme(darkTheme: Boolean): ColorScheme =

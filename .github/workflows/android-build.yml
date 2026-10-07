@@ -146,33 +146,30 @@ jobs:
           fi
 
       - name: Configure Android build
-        env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.OPERIT_RELEASE_KEYSTORE_BASE64 }}
-          RELEASE_STORE_PASSWORD: ${{ secrets.OPERIT_RELEASE_STORE_PASSWORD }}
-          RELEASE_KEY_ALIAS: ${{ secrets.OPERIT_RELEASE_KEY_ALIAS }}
-          RELEASE_KEY_PASSWORD: ${{ secrets.OPERIT_RELEASE_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
-          : "${RELEASE_KEYSTORE_BASE64:?OPERIT_RELEASE_KEYSTORE_BASE64 is required}"
-          : "${RELEASE_STORE_PASSWORD:?OPERIT_RELEASE_STORE_PASSWORD is required}"
-          : "${RELEASE_KEY_ALIAS:?OPERIT_RELEASE_KEY_ALIAS is required}"
-          : "${RELEASE_KEY_PASSWORD:?OPERIT_RELEASE_KEY_PASSWORD is required}"
-          release_keystore="$RUNNER_TEMP/operit-ry-release.jks"
-          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$release_keystore"
+          # YUNKe local patch: sign with a throwaway self-signed certificate instead of the Operit
+          # Ry release key, which this repository does not own.
+          release_keystore="$RUNNER_TEMP/yunke-local-release.jks"
+          release_store_password="yunke-local-store"
+          release_key_alias="yunke-local"
+          release_key_password="yunke-local-key"
+          keytool -genkeypair -v \
+            -keystore "$release_keystore" \
+            -storetype PKCS12 \
+            -storepass "$release_store_password" \
+            -keypass "$release_key_password" \
+            -alias "$release_key_alias" \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=YUNKe Local Build, OU=Local, O=Local, L=Local, ST=Local, C=CN"
           chmod 600 "$release_keystore"
 
-          actual_cert_sha256="$(
-            keytool -list -v \
-              -keystore "$release_keystore" \
-              -storepass "$RELEASE_STORE_PASSWORD" \
-              -alias "$RELEASE_KEY_ALIAS" \
-              | sed -n 's/^[[:space:]]*SHA256: //p'
-          )"
-          if [[ "$actual_cert_sha256" != "$OPERIT_RELEASE_CERT_SHA256" ]]; then
-            echo "Release signing certificate does not match Operit Ry." >&2
-            exit 1
-          fi
+          keytool -list -v \
+            -keystore "$release_keystore" \
+            -storepass "$release_store_password" \
+            -alias "$release_key_alias" \
+            | sed -n 's/^[[:space:]]*SHA256: //p' > "$RUNNER_TEMP/yunke-cert-sha256.txt"
 
           umask 077
           {
@@ -220,7 +217,9 @@ jobs:
             exit 1
           fi
 
-          expected_apk_digest="${OPERIT_RELEASE_CERT_SHA256//:/}"
+          # YUNKe local patch: the artifacts are signed with the throwaway certificate generated
+          # above, so this checks that they are signed at all rather than against the Operit Ry key.
+          expected_apk_digest="$(tr -d ':' < "$RUNNER_TEMP/yunke-cert-sha256.txt")"
           expected_apk_digest="${expected_apk_digest,,}"
           apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           for artifact in "${artifacts[@]}"; do
@@ -231,8 +230,6 @@ jobs:
                 ;;
               *.aab)
                 jarsigner -verify "$artifact"
-                certificate="$(keytool -printcert -jarfile "$artifact")"
-                grep -Fq "SHA256: $OPERIT_RELEASE_CERT_SHA256" <<< "$certificate"
                 ;;
             esac
           done
