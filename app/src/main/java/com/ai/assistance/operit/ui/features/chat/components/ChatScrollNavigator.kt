@@ -587,11 +587,15 @@ internal fun ChatMessageLocatorDialog(
     onToggleFavoriteMessage: ((Long, Boolean) -> Unit)?,
     onJumpToMessage: (Long) -> Unit,
 ) {
-    val visibleLocatorEntries = locatorVisibleEntries(locatorEntries)
+    val visibleLocatorEntries = remember(locatorEntries) { locatorVisibleEntries(locatorEntries) }
     val currentVisiblePosition =
-        locatorCurrentVisiblePosition(locatorEntries, currentMessageTimestamp)
-    val currentMessageIndex =
-        visibleLocatorEntries.getOrNull(currentVisiblePosition)?.messageIndex ?: -1
+        remember(locatorEntries, currentMessageTimestamp) {
+            locatorCurrentVisiblePosition(locatorEntries, currentMessageTimestamp)
+        }
+    // The row that stands for the reading position; a hidden row maps to the closest visible one.
+    val currentVisibleEntry = visibleLocatorEntries.getOrNull(currentVisiblePosition)
+    val currentMessageIndex = currentVisibleEntry?.messageIndex ?: -1
+    val referenceTimestamp = currentVisibleEntry?.timestamp ?: currentMessageTimestamp
     val initialIndex =
         currentVisiblePosition
             .takeIf { it >= 0 }
@@ -610,7 +614,7 @@ internal fun ChatMessageLocatorDialog(
         if (normalizedSearchQuery.isBlank()) {
             visibleLocatorEntries
         } else {
-            locatorVisibleEntries(searchEntries)
+            remember(searchEntries) { locatorVisibleEntries(searchEntries) }
         }
     val dialogIsLoading = isLoading || isLoadingSearchEntries
     val dialogLoadFailed =
@@ -620,22 +624,23 @@ internal fun ChatMessageLocatorDialog(
             searchLoadFailed
         }
     val indexedEntries =
-        activeLocatorEntries.mapIndexed { index, preview ->
-            ChatMessageLocatorEntry(index = preview.messageIndex ?: index, preview = preview)
+        remember(activeLocatorEntries) {
+            activeLocatorEntries.mapIndexed { index, preview ->
+                ChatMessageLocatorEntry(index = preview.messageIndex ?: index, preview = preview)
+            }
         }
     val filteredEntries =
-        if (dialogIsLoading) {
-            indexedEntries
-        } else {
-            indexedEntries.filter { entry ->
-                val isFavorite =
+        remember(indexedEntries, dialogIsLoading, favoritesOnly, favoriteOverrides) {
+            if (dialogIsLoading || !favoritesOnly) {
+                indexedEntries
+            } else {
+                indexedEntries.filter { entry ->
                     favoriteOverrides[entry.preview.timestamp] ?: entry.preview.isFavorite
-                val matchesFavorite = !favoritesOnly || isFavorite
-                matchesFavorite
+                }
             }
         }
     val maxMessageLength =
-        remember(activeLocatorEntries) {
+        remember(activeLocatorEntries, hiddenPlaceholderText) {
             activeLocatorEntries.maxOfOrNull { messageContentLength(it, hiddenPlaceholderText) }
                 ?.coerceAtLeast(1) ?: 1
         }
@@ -672,6 +677,15 @@ internal fun ChatMessageLocatorDialog(
         }
     }
 
+    // Search results are numbered within their own list, so both paths locate the reading position
+    // by timestamp instead of comparing numbers that only one of them shares.
+    val highlightedTimestamp =
+        if (normalizedSearchQuery.isBlank()) {
+            referenceTimestamp
+        } else {
+            locatorNearestTimestamp(filteredEntries.map { it.preview.timestamp }, referenceTimestamp)
+        }
+
     LaunchedEffect(normalizedSearchQuery, filteredEntries.size, currentMessageIndex, dialogIsLoading) {
         if (dialogIsLoading || filteredEntries.isEmpty()) {
             return@LaunchedEffect
@@ -679,14 +693,13 @@ internal fun ChatMessageLocatorDialog(
 
         val targetListIndex =
             if (normalizedSearchQuery.isBlank()) {
-                filteredEntries.indexOfFirst { it.index == currentMessageIndex }
+                filteredEntries.indexOfFirst { it.preview.timestamp == referenceTimestamp }
                     .takeIf { it >= 0 }
                     ?.let { (it - 2).coerceAtLeast(0) }
                     ?: 0
             } else {
-                filteredEntries.indices.minByOrNull { entryIndex ->
-                    abs(filteredEntries[entryIndex].index - currentMessageIndex)
-                } ?: 0
+                filteredEntries.indexOfFirst { it.preview.timestamp == highlightedTimestamp }
+                    .takeIf { it >= 0 } ?: 0
             }
         listState.scrollToItem(targetListIndex)
     }
@@ -725,7 +738,7 @@ internal fun ChatMessageLocatorDialog(
                                 stringResource(
                                     R.string.chat_message_locator_current,
                                     (currentMessageIndex + 1).coerceAtLeast(0),
-                                    locatorEntries.size,
+                                    visibleLocatorEntries.size,
                                 ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -868,7 +881,7 @@ internal fun ChatMessageLocatorDialog(
                                 preview = entry.preview,
                                 isFavorite =
                                     favoriteOverrides[entry.preview.timestamp] ?: entry.preview.isFavorite,
-                                isCurrent = entry.index == currentMessageIndex,
+                                isCurrent = entry.preview.timestamp == highlightedTimestamp,
                                 maxMessageLength = maxMessageLength,
                                 searchQuery = searchQuery,
                                 onToggleFavorite = {

@@ -1430,7 +1430,9 @@ open class GeminiProvider(
                     )
                 }
 
-                val requestBody = createRequestBody(context, chatHistory, modelParameters, enableThinking, availableTools, preserveThinkInHistory)
+                val requestBody = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    createRequestBody(context, chatHistory, modelParameters, enableThinking, availableTools, preserveThinkInHistory)
+                }
                 onTokensUpdated(
                         tokenCacheManager.totalInputTokenCount,
                         tokenCacheManager.cachedInputTokenCount,

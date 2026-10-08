@@ -90,6 +90,8 @@ internal object WorkspaceToolPermissionPolicy {
         val normalizedName = tool.name.lowercase()
         if (
             normalizedName == "create_terminal_session" ||
+            normalizedName == "start_terminal_task" ||
+            normalizedName == "cancel_terminal_task" ||
             normalizedName == "execute_hidden_terminal_command" ||
                 normalizedName == "execute_in_terminal_session" ||
                 normalizedName == "execute_in_terminal_session_streaming" ||

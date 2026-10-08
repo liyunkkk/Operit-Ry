@@ -32,6 +32,12 @@ import java.util.UUID
  */
 @RequiresApi(Build.VERSION_CODES.O)
 class Terminal internal constructor(private val terminalManager: TerminalManager) {
+    init {
+        terminalManager.lifecycleLogger = { message, error ->
+            if (error == null) AppLogger.i("TerminalLifecycle", message)
+            else AppLogger.e("TerminalLifecycle", message, error)
+        }
+    }
 
     companion object {
         @Volatile

@@ -19,6 +19,7 @@ import com.ai.assistance.operit.data.model.ChatMessage
 import com.ai.assistance.operit.data.model.ChatMessageDisplayMode
 import com.ai.assistance.operit.data.model.ChatMessageProcessMetadata
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
+import com.ai.assistance.operit.services.core.isContinuedAcrossSummaries
 import com.ai.assistance.operit.ui.common.markdown.LocalResponseProcessExpanded
 import com.ai.assistance.operit.ui.common.markdown.ResponseActivityHeader
 
@@ -30,9 +31,15 @@ internal data class ResponseProcessGroup(
     val headerIndex: Int = firstIndex,
 )
 
+/** One reply process and the rows it wrote, before compaction halves are merged back together. */
+private data class ResponseProcessSegment(
+    val group: ResponseProcessGroup,
+    val members: List<Int>,
+)
+
 /** Agent input cards are part of the AI process; human steering stays outside the fold. */
 internal fun responseProcessGroups(messages: List<ChatMessage>): Map<Int, ResponseProcessGroup> {
-    val result = mutableMapOf<Int, ResponseProcessGroup>()
+    val completed = mutableListOf<ResponseProcessSegment>()
     val pending = mutableListOf<Int>()
     val leadingCards = mutableListOf<Int>()
     messages.forEachIndexed { index, message ->
@@ -57,25 +64,59 @@ internal fun responseProcessGroups(messages: List<ChatMessage>): Map<Int, Respon
                 message.displayMode == ChatMessageDisplayMode.NORMAL &&
                 message.completedAt > 0L && message.contentStream == null
             ) {
-                val group = ResponseProcessGroup(
-                    key = message.sentAt,
-                    firstIndex = leadingCards.firstOrNull() ?: pending.first(),
-                    finalIndex = index,
-                    durationMs = message.waitDurationMs + message.outputDurationMs,
-                    headerIndex = pending.firstOrNull() ?: index,
-                )
-                (group.firstIndex..index).forEach { member ->
-                    if (messages[member].sender == "ai" ||
-                        messages[member].displayMode.isCollaborationEvent
-                    ) {
-                        result[member] = group
-                    }
-                }
+                val group =
+                    ResponseProcessGroup(
+                        key = message.sentAt,
+                        firstIndex = leadingCards.firstOrNull() ?: pending.first(),
+                        finalIndex = index,
+                        durationMs = message.waitDurationMs + message.outputDurationMs,
+                        headerIndex = pending.firstOrNull() ?: index,
+                    )
+                // Members are the rows this run wrote. A row that only sits in the gap between two
+                // halves — a card the summary pushed out, or the summary itself — belongs to
+                // neither half, so it stays visible outside the fold.
+                completed +=
+                    ResponseProcessSegment(
+                        group,
+                        (group.firstIndex..group.finalIndex).filter { member ->
+                            messages[member].sender == "ai" ||
+                                messages[member].displayMode.isCollaborationEvent
+                        },
+                    )
             }
             pending.clear()
             leadingCards.clear()
         }
     }
+    // Compaction is written inside the run it reports and the run resumes right after it; an agent
+    // input card is that same run reporting its subagent work. Both keep one fold and add up its
+    // time instead of cutting the reply process in half there.
+    val merged = mutableListOf<ResponseProcessSegment>()
+    completed.forEach { segment ->
+        val group = segment.group
+        val previous = merged.lastOrNull()
+        val between = previous?.let { (it.group.finalIndex + 1 until group.firstIndex).toList() }
+        val continued =
+            between != null &&
+                isContinuedAcrossSummaries(
+                    between.map { messages[it].sender },
+                    between.map { messages[it].displayMode.name },
+                )
+        if (previous != null && continued) {
+            merged[merged.lastIndex] =
+                ResponseProcessSegment(
+                    previous.group.copy(
+                        finalIndex = group.finalIndex,
+                        durationMs = previous.group.durationMs + group.durationMs,
+                    ),
+                    previous.members + segment.members,
+                )
+        } else {
+            merged += segment
+        }
+    }
+    val result = mutableMapOf<Int, ResponseProcessGroup>()
+    merged.forEach { segment -> segment.members.forEach { result[it] = segment.group } }
     return result
 }
 

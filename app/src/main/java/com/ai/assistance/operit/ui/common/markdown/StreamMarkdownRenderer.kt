@@ -465,12 +465,9 @@ fun StreamMarkdownRenderer(
         // 移除时间计算变量和日志
 
         // 重置状态
-        nodes.clear()
-        renderNodes.clear()
-        rendererState.collectedContent.clear()
+        batchUpdater.cancelPending()
+        rendererState.reset()
         parsedContent.clear()
-        xmlNodeStreams.clear()
-        rendererState.streamParsingCompletedSuccessfully = false
 
         try {
             var pendingHtmlBreakCount = 0
@@ -625,15 +622,7 @@ fun StreamMarkdownRenderer(
             AppLogger.e(TAG, "【流渲染】Markdown流处理异常: ${e.message}", e)
         } finally {
             // 移除时间计算变量和日志
-            synchronizeRenderNodes(
-                nodes,
-                renderNodes,
-                conversionCache,
-                nodeAnimationStates,
-                xmlNodeStreams,
-                rendererId,
-                scope
-            )
+            batchUpdater.flushNow()
             // 移除最终同步耗时日志
         }
     }
@@ -1270,6 +1259,7 @@ internal class BatchNodeUpdater(
         private val rendererId: String,
         private val scope: CoroutineScope
 ) {
+    private val dirtyIndices = linkedSetOf<Int>()
     private val coordinator =
         RenderBatchCoordinator(
             scope = scope,
@@ -1277,13 +1267,25 @@ internal class BatchNodeUpdater(
             onFlush = ::performBatchUpdate,
         )
 
-    fun requestUpdate() = coordinator.requestUpdate()
+    fun requestUpdate(nodeIndex: Int = nodes.lastIndex) {
+        if (nodeIndex >= 0) {
+            dirtyIndices.add(nodeIndex)
+            conversionCache.remove(nodeIndex)
+        }
+        coordinator.requestUpdate()
+    }
+
+    fun cancelPending() {
+        coordinator.cancelPending()
+        dirtyIndices.clear()
+    }
+
+    fun flushNow() = coordinator.flushNow()
 
     fun requestStructuralUpdate(nodeIndex: Int) {
         // Type and child-list mutations can preserve content length, so the length-keyed stable
         // node cache must be invalidated explicitly.
-        conversionCache.remove(nodeIndex)
-        requestUpdate()
+        requestUpdate(nodeIndex)
     }
 
     fun appendBlockChunk(node: MarkdownNode, contentChunk: String) {
@@ -1292,6 +1294,8 @@ internal class BatchNodeUpdater(
     }
 
     private fun performBatchUpdate() {
+        val changed = (dirtyIndices + (renderNodes.size until nodes.size)).sorted()
+        dirtyIndices.clear()
         synchronizeRenderNodes(
             nodes,
             renderNodes,
@@ -1299,7 +1303,8 @@ internal class BatchNodeUpdater(
             nodeAnimationStates,
             xmlNodeStreams,
             rendererId,
-            scope
+            scope,
+            changed,
         )
     }
 }
@@ -1312,12 +1317,14 @@ private fun synchronizeRenderNodes(
     nodeAnimationStates: MutableMap<String, Boolean>,
     xmlNodeStreams: MutableMap<Int, Stream<String>>,
     rendererId: String,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    changedIndices: Iterable<Int> = nodes.indices,
 ) {
     val keysToAnimate = mutableListOf<String>()
 
     // 1. 更新现有节点并添加新节点
-    nodes.forEachIndexed { i, sourceNode ->
+    changedIndices.forEach { i ->
+        val sourceNode = nodes.getOrNull(i) ?: return@forEach
         val contentLength = sourceNode.content.length
         val cached = conversionCache[i]
 
@@ -1348,20 +1355,19 @@ private fun synchronizeRenderNodes(
     }
 
     // 2. 如果源列表变小，则移除多余的节点
+    val previousSize = renderNodes.size
     while (renderNodes.size > nodes.size) {
         renderNodes.removeAt(renderNodes.lastIndex)
     }
 
-    // 3. 清理多余的缓存条目
-    if (nodes.size < conversionCache.size) {
-        (nodes.size until conversionCache.size).forEach {
-            conversionCache.remove(it)
+    // Append-only batches have no obsolete entries; avoid scanning all XML streams every tick.
+    if (previousSize > nodes.size) {
+        conversionCache.keys.filter { it >= nodes.size }.forEach { conversionCache.remove(it) }
+        xmlNodeStreams.keys.filter { it !in nodes.indices }.forEach { xmlNodeStreams.remove(it) }
+        (nodes.size until previousSize).forEach {
+            nodeAnimationStates.remove("node-$rendererId-$it")
         }
     }
-
-    // 4. 清理已被移除节点的 XML 子流
-    val keysToRemove = xmlNodeStreams.keys.filter { it !in nodes.indices }
-    keysToRemove.forEach { xmlNodeStreams.remove(it) }
 
 
     // 启动所有新标记节点的动画

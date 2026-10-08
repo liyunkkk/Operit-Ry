@@ -16,6 +16,67 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class RenderBatchCoordinatorTest {
     @Test
+    fun shrinkClearsSparseCachesBeforeReusingAnIndex() = runTest {
+        val nodes = mutableStateListOf(
+            MarkdownNode(MarkdownProcessorType.PLAIN_TEXT, "a"),
+            MarkdownNode(MarkdownProcessorType.PLAIN_TEXT, "b"),
+        )
+        val rendered = mutableStateListOf<MarkdownNodeStable>()
+        val cache = mutableMapOf<Int, Pair<Int, MarkdownNodeStable>>()
+        val updater = BatchNodeUpdater(nodes, rendered, cache, mutableMapOf(),
+            mutableMapOf(), "shrink", this)
+        updater.requestUpdate()
+        updater.flushNow()
+        cache.remove(0)
+        nodes.removeAt(1)
+        updater.requestUpdate()
+        updater.flushNow()
+        org.junit.Assert.assertFalse(cache.containsKey(1))
+        nodes.add(MarkdownNode(MarkdownProcessorType.PLAIN_TEXT, "c"))
+        nodes.add(MarkdownNode(MarkdownProcessorType.PLAIN_TEXT, "d"))
+        updater.requestUpdate()
+        updater.flushNow()
+        assertEquals(listOf("a", "c", "d"), rendered.map { it.content })
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun thousandCompletedNodesAreNotReconvertedWhenTailChanges() = runTest {
+        val nodes = mutableStateListOf<MarkdownNode>()
+        repeat(1000) { nodes.add(MarkdownNode(MarkdownProcessorType.PLAIN_TEXT, "node-$it")) }
+        val rendered = mutableStateListOf<MarkdownNodeStable>()
+        val cache = mutableMapOf<Int, Pair<Int, MarkdownNodeStable>>()
+        val updater = BatchNodeUpdater(nodes, rendered, cache, mutableMapOf(),
+            mutableMapOf(), "large", this)
+        updater.requestUpdate()
+        updater.flushNow()
+        val prefix = rendered.first()
+        // A missing prefix cache entry would force conversion if an entire-list pass were made.
+        cache.remove(0)
+        updater.appendBlockChunk(nodes.last(), " appended")
+        updater.flushNow()
+        org.junit.Assert.assertSame(prefix, rendered.first())
+        org.junit.Assert.assertFalse(cache.containsKey(0))
+        assertEquals("node-999 appended", rendered.last().content)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun flushAndCancelDoNotLeaveAnOldTimerInANewGeneration() = runTest {
+        var flushes = 0
+        val coordinator = RenderBatchCoordinator(this, 200) { flushes++ }
+        coordinator.requestUpdate()
+        coordinator.flushNow()
+        coordinator.requestUpdate()
+        advanceUntilIdle()
+        assertEquals(2, flushes)
+        coordinator.requestUpdate()
+        coordinator.cancelPending()
+        advanceUntilIdle()
+        assertEquals(2, flushes)
+    }
+
+    @Test
     fun requestWhileBatchIsPending_isIncludedWithoutAnotherInput() = runTest {
         var flushCount = 0
         val coordinator =

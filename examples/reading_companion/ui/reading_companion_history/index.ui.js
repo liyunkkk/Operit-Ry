@@ -27,21 +27,17 @@ function historyScreen(ctx) {
   const [runs, setRuns] = ctx.useState("historyRuns", []);
   const [section, setSection] = ctx.useState("historySection", "runs");
 
-  const watchTasks = () => readingTools.watch(ctx, "history", setTasks, error => setError(toErrorText(error)));
+  const watchTasks = () => readingTools.watchResource("history", async () => {
+    const [tasksResult, history] = await Promise.all([
+      readingTools.call(ctx, "list_tasks", {limit: 50}),
+      callHistoryTool(ctx, "auto_commentary_history", {limit: 50}),
+    ]);
+    return {tasks: tasksResult.tasks || [], runs: history.runs || []};
+  }, result => {
+    setTasks(result.tasks); setRuns(result.runs); setLoading(false); setError("");
+  }, error => {setError(toErrorText(error)); setLoading(false);});
   const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await callHistoryTool(ctx, "auto_commentary_history", {
-        limit: 50,
-      });
-      setRuns(Array.isArray(result && result.runs) ? result.runs : []);
-    } catch (loadError) {
-      setError(toErrorText(loadError));
-    } finally {
-      setLoading(false);
-      await watchTasks();
-    }
+    await watchTasks();
   };
 
   const openRun = async (run) => {
@@ -53,8 +49,8 @@ function historyScreen(ctx) {
     await Promise.resolve(ctx.navigate(DETAIL_ROUTE));
   };
 
-  const title = english ? "Commentary history" : "段评历史";
-  const empty = english ? "No commentary task records yet." : "还没有段评任务记录。";
+  const title = english ? "Generation history" : "生成历史";
+  const empty = english ? "No generation records yet." : "还没有生成记录。";
   const errorTitle = english ? "Could not load history" : "加载历史失败";
   const refresh = english ? "Refresh" : "刷新";
 
@@ -105,6 +101,10 @@ function historyScreen(ctx) {
         UI.Text({ text: readingTools.taskLabel(task, english), style: "bodySmall" }),
         UI.Text({ text: readingTools.taskProgress(task, english) }),
         ...(readingTools.taskErrors(task, english) ? [UI.Text({ text: readingTools.taskErrors(task, english) })] : []),
+        ...readingTools.retryChapters(task).map(index => UI.OutlinedButton({onClick: async () => {
+          try {await readingTools.retryChapter(ctx,task,index); await watchTasks();}
+          catch(error) {setError(toErrorText(error));}
+        }},UI.Text({text: english ? `Retry chapter ${index+1}` : `重试第 ${index+1} 章`}))),
         ...(task.attempts || []).map(attempt => attempt.archived
           ? UI.Text({ text: `${Number(attempt.chapterIndex) + 1} · ${statusLabel(attempt.status, english)} · ${english ? "Detailed trace expired" : "详细记录已过保留期"}` })
           : UI.OutlinedButton({ onClick: () => openRun(attempt) },
@@ -235,6 +235,10 @@ function historyScreen(ctx) {
     },
     [
       tabs,
+      UI.Row({fillMaxWidth: true, padding: 12, horizontalArrangement: "spaceBetween"}, [
+        UI.Text({text: english ? "Most recent 50 records" : "最近 50 条记录", style: "bodySmall"}),
+        UI.OutlinedButton({onClick: watchTasks}, UI.Text({text: refresh})),
+      ]),
       UI.Box({ fillMaxWidth: true, weight: 1 },
         UI.LazyColumn({
           fillMaxSize: true,

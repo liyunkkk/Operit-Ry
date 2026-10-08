@@ -56,7 +56,7 @@ object ReadingCompanionSubagentTools {
      * 6 个工具的 isolated 提示词（同一来源：ToolRegistration 注册、SubagentCoordinator
      * 透传、测试断言）。
      */
-    fun prompts(): List<ToolPrompt> =
+    fun prompts(summaryOnly: Boolean = false): List<ToolPrompt> =
         listOf(
             ToolPrompt(
                 name = TOOL_LIST_CHAPTERS,
@@ -68,7 +68,7 @@ object ReadingCompanionSubagentTools {
             ToolPrompt(
                 name = TOOL_READ_CHAPTER,
                 description =
-                    "Read one chapter from the required five-chapter window using chapterRef. " +
+                    "Read the target chapter, or preceding context only when needed, using chapterRef. " +
                         "The target chapter includes paragraph anchor ids; previous chapters are " +
                         "context only. Follow nextOffset until hasMore is false to read the whole chapter. " +
                         "Offsets address the returned labeled text; paragraph anchors may continue across pages.",
@@ -94,7 +94,7 @@ object ReadingCompanionSubagentTools {
             ToolPrompt(
                 name = TOOL_GREP,
                 description =
-                    "Grep literal text in this task book directory. Return paths, offsets and " +
+                    "Grep literal text and summaries through the target chapter only; future chapters and untimed memory are excluded. Return paths, offsets and " +
                     "line numbers, then read original text to verify facts for the " +
                     "commentary. Never invents facts beyond the returned evidence.",
                 parametersStructured =
@@ -151,7 +151,13 @@ object ReadingCompanionSubagentTools {
                         ),
                     ),
             ),
-        )
+        ).filterNot { summaryOnly && it.name == TOOL_SUBMIT_COMMENTS }.map {
+            if (summaryOnly && it.name == TOOL_SUBMIT_SUMMARY)
+                it.copy(description = "Submit the factual target-chapter summary. Usually 100-200 Chinese characters, " +
+                    "up to about 300 for dense chapters. Successful submission ends the task immediately; " +
+                    "a validation error allows correction. Do not call other tools in the same batch.")
+            else it
+        }
 
     /** ToolRegistration 使用的统一执行器入口。 */
     fun execute(tool: AITool): ToolResult {
@@ -443,6 +449,7 @@ object ReadingCompanionSubagentTools {
     }
 
     private fun submitComments(tool: AITool, session: ReadingCompanionRunSession): ToolResult {
+        if (session.summaryOnly) return failure(tool,"This is a summary-only task; use submit_summary to finish.")
         if (session.candidateSummary.isBlank()) {
             return ToolResult(
                 toolName = tool.name,
@@ -629,9 +636,9 @@ class ProductionReadingCompanionSubagentBackend(
         store.incrementRunModelRound(runId)
 
     override fun readFile(bookId: String, path: String, offset: Int, maxCharacters: Int): JSONObject =
-        fileStore.readPersistedFile(bookId, path, offset, maxCharacters)
+        fileStore.readPersistedFile(bookId, path, offset, maxCharacters, throughChapterIndex = targetChapterIndex)
 
     override suspend fun grep(bookId: String, query: String, offset: Int, limit: Int): JSONObject =
-        fileStore.grepPersistedFiles(bookId, query, offset, limit)
+        fileStore.grepPersistedFiles(bookId, query, offset, limit, throughChapterIndex = targetChapterIndex)
             .put("coverage", fileStore.chapterCacheCoverage(bookId, targetChapterIndex))
 }

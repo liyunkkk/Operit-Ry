@@ -19,8 +19,8 @@ import org.junit.Test
 class ReadingCompanionSchemaV14Test {
 
     @Test
-    fun `store database version is 15 so older devices run all upgrades`() {
-        assertEquals(15, ReadingCompanionStore.DATABASE_VERSION)
+    fun `store database version is 16 so older devices run all upgrades`() {
+        assertEquals(16, ReadingCompanionStore.DATABASE_VERSION)
         // onUpgrade 必然走到 oldVersion < 13 => ensureAutoCommentRunSubagentColumns：
         // 该函数与测试共用 AUTO_COMMENT_RUN_V13_SUBAGENT_COLUMN_DEFINITIONS，见下。
         assertTrue(AUTO_COMMENT_RUN_V13_SUBAGENT_COLUMN_DEFINITIONS.isNotEmpty())

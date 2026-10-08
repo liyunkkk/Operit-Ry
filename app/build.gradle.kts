@@ -183,8 +183,8 @@ android {
         applicationId = "com.rainy.operitry"
         minSdk = 26
         targetSdk = 34
-        versionCode = 51
-        versionName = "1.12.2-ry.5"
+        versionCode = 100205
+        versionName = "1.12.2-ry.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

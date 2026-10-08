@@ -616,6 +616,18 @@ export interface IntentResultData {
 /**
  * Terminal command execution result data
  */
+export interface TerminalTaskResultData {
+    runId: string;
+    sessionId: string;
+    status: 'queued' | 'running' | 'completed' | 'cancelled' | 'cancelling' | 'failed' | 'timed_out';
+    /** Latest tail snapshot, not a new output chunk. */
+    output: string;
+    outputMode: 'tail_snapshot';
+    outputTruncated: boolean;
+    terminationReason?: string;
+    timedOut: boolean;
+}
+
 export interface TerminalCommandResultData {
     /** The command that was executed */
     command: string;

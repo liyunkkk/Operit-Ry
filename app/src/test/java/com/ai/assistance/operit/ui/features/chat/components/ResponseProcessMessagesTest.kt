@@ -100,6 +100,100 @@ class ResponseProcessMessagesTest {
         assertTrue(responseProcessGroups(messages.take(2)).isEmpty())
     }
 
+    @Test fun compactionSummaryKeepsTheReplyProcessFoldedTogether() {
+        val messages = listOf(
+            intermediate(10), final(10),
+            summary(),
+            intermediate(20), final(20),
+        )
+        val groups = responseProcessGroups(messages)
+        assertEquals(setOf(0, 1, 3, 4), groups.keys)
+        val group = groups.getValue(0)
+        assertEquals(1, groups.values.toSet().size)
+        assertEquals(0, group.firstIndex)
+        assertEquals(4, group.finalIndex)
+        assertEquals(10L, group.key)
+        // The halves are one process, so the elapsed time adds up instead of restarting.
+        assertEquals(6000L, group.durationMs)
+        // The divider reporting the compression stays visible outside the fold.
+        assertNull(groups[2])
+    }
+
+    @Test fun repeatedCompactionsStayOneProcess() {
+        val messages = listOf(
+            intermediate(10), final(10),
+            summary(),
+            intermediate(20), final(20),
+            summary(),
+            intermediate(30), final(30),
+        )
+        val group = responseProcessGroups(messages).getValue(0)
+        assertEquals(0, group.firstIndex)
+        assertEquals(7, group.finalIndex)
+        assertEquals(9000L, group.durationMs)
+    }
+
+    @Test fun aHumanMessageStillSeparatesTwoRepliesEvenAfterASummary() {
+        val messages = listOf(
+            intermediate(10), final(10),
+            summary(),
+            ChatMessage(sender = "user", content = "next"),
+            intermediate(20), final(20),
+        )
+        val groups = responseProcessGroups(messages)
+        assertEquals(10L, groups.getValue(0).key)
+        assertEquals(20L, groups.getValue(4).key)
+        assertEquals(2, groups.values.toSet().size)
+    }
+
+    @Test fun anAgentCardBesideTheSummaryKeepsTheReplyProcessFoldedTogether() {
+        val messages = listOf(
+            intermediate(10), final(10),
+            ChatMessage(sender = "user", content = "mail", displayMode = ChatMessageDisplayMode.COLLABORATION_EVENT),
+            summary(),
+            intermediate(20), final(20),
+        )
+        val groups = responseProcessGroups(messages)
+        val group = groups.getValue(0)
+        assertEquals(setOf(0, 1, 4, 5), groups.keys)
+        assertEquals(1, groups.values.toSet().size)
+        assertEquals(0, group.firstIndex)
+        assertEquals(5, group.finalIndex)
+        assertEquals(6000L, group.durationMs)
+        // The card the summary pushed into the gap, and the divider itself, stay outside the fold.
+        assertNull(groups[2])
+        assertNull(groups[3])
+    }
+
+    @Test fun anAgentCardAfterTheSummaryFoldsInsideTheProcess() {
+        val messages = listOf(
+            intermediate(10), final(10),
+            summary(),
+            ChatMessage(sender = "user", content = "mail", displayMode = ChatMessageDisplayMode.COLLABORATION_EVENT),
+            intermediate(20), final(20),
+        )
+        val groups = responseProcessGroups(messages)
+        val group = groups.getValue(0)
+        assertEquals(setOf(0, 1, 3, 4, 5), groups.keys)
+        assertEquals(1, groups.values.toSet().size)
+        assertEquals(0, group.firstIndex)
+        assertEquals(5, group.finalIndex)
+        assertEquals(6000L, group.durationMs)
+        assertNull(groups[2])
+    }
+
+    @Test fun anAgentCardAloneNeverGluesTwoRepliesTogether() {
+        val messages = listOf(
+            intermediate(10), final(10),
+            ChatMessage(sender = "user", content = "mail", displayMode = ChatMessageDisplayMode.COLLABORATION_EVENT),
+            intermediate(20), final(20),
+        )
+        val groups = responseProcessGroups(messages)
+        assertEquals(2, groups.values.toSet().size)
+    }
+
+    private fun summary() = ChatMessage(sender = "summary", content = "compressed")
+
     private fun intermediate(sentAt: Long) = ChatMessage(
         sender = "ai", content = "work", sentAt = sentAt,
         displayMode = ChatMessageDisplayMode.ASSISTANT_INTERMEDIATE,

@@ -803,6 +803,13 @@ fun getJsToolsDefinition(): String {
                 // 执行终端命令 - 一次性收集输出
                 terminal: {
                     create: (sessionName) => toolCall("create_terminal_session", { session_name: sessionName }),
+                    start: (sessionId, command, options = {}) => toolCall("start_terminal_task", {
+                        session_id: sessionId, command, timeout_ms: options.timeoutMs, yield_ms: options.yieldMs
+                    }),
+                    poll: (options = {}) => toolCall("poll_terminal_task", {
+                        run_id: options.runId, session_id: options.sessionId, yield_ms: options.yieldMs
+                    }),
+                    cancel: (runId) => toolCall("cancel_terminal_task", { run_id: runId }),
                     exec: (sessionId, command, timeoutMs) => {
                         const params = { session_id: sessionId, command };
                         if (timeoutMs !== undefined && timeoutMs !== null) {

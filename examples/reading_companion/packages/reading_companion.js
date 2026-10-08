@@ -113,8 +113,8 @@
         {
           "name": "chapter_number",
           "description": {
-            "zh": "章节号，从 1 开始；省略表示当前章",
-            "en": "One-based chapter number; omit for current chapter"
+            "zh": "目录序号，从 1 开始（拆分子节分别计数，不是标题中的原著章号）；省略表示当前章",
+            "en": "One-based catalog position, counting split sections separately; omit for current chapter"
           },
           "type": "number",
           "required": false
@@ -214,8 +214,8 @@
         {
           "name": "chapter_number",
           "description": {
-            "zh": "章节号，从 1 开始；省略表示当前章",
-            "en": "One-based chapter number; omit for current chapter"
+            "zh": "目录序号，从 1 开始（拆分子节分别计数，不是标题中的原著章号）；省略表示当前章",
+            "en": "One-based catalog position, counting split sections separately; omit for current chapter"
           },
           "type": "number",
           "required": false

@@ -382,6 +382,23 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             }
     )
 
+    for (action in listOf("start", "poll", "cancel")) {
+        handler.registerTool(
+            name = "${action}_terminal_task",
+            descriptionGenerator = { tool ->
+                val label = when (action) {
+                    "start" -> R.string.terminal_task_start_desc
+                    "poll" -> R.string.terminal_task_poll_desc
+                    else -> R.string.terminal_task_cancel_desc
+                }
+                s(label, tool.parameters.find {
+                    it.name == if (action == "start") "command" else "run_id"
+                }?.value ?: "")
+            },
+            executor = { tool -> ToolGetter.getTerminalCommandExecutor(context).terminalTask(tool, action) }
+        )
+    }
+
     // 终端命令执行工具 - 一次性收集输出
     handler.registerTool(
             name = "create_terminal_session",

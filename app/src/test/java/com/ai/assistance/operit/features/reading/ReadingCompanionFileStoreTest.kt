@@ -15,6 +15,40 @@ import org.junit.Test
 import org.mockito.Mockito.mock
 
 class ReadingCompanionFileStoreTest {
+    @Test fun `generation search and reads exclude later chapters and untimed memory`() {
+        val future = chapter.copy(index=1,sourceId="future")
+        store.syncBookCatalog(book,listOf(chapter,future))
+        store.writeChapterContent(book,chapter,"needle earlier")
+        store.writeChapterContent(book,future,"needle future")
+        val all = store.grepPersistedFiles(book.id,"needle").getJSONArray("results")
+        val scoped = store.grepPersistedFiles(book.id,"needle",throughChapterIndex=0).getJSONArray("results")
+        assertEquals(2,all.length())
+        assertEquals(1,scoped.length())
+        val later = (0 until all.length()).map { all.getJSONObject(it) }.first {
+            it.getString("text").contains("future")
+        }
+        assertTrue(runCatching { store.readPersistedFile(book.id,later.getString("path"),throughChapterIndex=0) }.isFailure)
+        val memory = store.ensureCompanionMemory(book.id,"reader")
+        memory.writeText("needle secret")
+        assertTrue(runCatching { store.readPersistedFile(book.id,memory.path,throughChapterIndex=0) }.isFailure)
+    }
+
+    @Test fun `large grep results retain complete transport-safe pagination without losing matches`() {
+        store.writeChapterContent(book,chapter,(1..100).joinToString("\n") { "needle $it " + "\"&".repeat(450) })
+        var offset = 0
+        var count = 0
+        do {
+            val page = store.grepPersistedFiles(book.id,"needle",offset,100,throughChapterIndex=0)
+            val xml = page.toString().replace("&","&amp;").replace("\"","&quot;")
+            assertTrue(xml.length < 64000)
+            count += page.getJSONArray("results").length()
+            val next = if (page.isNull("nextOffset")) null else page.getInt("nextOffset")
+            if (next == null) break
+            assertTrue(next > offset)
+            offset = next
+        } while (true)
+        assertEquals(100,count)
+    }
     private lateinit var root: File
     private lateinit var store: ReadingCompanionFileStore
 

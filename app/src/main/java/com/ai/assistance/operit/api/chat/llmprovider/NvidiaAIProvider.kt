@@ -58,7 +58,7 @@ class NvidiaAIProvider(
         availableTools: List<ToolPrompt>?,
         preserveThinkInHistory: Boolean
     ): RequestBody {
-        val baseRequestBodyJson = super.createRequestBodyInternal(
+        val jsonObject = super.createRequestBodyInternal(
             context,
             chatHistory,
             modelParameters,
@@ -66,7 +66,6 @@ class NvidiaAIProvider(
             availableTools,
             preserveThinkInHistory
         )
-        val jsonObject = JSONObject(baseRequestBodyJson)
 
         // Explicit thinking toggle for NVIDIA template-based reasoning models.
         val chatTemplateKwargs = jsonObject.optJSONObject("chat_template_kwargs") ?: JSONObject()

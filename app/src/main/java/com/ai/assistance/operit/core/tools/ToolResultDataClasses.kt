@@ -285,6 +285,21 @@ data class TerminalCommandResultData(
 
 /** 终端命令流式事件数据 */
 @Serializable
+data class TerminalTaskResultData(
+    val runId: String,
+    val sessionId: String,
+    val status: String,
+    val output: String,
+    val outputTruncated: Boolean,
+    val terminationReason: String? = null,
+    val outputMode: String,
+    val timedOut: Boolean,
+) : ToolResultData() {
+    override fun toString(): String = "Terminal task $runId: $status\n$output"
+}
+
+/** 终端命令流式事件数据 */
+@Serializable
 data class TerminalStreamEventData(
         val type: String,
         val command: String,

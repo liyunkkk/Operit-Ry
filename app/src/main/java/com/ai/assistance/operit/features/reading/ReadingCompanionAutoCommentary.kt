@@ -1258,7 +1258,7 @@ class ReadingCompanionAutoCommentary private constructor(
             put("previousContextChapterLimit", 4)
             put("previousContextCharacterLimit", JSONObject.NULL)
             put("roleCardPolicy", "per_book_selected_character_card")
-            put("modelPolicy", "caller_model_or_global_chat")
+            put("modelPolicy", "caller_model_or_character_card_or_global_chat")
             put("tokenStatsCategory", TokenStatCategory.READING_COMPANION.name)
             put(
                 "historyStorage",

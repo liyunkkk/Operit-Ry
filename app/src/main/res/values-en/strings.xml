@@ -1,4 +1,5 @@
 <resources>
+    <string name="logcat_flush_incomplete">Available logs saved to %1$s. Some logs are pending or failed to write; this export may be incomplete.</string>
     <string name="local_llm_removed">On-device LLM inference has been removed. Select a cloud or remote provider. Existing files remain in Download/Operit/models and can be removed using a file manager.</string>
     <string name="openai_error_repetition_truncation">The server stopped repetitive model output. The response was discarded and its tools will not run.</string>
     <string name="openai_retry_repetition_truncation">Repetitive output was discarded. Retrying the request once.</string>
@@ -8821,6 +8822,9 @@
     <string name="collapse_process_hide">Hide response activity</string>
     <string name="collapse_process_duration_seconds">Worked for %1$ds</string>
     <string name="collapse_process_duration_minutes">Worked for %1$dm %2$ds</string>
+    <string name="collapse_process_duration_hours">Worked for %1$dh %2$dm %3$ds</string>
+    <string name="duration_compact_minutes">%1$dm %2$ds</string>
+    <string name="duration_compact_hours">%1$dh %2$dm %3$ds</string>
     <string name="tool_errors_title">Tool call issues</string>
     <string name="tool_errors_app_logs">App logs</string>
     <string name="tool_errors_scope">Records execution failures and undeclared parameters in AI chats and subagents, even when tools succeed. Keeps original parameters. Cancellations and permission denials are excluded. Recording starts with this version.</string>
@@ -8835,9 +8839,12 @@
     <string name="tool_repairs_total">%1$d repair records</string>
     <string name="tool_repairs_empty">No tool call repairs yet</string>
     <string name="tool_repairs_line_range">Line range redirected to the partial file reader</string>
-    <string name="tool_repairs_separator">Corrected the terminal tool name to use a single colon</string>
+    <string name="tool_repairs_separator">Corrected repeated colons in the terminal tool name</string>
     <string name="tool_repairs_timeout">Normalized terminal timeout to timeoutMs</string>
     <string name="tool_repairs_package">Removed redundant package_name matching the target package</string>
+    <string name="tool_repairs_flattened_proxy">Recovered the tool_name that was folded into the params text</string>
+    <string name="tool_repairs_memory_argument">Renamed the memory tool\'s new_text argument to content</string>
+    <string name="tool_repairs_memory_finish">Routed an empty finish action to the separate finish tool</string>
     <string name="tool_repairs_invalid_record">Invalid record format; tap to view the raw record</string>
     <string name="tool_repairs_refresh">Refresh</string>
     <string name="tool_errors_totals">%1$d records · %2$d tools</string>
@@ -9057,4 +9064,7 @@
     <string name="resource_download_failed_space">Not enough free storage. Free some space and retry.</string>
     <string name="resource_download_failed_generic">Download failed. Please retry.</string>
     <string name="plugin_terminal_resource_required">The Ubuntu terminal environment must be downloaded first (about 64 MB)</string>
+    <string name="terminal_task_start_desc">Start terminal task: %1$s</string>
+    <string name="terminal_task_poll_desc">Check terminal task: %1$s</string>
+    <string name="terminal_task_cancel_desc">Cancel terminal task: %1$s</string>
 </resources>

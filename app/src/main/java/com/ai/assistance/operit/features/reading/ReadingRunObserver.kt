@@ -9,6 +9,7 @@ internal class ReadingRunObserver(
     private val context: Context,
     private val session: ReadingCompanionRunSession,
     private val childChatId: String,
+    private val onExecution: (com.ai.assistance.operit.core.agent.AgentModelIdentity) -> Unit = {},
 ) : AgentRunObserver {
     override val capabilityTools = ReadingCompanionSubagentTools.CAPABILITY_BOUND_NAMES
     override suspend fun beforeToolBatch(tools: List<AITool>) {
@@ -32,5 +33,10 @@ internal class ReadingRunObserver(
         kotlinx.coroutines.runBlocking {
             runCatching { SubagentRunRepository.getInstance(context).incrementModelRoundCountByChildChatId(childChatId) }
         }
+    }
+    override fun onModelRequest(identity: com.ai.assistance.operit.core.agent.AgentModelIdentity) {
+        checkActive()
+        onExecution(identity)
+        onModelRequest()
     }
 }

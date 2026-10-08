@@ -1849,7 +1849,22 @@ class JsEngine(private val context: Context) {
                             .put("configured", persona != null)
                             .put("roleCardId", persona?.roleCardId)
                             .put("roleCardName", persona?.roleCardName)
-                            .put("updatedAt", persona?.updatedAt),
+                            .put("updatedAt", persona?.updatedAt)
+                            .apply {
+                                if (persona != null) {
+                                    runCatching {
+                                        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                                            com.ai.assistance.operit.features.reading.ReadingCompanionModelGateway(context)
+                                                .previewAutoCommentConfiguration(persona.roleCardId)
+                                        }
+                                    }.onSuccess { preview ->
+                                        put("configuration",JSONObject()
+                                            .put("modelSource",preview.modelSource)
+                                            .put("modelConfigName",preview.modelConfigName)
+                                            .put("model",preview.model))
+                                    }.onFailure { put("configurationError",it.message.orEmpty()) }
+                                }
+                            },
                     )
                     .toString()
             } catch (error: Throwable) {

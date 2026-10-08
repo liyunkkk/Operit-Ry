@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "toolpkg_id": "com.operit.reading_companion",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "main": "main.js",
   "display_name": {
     "zh": "AI 阅读伴侣",
@@ -35,8 +35,8 @@
         "en": "AI Auto Commentary"
       },
       "description": {
-        "zh": "由用户为每本书选择一个角色卡，隔离读取下一章及有限前情，一次生成少而精的角色化段评；由多轮子代理按需查阅目标章及前四章，后台使用全局 CHAT 模型，Legado 将角色卡名字显示为段评作者。开启会产生模型 Token 消耗。",
-        "en": "Uses a selected per-book character card, the next chapter, and bounded private context to write sparse in-character comments. A multi-turn subagent reads the target and four preceding chapters on demand using the global CHAT model in background. Legado shows the card name as author; enabling spends model tokens."
+        "zh": "为每本书选择角色卡，多轮子代理读取目标章，按需查前情，生成少而精的角色化段评。模型依次采用发起对话的模型、角色卡固定模型或全局 CHAT 模型；记录展示实际使用的模型。Legado 将角色卡名字显示为作者。开启会产生模型 Token 消耗。",
+        "en": "Selects a per-book character card and reads the target chapter, consulting earlier context only as needed. Uses the initiating conversation model, then the card's fixed model, then global CHAT; records show the model actually used. Legado displays the card name as author. Enabling spends model tokens."
       }
     },
     {

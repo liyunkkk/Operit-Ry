@@ -23,16 +23,16 @@
     {
       "name": "summary_batch_prefs",
       "description": {
-        "zh": "读取或保存当前书籍的手动摘要范围与单次预算。无参数时读取；传参时保存。章节号从 1 开始。",
-        "en": "Read or save the current book's manual-summary range and per-run budget. No parameters reads; supplied parameters save. Chapter numbers are one-based."
+        "zh": "读取或保存当前书籍的手动摘要范围与单次预算。无参数时读取；传参时保存。目录序号从 1 开始，拆分子节分别计数，不是标题中的原著章号。",
+        "en": "Read or save the current book's manual-summary range and per-run budget. No parameters reads; supplied parameters save. Use one-based catalog positions, counting split sections separately, not numbers in chapter titles."
       },
       "parameters": [
         {"name": "book_id", "description": {"zh": "明确指定书籍，省略时使用当前书籍", "en": "Explicit book ID; defaults to the current book"}, "type": "string", "required": false},
         {
           "name": "start_chapter",
           "description": {
-            "zh": "起始章号",
-            "en": "Start chapter number"
+            "zh": "起始目录序号",
+            "en": "Start catalog position (split sections count separately)"
           },
           "type": "number",
           "required": false
@@ -40,8 +40,8 @@
         {
           "name": "end_chapter",
           "description": {
-            "zh": "结束章号",
-            "en": "End chapter number"
+            "zh": "结束目录序号",
+            "en": "End catalog position (split sections count separately)"
           },
           "type": "number",
           "required": false

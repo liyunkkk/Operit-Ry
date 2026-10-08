@@ -43,7 +43,7 @@ import com.ai.assistance.operit.ui.features.chat.components.style.bubble.remembe
 import androidx.compose.ui.text.rememberTextMeasurer
 import com.ai.assistance.operit.ui.common.markdown.LocalTranscriptTextMeasurer
 
-private data class TranscriptBookmark(val key: String, val offset: Int)
+private data class TranscriptBookmark(val key: String, val offset: Int, val timestamp: Long?)
 private object TranscriptBookmarks {
     private val entries = LinkedHashMap<String, TranscriptBookmark>()
     fun get(chatId: String) = entries[chatId]
@@ -132,15 +132,14 @@ internal fun VirtualTranscript(
     }
     val bookmark = remember(chatId) { TranscriptBookmarks.get(chatId) }
     var restoring by remember(chatId) { mutableStateOf(bookmark != null) }
-    var restoreRequested by remember(chatId) { mutableStateOf(false) }
-    val restoreTimestamp = remember(bookmark) {
-        bookmark?.key?.takeIf { it.startsWith("message:") }?.split(':')?.getOrNull(1)?.toLongOrNull()
-    }
+    var restoreUnavailable by remember(chatId) { mutableStateOf(false) }
+    val restoreTimestamp = bookmark?.timestamp
     val listState = remember(chatId) {
         LazyListState(
             cacheWindow = LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 1f),
             firstVisibleItemIndex = rows.indexOfFirst { it.key == bookmark?.key }.coerceAtLeast(0),
-            firstVisibleItemScrollOffset = bookmark?.offset ?: 0,
+            // The saved markdown slice may not exist until preparation finishes.
+            firstVisibleItemScrollOffset = 0,
         )
     }
     val scope = rememberCoroutineScope()
@@ -155,9 +154,10 @@ internal fun VirtualTranscript(
         }
     }
     var pendingJump by remember(chatId) { mutableStateOf<Long?>(null) }
-    val currentRows by rememberUpdatedState(rows)
+    val currentRows by key(chatId) { rememberUpdatedState(rows) }
     val currentBaseRows by rememberUpdatedState(baseRows)
-    val currentMessages by rememberUpdatedState(messages)
+    val currentMessages by key(chatId) { rememberUpdatedState(messages) }
+    val currentReveal by rememberUpdatedState(reveal)
     val prepareCandidates by remember(listState) { derivedStateOf {
         val indices = listState.layoutInfo.visibleItemsInfo.mapNotNull {
             currentRows.getOrNull(it.index)?.messageIndex?.takeIf { index -> index >= 0 }
@@ -186,7 +186,15 @@ internal fun VirtualTranscript(
             }
         }
     }
-    LaunchedEffect(chatId, rows.map { it.key to it.preparingMarkdown }, restoring) {
+    // Loading the missing anchor must survive row changes from asynchronous markdown preparation.
+    // A rows-keyed effect can cancel the IO after marking it requested and never retry it.
+    LaunchedEffect(chatId, bookmark, restoring) {
+        if (restoring && restoreTimestamp != null &&
+            currentMessages.none { it.timestamp == restoreTimestamp }) {
+            restoreUnavailable = currentReveal?.invoke(restoreTimestamp) != true
+        }
+    }
+    LaunchedEffect(chatId, rows.map { it.key to it.preparingMarkdown }, restoring, restoreUnavailable) {
         if (!restoring || bookmark == null) return@LaunchedEffect
         onFollowingChange?.invoke(false)
         val index = rows.indexOfFirst { it.key == bookmark.key }
@@ -203,10 +211,7 @@ internal fun VirtualTranscript(
                 listState.scrollToItem(fallback)
                 restoring = false
             }
-        } else if (restoreTimestamp != null && !restoreRequested) {
-            restoreRequested = true
-            if (reveal?.invoke(restoreTimestamp) != true) restoring = false
-        } else if (restoreTimestamp == null) {
+        } else if (restoreTimestamp == null || restoreUnavailable) {
             restoring = false
         }
     }
@@ -236,13 +241,26 @@ internal fun VirtualTranscript(
             }
         }
     }
+    fun currentBookmark(): TranscriptBookmark? {
+        // visibleItemsInfo also contains rows in contentPadding; their key must not be paired
+        // with another row's firstVisibleItemScrollOffset.
+        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+            it.index == listState.firstVisibleItemIndex
+        } ?: return null
+        val row = currentRows.firstOrNull { it.key == item.key.toString() } ?: return null
+        val timestamp = currentMessages.getOrNull(row.messageIndex)?.timestamp
+            ?: row.group?.let { currentMessages.getOrNull(it.finalIndex)?.timestamp }
+        return TranscriptBookmark(row.key,listState.firstVisibleItemScrollOffset,timestamp)
+    }
     LaunchedEffect(chatId, listState) {
-        snapshotFlow {
-            listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let {
-                TranscriptBookmark(it.key.toString(), listState.firstVisibleItemScrollOffset)
-            }
-        }.collect { value ->
-            if (!restoring && value != null && value.key != "footer") TranscriptBookmarks.put(chatId, value)
+        snapshotFlow { if (restoring) null else currentBookmark() }.collect { value ->
+            if (value != null) TranscriptBookmarks.put(chatId,value)
+        }
+    }
+    DisposableEffect(chatId,listState) {
+        onDispose {
+            // Flush the last frame when navigation disposes the collector before it can run.
+            if (!restoring) currentBookmark()?.let { TranscriptBookmarks.put(chatId,it) }
         }
     }
     val atEnd by remember(listState) { derivedStateOf { !listState.canScrollForward } }

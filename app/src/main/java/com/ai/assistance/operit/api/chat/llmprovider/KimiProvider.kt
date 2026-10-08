@@ -72,9 +72,8 @@ open class KimiProvider(
         }
 
         if (!enableThinking && configureThinking) {
-            val baseRequestBodyJson =
+            val jsonObject =
                 super.createRequestBodyInternal(context, chatHistory, automaticReasoning.modelParameters, stream, availableTools, preserveThinkInHistory)
-            val jsonObject = JSONObject(baseRequestBodyJson)
             applyThinkingParams(jsonObject)
             return createJsonRequestBody(jsonObject.toString())
         }

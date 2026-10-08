@@ -27,6 +27,7 @@ class CommandSessionCloseTest {
                 running.outputPages.add("first page")
                 session.currentExecutingCommand = running
                 session.currentCommandOutput.append("last page")
+                session.rawBuffer.append(" tail without newline")
                 session.commandQueue.addAll(listOf(QueuedCommand("b", "touch b"), QueuedCommand("c", "touch c")))
 
                 processor.finishClosedSession(session, "closed")
@@ -36,6 +37,7 @@ class CommandSessionCloseTest {
                 assertEquals(listOf("a", "b", "c"), events.map { it.commandId })
                 assertTrue(events.all { it.isCompleted && it.terminationReason == "session_closed" })
                 assertTrue(events.first().outputChunk.contains("first page\nlast page"))
+                assertTrue(events.first().outputChunk.contains("last page tail without newline\nclosed"))
                 assertFalse(running.isExecuting)
                 assertNull(session.currentExecutingCommand)
                 assertTrue(session.commandQueue.isEmpty())

@@ -809,7 +809,10 @@ class MessageProcessingDelegate(
         chatRuntime.streamingAiMessage = null
         chatRuntime.toolBoundarySnapshot = null
         chatRuntime.steeringBoundarySnapshot = null
-        chatRuntime.runStartedElapsed = android.os.SystemClock.elapsedRealtime()
+        // 压缩后的自动续写是同一个任务的后半段：重启计时会让用户看到长任务被清零。
+        if (!isAutoContinuation || chatRuntime.runStartedElapsed <= 0L) {
+            chatRuntime.runStartedElapsed = android.os.SystemClock.elapsedRealtime()
+        }
         chatRuntime.isLoading.value = true
         chatRuntime.currentTurnOptions = turnOptions
         chatRuntime.inputInbox = TurnInputInbox()

@@ -58,8 +58,8 @@
         {
           "name": "start_chapter",
           "description": {
-            "zh": "起始章节号，从 1 开始",
-            "en": "One-based first chapter"
+            "zh": "起始目录序号，从 1 开始（拆分子节分别计数，不是标题中的原著章号）",
+            "en": "One-based first catalog position; split sections count separately"
           },
           "type": "number",
           "required": false
@@ -67,8 +67,8 @@
         {
           "name": "end_chapter",
           "description": {
-            "zh": "结束章节号，从 1 开始",
-            "en": "One-based last chapter"
+            "zh": "结束目录序号，从 1 开始（拆分子节分别计数，不是标题中的原著章号）",
+            "en": "One-based last catalog position; split sections count separately"
           },
           "type": "number",
           "required": false

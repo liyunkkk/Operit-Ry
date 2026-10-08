@@ -55,6 +55,9 @@ class MemoryLearningActions(
                 val version = LearnedSkillRepository.version(disk)
                 rememberVersion(if(user) "user" else "memory", version)
                 JSONObject().put("content",content).put("version",version).put("staged",staged!=null).apply {
+                    val limit = if (user) UserProfileDocumentRepository.MAX_CONTENT_CHARS else MemoryNotesRepository.MAX_CHARS
+                    put("current_chars",content.length).put("max_chars",limit)
+                        .put("remaining_chars",(limit-content.length).coerceAtLeast(0))
                     if (user) {
                         val sections = UserProfileSections.parse(content)
                         put("sections", JSONObject().put("profile", sections.profile)
@@ -92,7 +95,7 @@ class MemoryLearningActions(
                 }
                 val change = if(user) {
                     require(after.length<=UserProfileDocumentRepository.MAX_CONTENT_CHARS) {
-                        "user.md would exceed its character limit; remove or replace existing text in this batch before adding"
+                        memoryCapacityError("user.md",base.length,after.length,UserProfileDocumentRepository.MAX_CONTENT_CHARS)
                     }
                     reviews.proposeUser(disk,after,sourceChatId,onCreated)
                 } else {
@@ -100,7 +103,7 @@ class MemoryLearningActions(
                     val before = repo.load()
                     check(before.markdown==disk)
                     require(after.length<=MemoryNotesRepository.MAX_CHARS) {
-                        MemoryNotesRepository.OVERFLOW_MESSAGE
+                        memoryCapacityError("memory.md",base.length,after.length,MemoryNotesRepository.MAX_CHARS)
                     }
                     reviews.proposeNotes(before,after,if(operation=="add") content else "",sourceChatId,onCreated)
                 }
@@ -187,7 +190,7 @@ class MemoryLearningActions(
                 stagedSkillCreate(stagedChanges,name)?.let { created ->
                     LearnedSkillRepository.validatePath(path)
                     check(readVersion("$name/$path")=="draft") {
-                        "Call skill_read with this name and path before editing the draft file"
+                        skillReadRequired(name,path)
                     }
                     val before = if(path=="SKILL.md") created.body else created.files[path].orEmpty()
                     val text = if(action=="skill_patch") editText(before,"replace",content,arg("old_text"))
@@ -209,7 +212,7 @@ class MemoryLearningActions(
                 }
                 val before = skills.read(name,path)
                 check((readVersion("$name/$path") ?: arg("version"))==before.version) {
-                    "Call skill_read with this name and path before editing the file"
+                    skillReadRequired(name,path)
                 }
                 val remove = action=="skill_remove_file"
                 // A revision patches the version this batch staged, not the untouched file on disk.
@@ -226,7 +229,8 @@ class MemoryLearningActions(
                 if (stagedChanges==null) forgetVersion("$name/$path")
                 reviews.toModelJson(applied)
             }
-            else -> error("Unknown learning action")
+            "memory_learning_finish" -> error("memory_learning_finish is a separate tool, not an action. Call it directly without arguments; this call did not finish the review.")
+            else -> error("Unknown learning action; use an action listed in memory_learning_action's description")
         }
     }
 }
@@ -244,7 +248,8 @@ private fun notesEdit(base: String, operation: String, content: String, oldText:
         throw IllegalArgumentException(when (e.reason) {
             MemoryNotesRepository.Failure.EMPTY ->
                 if (operation == "add") "content is required" else "old_text and content are required"
-            MemoryNotesRepository.Failure.NOT_UNIQUE -> "old_text must match exactly once"
+            MemoryNotesRepository.Failure.NOT_UNIQUE -> exactEditError(
+                stripInvisibleCharacters(base),stripInvisibleCharacters(oldText))
             MemoryNotesRepository.Failure.CONFLICT -> "memory.md changed while this batch ran; read it again"
             MemoryNotesRepository.Failure.FULL -> MemoryNotesRepository.OVERFLOW_MESSAGE
             MemoryNotesRepository.Failure.INVALID -> "Use add/replace/remove"
@@ -284,10 +289,25 @@ internal fun editText(current: String, operation: String, content: String, old: 
         else listOf(current.trimEnd(),content.trim()).filter { it.isNotEmpty() }.joinToString("\n\n")
     }
     "replace","remove" -> {
-        require(old.isNotBlank())
+        require(old.isNotBlank()) { "old_text is required; read the current content before editing" }
         val at = current.indexOf(old)
-        require(at>=0 && current.indexOf(old,at+1)<0) { "old_text must match exactly once" }
+        require(at>=0 && current.indexOf(old,at+1)<0) { exactEditError(current,old) }
         current.replaceRange(at,at+old.length,if(operation=="remove") "" else content)
     }
     else -> error("Use add/replace/remove")
 }
+
+internal fun memoryCapacityError(document: String, before: Int, after: Int, limit: Int) =
+    "$document capacity exceeded: current_chars=$before, proposed_chars=$after, max_chars=$limit, " +
+        "over_by=${after-limit}. Read the latest staged content with memory_read, then shorten or remove " +
+        "existing text by at least ${after-limit} characters before retrying. A replacement can also exceed the limit."
+
+internal fun exactEditError(current: String, old: String): String {
+    val match = if (old.isEmpty() || !current.contains(old)) "0" else "more than 1"
+    return "old_text must match exactly once; found $match matches. Read the latest staged content with " +
+        "memory_read or skill_read and copy an exact, unique span (include more surrounding text if ambiguous)."
+}
+
+private fun skillReadRequired(name: String, path: String) =
+    "Read the current file first: action=skill_read, arguments=" +
+        JSONObject().put("name",name).put("path",path).toString() + "; then retry the edit."

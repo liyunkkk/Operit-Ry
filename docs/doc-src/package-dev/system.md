@@ -262,9 +262,35 @@ sendBroadcast({
 ### `terminal.exec(sessionId, command, timeoutMs?)`
 
 在指定会话中执行命令，返回 `TerminalCommandResultData`。
-若发生超时，不会抛错；仍会正常返回结果，并带有 `timedOut = true`。
+这是原有阻塞接口，继续供依赖完整结果的包使用。超时会取消命令，无法恢复时会关闭会话；JS 桥可能将失败结果转为异常。
 
 类型注释建议总是显式传入 `timeoutMs`。
+
+### 可查询的长任务
+
+```ts
+const session = await Tools.System.terminal.create("build");
+const task = await Tools.System.terminal.start(session.sessionId, "./gradlew build", {
+  yieldMs: 10000,       // 本次最多等 10 秒；到时返回，不中断命令
+  timeoutMs: 1800000    // 执行总上限（包含排队时间）
+});
+const progress = await Tools.System.terminal.poll({ runId: task.runId, yieldMs: 10000 });
+// 需要停止时：
+// await Tools.System.terminal.cancel(task.runId);
+```
+
+`start` 和 `poll` 默认等待 10 秒，允许 0–30000 毫秒。`start` 的执行上限默认 30 分钟。
+`super_admin:terminal`、`terminal_wait`、`terminal_cancel` 使用这组接口；
+后台执行也会返回可查询的 `runId`。原有 `terminal.input` 仍按明确的 `sessionId` 输入。
+
+结果包含 `runId`、`sessionId`、`status`、`output`、`outputMode`、`outputTruncated`、
+`timedOut` 和可选的 `terminationReason`。`queued`/`running` 表示尚未完成；
+`completed` 表示回到提示符，并非验证了 Shell 的真实退出码；`cancelling` 表示正在收尾。
+查询返回最近 12000 字符的尾部快照（`outputMode=tail_snapshot`），不是增量，
+不要将多次查询结果直接拼接。需要完整大日志时，在命令中重定向到文件。
+
+每项任务最多缓存 64000 字符，最多保留 32 项任务；容量不足时只淘汰已结束记录，
+不会自动杀掉运行中任务。应用退出后运行记录不持久保存，旧 ID 失效时不要自动重跑命令。
 
 ### `terminal.close(sessionId)`
 

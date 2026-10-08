@@ -76,6 +76,15 @@ data class ResolvedAutoCommentRole(
     val name: String,
 )
 
+internal data class AutoCommentRequestContext(
+    val roleCardId: String,
+    val roleCardName: String,
+    val rolePrompt: String,
+    val modelConfigId: String?,
+    val modelIndex: Int?,
+    val modelSource: String,
+)
+
 class AutoCommentModelTimeoutException(
     message: String,
     cause: Throwable,
@@ -627,18 +636,19 @@ class ReadingCompanionModelGateway(
     suspend fun previewAutoCommentConfiguration(
         roleCardId: String,
     ): AutoCommentConfigurationPreview {
-        val role = resolveAutoCommentRole(roleCardId)
+        val request = resolveAutoCommentRequestContext(roleCardId, null)
         val host = EnhancedAIService.getChatInstance(appContext, INTERNAL_CHAT_ID)
-        val lease = host.acquireAIServiceLeaseForFunction(functionType = FunctionType.CHAT)
+        val lease = host.acquireAIServiceLeaseForFunction(functionType = FunctionType.CHAT,
+            chatModelConfigIdOverride = request.modelConfigId, chatModelIndexOverride = request.modelIndex)
         try {
             val config = lease.modelConfig
             val providerType =
                 ApiProviderType.fromProviderTypeId(config.apiProviderTypeId)
                     ?: config.apiProviderType
             return AutoCommentConfigurationPreview(
-                roleCardId = role.id,
-                roleCardName = role.name,
-                modelSource = MODEL_SOURCE_GLOBAL_CHAT,
+                roleCardId = request.roleCardId,
+                roleCardName = request.roleCardName,
+                modelSource = request.modelSource,
                 modelConfigId = config.id,
                 modelConfigName = config.name,
                 modelIndex = lease.modelIndex,
@@ -651,7 +661,7 @@ class ReadingCompanionModelGateway(
         }
     }
 
-    private suspend fun resolveAutoCommentRequestContext(
+    internal suspend fun resolveAutoCommentRequestContext(
         roleCardId: String,
         runtime: ToolExecutionManager.ToolRuntimeContext?,
     ): AutoCommentRequestContext {
@@ -714,15 +724,6 @@ class ReadingCompanionModelGateway(
     }
 
     private companion object {
-        data class AutoCommentRequestContext(
-            val roleCardId: String,
-            val roleCardName: String,
-            val rolePrompt: String,
-            val modelConfigId: String?,
-            val modelIndex: Int?,
-            val modelSource: String,
-        )
-
         data class PreparedAutoCommentPrompt(
             val prompt: String,
             val metrics: AutoCommentPromptMetrics,

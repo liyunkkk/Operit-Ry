@@ -921,6 +921,7 @@ class ReadingCompanionFileStore(
         bookId: String,
         offset: Int = 0,
         limit: Int = 50,
+        throughChapterIndex: Int? = null,
     ): JSONObject = withFileStoreLock {
         val safeOffset = offset.coerceAtLeast(0)
         val safeLimit = limit.coerceIn(1, 100)
@@ -935,6 +936,10 @@ class ReadingCompanionFileStore(
             chapterNumber: Int? = null,
             chapterTitle: String? = null,
         ) {
+            // Untimed book/character/companion documents can contain later plot knowledge.
+            if (throughChapterIndex != null &&
+                (kind != "chapter" || chapterNumber == null || chapterNumber > throughChapterIndex + 1 ||
+                    file.name !in setOf(CONTENT_FILE_NAME,"summary.md"))) return
             val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return
             if (
                 !canonical.isFile ||
@@ -1187,15 +1192,17 @@ class ReadingCompanionFileStore(
     }
 
     /** Literal lookup over the same book-bound active files exposed by the reader. */
-    fun grepPersistedFiles(bookId: String, query: String, offset: Int = 0, limit: Int = 30): JSONObject = withFileStoreLock {
+    fun grepPersistedFiles(bookId: String, query: String, offset: Int = 0, limit: Int = 30,
+        throughChapterIndex: Int? = null): JSONObject = withFileStoreLock {
         require(query.isNotBlank()) { "query must not be blank" }
         require(offset >= 0 && limit in 1..100) { "Invalid grep page" }
         val matches = JSONArray()
         var seen = 0
         var fileOffset = 0
         var more = false
+        var resultCharacters = 0
         search@ while (true) {
-            val page = listPersistedFilesFromCatalogs(bookId, fileOffset, 100)
+            val page = listPersistedFilesFromCatalogs(bookId, fileOffset, 100, throughChapterIndex)
             val entries = page.getJSONArray("entries")
             for (i in 0 until entries.length()) {
                 val entry = entries.getJSONObject(i)
@@ -1224,10 +1231,19 @@ class ReadingCompanionFileStore(
                         if (matchIndex >= 0) {
                             if (seen++ >= offset) {
                                 if (matches.length() == limit) { more = true; break }
-                                matches.put(JSONObject().put("path", file.absolutePath)
+                                val hit = JSONObject().put("path", file.absolutePath)
                                     .put("kind", entry.optString("kind"))
                                     .put("lineNumber", line).put("offset", characterOffset + matchIndex)
-                                    .put("text", text.substring(maxOf(0, matchIndex - 200), minOf(text.length, matchIndex + 800))))
+                                    .put("text", text.substring(maxOf(0, matchIndex - 200), minOf(text.length, matchIndex + 800)))
+                                val size = hit.toString().sumOf { char -> when (char) {
+                                    '"' -> 6; '&' -> 5; '<','>' -> 4; '\'' -> 6; else -> 1
+                                } }
+                                if (resultCharacters + size > 24_000 && matches.length() > 0) {
+                                    more = true
+                                    break
+                                }
+                                matches.put(hit)
+                                resultCharacters += size
                             }
                         }
                         characterOffset += consumed
@@ -1248,6 +1264,7 @@ class ReadingCompanionFileStore(
         path: String,
         offset: Int = 0,
         maxCharacters: Int? = null,
+        throughChapterIndex: Int? = null,
     ): JSONObject = withFileStoreLock {
         val requested = path.trim()
         require(requested.isNotBlank()) { "文件路径不能为空" }
@@ -1276,6 +1293,21 @@ class ReadingCompanionFileStore(
         }
         require(isActivePersistedPathLocked(bookId, target)) {
             "文件不属于当前书籍目录或当前章节 catalog"
+        }
+        if (throughChapterIndex != null) {
+            var pageOffset = 0
+            var allowed = false
+            do {
+                val page = listPersistedFilesFromCatalogs(bookId,pageOffset,100,throughChapterIndex)
+                val entries = page.getJSONArray("entries")
+                allowed = (0 until entries.length()).any {
+                    entries.getJSONObject(it).getString("path") == target.path
+                }
+                val next = if (page.isNull("nextOffset")) null else page.getInt("nextOffset")
+                if (allowed || next == null) break
+                pageOffset = next
+            } while (true)
+            require(allowed) { "This task can read only chapter text and summaries through its target chapter; future and untimed memory files are excluded." }
         }
         if (target.name in setOf(CONTENT_FILE_NAME, "summary.md", "comments.json", META_FILE_NAME)) {
             recoverSummaryPublication(requireNotNull(target.parentFile))

@@ -11,7 +11,12 @@ import java.util.Locale
 
 internal fun formatResponseElapsed(elapsedMs: Long): String {
     val seconds = elapsedMs.coerceAtLeast(0L) / 1000
-    return String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
+    val hours = seconds / 3600
+    return if (hours > 0) {
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, (seconds % 3600) / 60, seconds % 60)
+    } else {
+        String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
+    }
 }
 
 @Composable

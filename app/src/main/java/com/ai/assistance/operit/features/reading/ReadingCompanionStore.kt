@@ -543,6 +543,7 @@ class ReadingCompanionStore(context: Context) :
         createKnowledgeTables(db)
         createAutoCommentTables(db)
         createTaskTables(db)
+        createCatalogSourcesTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -707,6 +708,46 @@ class ReadingCompanionStore(context: Context) :
             )
         }
         if (oldVersion < 15) createTaskTables(db)
+        if (oldVersion < 16) createCatalogSourcesTable(db)
+    }
+
+    private fun createCatalogSourcesTable(db: SQLiteDatabase) {
+        db.execSQL(READING_CATALOG_SOURCES_SQL)
+    }
+
+    /** Derived text/knowledge must not survive a catalog entry being replaced at the same index. */
+    @Synchronized
+    fun synchronizeCatalogSources(bookId: String, chapters: List<ReaderChapter>) {
+        val expected = chapters.filterNot { it.isVolume }.associate { it.index to it.sourceId }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val previous = mutableMapOf<Int, String>()
+            db.rawQuery("SELECT chapter_index, source_id FROM indexed_catalog_sources WHERE book_id = ?",
+                arrayOf(bookId)).use { cursor ->
+                while (cursor.moveToNext()) previous[cursor.getInt(0)] = cursor.getString(1)
+            }
+            val indexed = mutableSetOf<Int>()
+            db.rawQuery("""SELECT chapter_index FROM chapters WHERE book_id = ?
+                UNION SELECT chapter_index FROM chapter_knowledge WHERE book_id = ?""",
+                arrayOf(bookId, bookId)).use { cursor ->
+                while (cursor.moveToNext()) indexed.add(cursor.getInt(0))
+            }
+            staleReadingChapterIndices(indexed, previous, expected)
+                .forEach { deleteChapter(db, bookId, it) }
+            (previous.keys - expected.keys).forEach {
+                db.delete("indexed_catalog_sources", "book_id = ? AND chapter_index = ?",
+                    arrayOf(bookId, it.toString()))
+            }
+            expected.filter { (index, source) -> previous[index] != source }.forEach { (index, source) ->
+                db.insertWithOnConflict("indexed_catalog_sources", null, ContentValues().apply {
+                    put("book_id", bookId); put("chapter_index", index); put("source_id", source)
+                }, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     private fun createTaskTables(db: SQLiteDatabase) {
@@ -3163,6 +3204,7 @@ class ReadingCompanionStore(context: Context) :
         val contentHash = ReadingTextIndexSupport.sha256(content.content)
         db.beginTransaction()
         try {
+            requireCatalogSource(db, content.bookId, content.chapterIndex, content.sourceId)
             val indexedChapter = getIndexedChapter(db, content.bookId, content.chapterIndex)
             val storedChunks = getStoredChunks(db, content.bookId, content.chapterIndex)
             val unchanged = indexedChapter?.contentHash == contentHash &&
@@ -3239,8 +3281,9 @@ class ReadingCompanionStore(context: Context) :
 
     /** Index the actual durable summary, never the discarded model candidate. */
     @Synchronized
-    fun indexPublishedSummary(bookId: String, chapterIndex: Int, summary: PublishedSummary) {
+    fun indexPublishedSummary(bookId: String, chapterIndex: Int, sourceId: String, summary: PublishedSummary) {
         val db = writableDatabase
+        requireCatalogSource(db, bookId, chapterIndex, sourceId)
         val indexed = getIndexedChapter(db, bookId, chapterIndex) ?: return
         if (summary.sourceHashKind != ReadingCompanionFileStore.CONTENT_HASH_KIND_READABLE ||
             summary.sourceHash != indexed.contentHash || summary.text.isBlank()) {
@@ -3843,6 +3886,14 @@ class ReadingCompanionStore(context: Context) :
         )
     }
 
+    private fun requireCatalogSource(db: SQLiteDatabase, bookId: String, index: Int, sourceId: String) {
+        val current = db.rawQuery(
+            "SELECT source_id FROM indexed_catalog_sources WHERE book_id = ? AND chapter_index = ?",
+            arrayOf(bookId, index.toString()),
+        ).use { if (it.moveToFirst()) it.getString(0) else null }
+        check(current == sourceId) { "章节目录已更新，请重新读取正文" }
+    }
+
     private fun deleteChapter(db: SQLiteDatabase, bookId: String, chapterIndex: Int) {
         db.delete(
             "text_chunks",
@@ -3866,7 +3917,7 @@ class ReadingCompanionStore(context: Context) :
 
     companion object {
         private const val DATABASE_NAME = "reading_companion.db"
-        internal const val DATABASE_VERSION = 15
+        internal const val DATABASE_VERSION = 16
         private const val SELECTED_BOOK_KEY = "selected_book_id"
         private const val LAST_RESOLVED_BOOK_KEY = "last_resolved_book_id"
         private const val SUMMARY_BATCH_PREFS_KEY_PREFIX = "summary_batch|"

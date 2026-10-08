@@ -9,11 +9,9 @@ import com.ai.assistance.operit.core.agent.SubagentTaskResult
 import com.ai.assistance.operit.data.db.AppDatabase
 import com.ai.assistance.operit.data.model.ChatEntity
 import com.ai.assistance.operit.data.model.FunctionType
-import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
 import com.ai.assistance.operit.data.repository.ChatHistoryManager
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -39,7 +37,6 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
     private val store = ReadingCompanionStore(appContext)
     private val chatHistoryManager = ChatHistoryManager.getInstance(appContext)
     private val subagentCoordinator = SubagentCoordinator.getInstance(appContext)
-    private val functionalConfigManager = FunctionalConfigManager(appContext)
 
     /**
      * 执行一次段评审计子代理运行。
@@ -65,6 +62,13 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
         summaryOnly: Boolean = false,
     ): SubagentGenerationOutcome {
         val conversation = trigger == ReadingCompanionAudit.TRIGGER_CONVERSATION
+        val modelRequest = if (summaryOnly) {
+            AutoCommentRequestContext(persona.roleCardId,persona.roleCardName,"",
+                runtime?.parentModelConfigId, runtime?.parentModelIndex,
+                if (runtime?.parentModelConfigId.isNullOrBlank()) "global_chat" else "caller_chat")
+        } else ReadingCompanionModelGateway(appContext).resolveAutoCommentRequestContext(
+            persona.roleCardId, runtime.takeIf { conversation })
+        var actualExecution: AutoCommentModelExecution? = null
         val parentChatId =
             if (conversation) {
                 requireNotNull(runtime?.callerChatId?.takeIf(String::isNotBlank)) {
@@ -135,12 +139,11 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
                     subagentType = ReadingCompanionAudit.PROFILE_ID,
                     // 阶段 3 恢复语义：绝不复用旧 taskId，每次全新 child + run。
                     taskId = null,
-                    parentModelConfigId = requestParentModelConfigId(conversation, runtime),
-                    parentModelIndex =
-                        if (conversation) runtime?.parentModelIndex else null,
+                    parentModelConfigId = modelRequest.modelConfigId,
+                    parentModelIndex = modelRequest.modelIndex,
                     functionType = FunctionType.CHAT,
                     toolsEnabled = true,
-                    isolatedToolPrompts = ReadingCompanionSubagentTools.prompts(),
+                    isolatedToolPrompts = ReadingCompanionSubagentTools.prompts(summaryOnly),
                     terminalToolNames = ReadingCompanionSubagentTools.TERMINAL_TOOL_NAMES,
                     promptHooksEnabled = false,
                     childHidden = !conversation,
@@ -157,7 +160,15 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
                             childChatId = createdRun.childChatId,
                         )
                         com.ai.assistance.operit.core.agent.AgentRunObservers.register(
-                            createdRun.childChatId, ReadingRunObserver(appContext, session, createdRun.childChatId),
+                            createdRun.childChatId, ReadingRunObserver(appContext, session, createdRun.childChatId) { identity ->
+                                val execution = AutoCommentModelExecution(
+                                    identity.configId,identity.configName,identity.modelIndex,modelRequest.modelSource,
+                                    identity.provider,identity.model,persona.roleCardId,persona.roleCardName,
+                                )
+                                // Capture the leased request identity before network IO, including failed requests.
+                                actualExecution = execution
+                                store.updateAutoCommentRunExecution(runId,execution)
+                            },
                         )
                         ReadingCompanionSubagentSessionRegistry.register(
                             createdRun.childChatId,
@@ -224,14 +235,7 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
                     "段评子代理未依次成功调用 submit_summary 与 submit_comments，未发布任何结果"
                 }
             }
-            val execution =
-                resolveExecution(
-                    conversation,
-                    runtime,
-                    executedRun.modelConfigIdSnapshot,
-                    executedRun.modelIndexSnapshot,
-                    persona,
-                )
+            val execution = checkNotNull(actualExecution) { "Model execution identity was not recorded" }
             SubagentGenerationOutcome(
                 comments = session.candidateDrafts,
                 summary = session.candidateSummary,
@@ -276,43 +280,6 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
             .minWithOrNull(
                 compareBy<ChatEntity> { it.createdAt }.thenBy { it.id }
             )
-
-    private fun requestParentModelConfigId(
-        conversation: Boolean,
-        runtime: ToolExecutionManager.ToolRuntimeContext?,
-    ): String? = if (conversation) runtime?.parentModelConfigId else null
-
-    private suspend fun resolveExecution(
-        conversation: Boolean,
-        runtime: ToolExecutionManager.ToolRuntimeContext?,
-        modelConfigIdSnapshot: String?,
-        modelIndexSnapshot: Int?,
-        persona: AutoCommentPersona,
-    ): AutoCommentModelExecution {
-        val configId =
-            modelConfigIdSnapshot
-                ?: functionalConfigManager
-                    .getConfigMappingForFunction(FunctionType.CHAT)
-                    .configId
-        val modelIndex = modelIndexSnapshot ?: runtime?.parentModelIndex ?: 0
-        val config =
-            runCatching {
-                    com.ai.assistance.operit.data.preferences.ModelConfigManager(appContext)
-                        .getModelConfigFlow(configId)
-                        .first()
-                }
-                .getOrNull()
-        return AutoCommentModelExecution(
-            configId = configId,
-            configName = config?.name.orEmpty(),
-            modelIndex = modelIndex.coerceAtLeast(0),
-            modelSource = if (conversation) "parent_conversation" else "global_chat",
-            provider = config?.apiProviderType?.name.orEmpty(),
-            model = config?.modelName?.ifBlank { config.name }.orEmpty(),
-            roleCardId = persona.roleCardId,
-            roleCardName = persona.roleCardName,
-        )
-    }
 
     companion object {
         /** 后台/手动/对话内共用的 run/claim 心跳间隔（远小于 5 分钟 stale 窗口）。 */
@@ -394,7 +361,7 @@ class ReadingCompanionSubagentCoordinator private constructor(context: Context) 
             } else {
                 append("以角色卡「$roleCardName」的口吻，为小说《$bookName》即将阅读的第 ${chapterIndex + 1} 章")
                 append("生成 0 到 6 条段落级 AI 段评，并提交一份客观章节摘要。")
-                append("\n阅读范围：目标章和目录中紧邻目标章的前四章；仅读取 contentAvailable=true 的章节。不可用的前文在本轮重试无法恢复，请继续读取可用章节，不得编造缺失的前文。")
+                append("\n阅读范围：必须完整读取目标章；只有理解人物、事件或核对呼应确有需要时，才读取目录中紧邻目标章的前四章或检索更早正文。不要为了凑流程通读所有前文。仅读取 contentAvailable=true 的章节；不可用的前文在本轮重试无法恢复，不得编造。检索仅限目标章及以前，不可使用无时间版本的读者记忆推断剧情。")
             }
         }
 

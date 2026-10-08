@@ -7,6 +7,7 @@ import com.ai.assistance.operit.core.tools.*
 import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.core.tools.system.Terminal
+import com.ai.assistance.operit.core.tools.system.TerminalTaskRegistry
 import com.ai.assistance.operit.terminal.provider.type.HiddenExecResult
 import com.ai.assistance.operit.terminal.view.domain.ansi.TerminalChar
 import kotlinx.coroutines.*
@@ -23,8 +24,46 @@ class StandardTerminalCommandExecutor(private val context: Context) {
     companion object {
         // 用于将会话名称映射到会话ID
         private val sessionNameToIdMap = ConcurrentHashMap<String, String>()
+        private val taskRegistry = TerminalTaskRegistry(CoroutineScope(SupervisorJob() + Dispatchers.IO))
     }
 
+    fun terminalTask(tool: AITool, action: String): ToolResult = runBlocking {
+        var startedId: String? = null
+        try {
+            fun param(name: String) = tool.parameters.find { it.name == name }?.value
+            val terminal = Terminal.getInstance(context)
+            val yieldMs = param("yield_ms")?.toLongOrNull() ?: 10_000L
+            require(yieldMs in 0..30_000L) { "yield_ms must be between 0 and 30000." }
+            val id = if (action == "start") {
+                val sessionId = requireNotNull(param("session_id")) { "session_id is required." }
+                val command = requireNotNull(param("command")) { "command is required." }
+                require(command.isNotBlank()) { "command must not be empty." }
+                val timeoutMs = param("timeout_ms")?.toLongOrNull() ?: 1_800_000L
+                require(timeoutMs >= 3_000L) { "timeout_ms must be at least 3000." }
+                taskRegistry.start(sessionId, timeoutMs) { commandId ->
+                    terminal.executeCommandFlow(sessionId, command, commandId)
+                }.also { startedId = it }
+            } else {
+                param("run_id") ?: param("session_id")?.let(taskRegistry::latest)
+                    ?: error("No terminal task found. Pass the runId returned by terminal.")
+            }
+            val result = if (action == "cancel") taskRegistry.cancel(id) else taskRegistry.poll(id, yieldMs)
+            val session = terminal.terminalState.value.sessions.find { it.id == result.sessionId }
+            val status = if (result.status == "running" && session != null &&
+                synchronized(session.commandLifecycle) { session.commandQueue.any { it.id == result.runId } }
+            ) "queued" else result.status
+            ToolResult(tool.name, true, TerminalTaskResultData(
+                result.runId, result.sessionId, status, result.output,
+                result.outputTruncated, result.terminationReason,
+                outputMode = "tail_snapshot", timedOut = result.status == "timed_out"
+            ))
+        } catch (e: CancellationException) {
+            startedId?.let { withContext(NonCancellable) { taskRegistry.cancel(it) } }
+            throw e
+        } catch (e: Exception) {
+            ToolResult(tool.name, false, StringResultData(""), e.message)
+        }
+    }
 
     /** 创建或获取一个终端会话 */
     fun createOrGetSession(tool: AITool): ToolResult {

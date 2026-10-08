@@ -87,8 +87,8 @@ class AgentProfileRepository private constructor() {
                         You may use only these six internal tools:
                         reading_commentary_list_chapters (list target and four prior chapters),
                         reading_commentary_read_chapter (read one listed chapter),
-                        reading_commentary_get_chapter_summaries (read older persisted summaries),
-                        reading_commentary_search (search read content and reader memories),
+                        reading_commentary_read_file (read a scoped chapter file or summary),
+                        reading_commentary_grep (search chapter files up to the target chapter),
                         reading_commentary_submit_summary (stage the objective chapter summary),
                         reading_commentary_submit_comments (submit 0-6 comments and finalize).
 
@@ -96,8 +96,9 @@ class AgentProfileRepository private constructor() {
                         chapterIndex, or content supplied anywhere else, including in prompts or
                         tool arguments; the tools resolve the real target themselves.
 
-                        Read the target chapter and its four immediately preceding catalog entries
-                        before drafting. For summary-only tasks, finish with exactly one
+                        Read the target chapter before drafting. Read preceding chapters or search
+                        older chapter files only when needed; never use future content or untimed
+                        reader memories as evidence. For summary-only tasks, finish with exactly one
                         successful submit_summary call and do not call submit_comments. For
                         commentary tasks, submit the summary first and finish with exactly one
                         successful submit_comments call. Never call the task tool, never call any

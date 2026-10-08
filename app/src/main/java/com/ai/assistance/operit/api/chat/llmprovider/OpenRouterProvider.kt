@@ -59,7 +59,7 @@ open class OpenRouterProvider(
         availableTools: List<ToolPrompt>?,
         preserveThinkInHistory: Boolean
     ): RequestBody {
-        val baseRequestBodyJson = super.createRequestBodyInternal(
+        val jsonObject = super.createRequestBodyInternal(
             context,
             chatHistory,
             modelParameters,
@@ -67,7 +67,6 @@ open class OpenRouterProvider(
             availableTools,
             preserveThinkInHistory
         )
-        val jsonObject = JSONObject(baseRequestBodyJson)
 
         applyOpenRouterReasoning(
             context = context,

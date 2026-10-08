@@ -1,4 +1,5 @@
 const readingTools = require("../reading_client.js");
+const historyTools = require("../history_shared.js");
 const TOOL_PACKAGE = "reading_companion";
 const AUTO_COMMENTARY_PACKAGE = "reading_companion_auto_commentary";
 const HISTORY_ROUTE =
@@ -94,25 +95,25 @@ function getText(useEnglish) {
       manualSummaries: "Generate summary batch",
       readCommentaryTitle: "Specified chapter commentary",
       readCommentaryHint:
-        "Choose 1–10 catalog chapters. The range may include unread chapters; every selected chapter is regenerated, and a successful result replaces its old commentary.",
+        "Choose 1–10 catalog entries, counting split sections separately, not numbers in chapter titles. Unread entries are allowed; successful generation replaces their old commentary.",
       aheadCommentaryTitle: "Read-ahead commentary",
       aheadCommentaryHint:
         "Choose only how many chapters to fill after the current chapter. The configured pre-generation window is the hard boundary.",
       aheadCountRequired: "Enter a chapter count from 1 to 10.",
       batchSummaryHint:
-        "Generates summaries for the current and already-read chapters; chapters with a fresh summary are skipped automatically.",
+        "Generates summaries for current and read chapters. Use Legado's catalog positions, including split sections, not numbers in chapter titles. Fresh summaries are skipped.",
       batchCount: "Count (required)",
       batchBudget: "Max to generate this run",
-      batchCommentStart: "Start chapter (required)",
-      batchCommentEnd: "End chapter (required)",
+      batchCommentStart: "Start catalog position (required)",
+      batchCommentEnd: "End catalog position (required)",
       readRangeRequired: "Enter both the start and end chapter.",
       readRangeTooLarge: "Choose no more than 10 chapters per run.",
-      batchStart: "Start chapter (optional)",
-      batchEnd: "End chapter (optional)",
+      batchStart: "Start catalog position (optional)",
+      batchEnd: "End catalog position (optional)",
       batchCalls: (count) =>
         `Up to ${count} chapter subagent task(s); existing chapters are skipped and each task may use multiple model turns`,
       batchRange: (start, end, count) =>
-        `Chapters ${start}–${end} · ${count} selected`,
+        `Catalog positions ${start}–${end} · ${count} selected`,
       batchDone: "Manual batch completed.",
       batchSuperseded:
         "The book or chapter list changed, so this batch stopped before generating the changed target. Refresh and try again.",
@@ -149,7 +150,7 @@ function getText(useEnglish) {
       manage: "Open package management",
       regenerate: "Generate or prefill commentary now",
       regenerating: "Generating comments with the selected model…",
-      latestRun: "Latest commentary task",
+      latestRun: "Latest generation task",
       flowTitle: "Generation flow",
       flowStages: {
         reading_target: "Read current position and target chapter",
@@ -271,23 +272,23 @@ function getText(useEnglish) {
     manualReadComments: "重新生成指定章节段评",
     manualSummaries: "生成摘要批次",
     readCommentaryTitle: "指定章节段评",
-    readCommentaryHint: "选择目录中的 1～10 章，可包含未读章节；所选章节都会重新生成，成功后替换旧段评。",
+    readCommentaryHint: "按阅读目录序号选择 1～10 节，可包含未读章节。拆分后的子节分别计数，不按标题里的原著章号；成功后替换所选章节的旧段评。",
     aheadCommentaryTitle: "提前生成段评",
     aheadCommentaryHint: "只需填写数量；从当前章之后开始补全，并严格受“提前生成章数”窗口限制。",
     aheadCountRequired: "请输入 1～10 的章节数量。",
-    batchSummaryHint: "为当前及已读章节生成摘要（已有有效摘要的自动跳过）",
+    batchSummaryHint: "为当前及已读章节生成摘要，已有有效摘要的跳过。请填阅读目录序号，拆分子节分别计数，不是标题里的原著章号。",
     batchCount: "数量（必填）",
     batchBudget: "本次最多生成",
-    batchCommentStart: "起始章节（必填）",
-    batchCommentEnd: "结束章节（必填）",
+    batchCommentStart: "起始目录序号（必填）",
+    batchCommentEnd: "结束目录序号（必填）",
     readRangeRequired: "请填写起始章节和结束章节。",
     readRangeTooLarge: "每次最多选择 10 章。",
-    batchStart: "起始章节（可选）",
-    batchEnd: "结束章节（可选）",
+    batchStart: "起始目录序号（可选）",
+    batchEnd: "结束目录序号（可选）",
     batchCalls: (count) =>
       `最多 ${count} 个章节子代理任务；已存在的自动跳过，每个任务内部可能有多轮模型调用`,
     batchRange: (start, end, count) =>
-      `第 ${start}～${end} 章 · 共选择 ${count} 章`,
+      `目录 ${start}～${end} · 共选择 ${count} 节`,
     batchDone: "手动批次已完成。",
     batchSuperseded: "书籍或章节目录已变化，本批次已在生成变更目标前停止；请刷新后重试。",
     batchSummaryDone: "手动批次已完成，范围内已无缺失摘要。",
@@ -320,7 +321,7 @@ function getText(useEnglish) {
     manage: "打开包管理",
     regenerate: "立即生成/补全段评",
     regenerating: "正在使用所选模型生成段评…",
-    latestRun: "最近一次段评任务",
+    latestRun: "最近一次生成任务",
     flowTitle: "生成流程",
     flowStages: {
       reading_target: "读取当前进度与目标章节",
@@ -461,13 +462,11 @@ function modelSourceLabel(text, source) {
     character_card: text.modelSourceCharacter,
     global_chat: text.modelSourceGlobal,
   };
-  return labels[String(source || "").trim()] || text.modelSourceUnknown;
+  return labels[source === "parent_conversation" ? "caller_chat" : String(source || "").trim()] || text.modelSourceUnknown;
 }
 
 function runTriggerLabel(text, trigger) {
-  return String(trigger || "").trim() === "manual"
-    ? text.triggerManual
-    : text.triggerBackground;
+  return historyTools.triggerLabel(trigger, text.seconds === "s");
 }
 
 function formatDuration(text, durationMs) {
@@ -597,7 +596,14 @@ function readingCompanionEntryScreen(ctx) {
   const tasksState = useStateValue(ctx, "tasks", []);
   const pageState = useStateValue(ctx, "dashboardPage", "reading");
   const page = pageState.value;
-  const watchTasks = () => readingTools.watch(ctx, "entry", tasksState.set, error => errorState.set(toErrorText(error)));
+  const watchTasks = () => readingTools.watchResource("entry", async () => {
+    const [tasks, history] = await Promise.all([
+      readingTools.call(ctx, "list_tasks", {limit: 50}),
+      readingTools.call(ctx, "auto_commentary_history", {limit: 10}),
+    ]);
+    return {tasks: tasks.tasks || [], history};
+  }, result => {tasksState.set(result.tasks); historyState.set(result.history);},
+  error => errorState.set(toErrorText(error)));
 
   const isBusy = () => busyState.value || refreshingState.value;
 
@@ -605,7 +611,7 @@ function readingCompanionEntryScreen(ctx) {
     if (refreshingState.value) return;
     refreshingState.set(true);
     const previousBookId = String(readingState.value && readingState.value.bookId || "");
-    if (!resuming) loadingState.set(true);
+    if (!readingState.value) loadingState.set(true);
     errorState.set("");
     try {
       const basicEnabled = ctx.isPackageImported
@@ -616,17 +622,6 @@ function readingCompanionEntryScreen(ctx) {
         : false;
       basicEnabledState.set(basicEnabled);
       autoEnabledState.set(autoEnabled);
-      if (!resuming) {
-        readingState.set(null);
-        autoStatusState.set(null);
-        historyState.set(null);
-        auditGroupsState.set({
-          groups: [],
-          totalRunChats: 0,
-          shownRunChats: 0,
-        });
-        selectedPersonaState.set(null);
-      }
 
       const errors = [];
       if (basicEnabled) {
@@ -643,7 +638,7 @@ function readingCompanionEntryScreen(ctx) {
           // Publish the book and its controls together; resumed screens keep same-book drafts.
           readingState.set(currentBook);
           selectedPersonaState.set(persona);
-          if (!resuming || previousBookId !== bookId) {
+          if (previousBookId !== bookId) {
             const savedStart = Number(prefsResult && prefsResult.startChapter);
             const savedEnd = Number(prefsResult && prefsResult.endChapter);
             const savedBudget = Number(prefsResult && prefsResult.budget);
@@ -779,9 +774,6 @@ function readingCompanionEntryScreen(ctx) {
       return;
     }
     showCardPickerState.set(true);
-    if (cardsLoadedState.value) {
-      return;
-    }
     try {
       await queryCharacterCards();
     } catch (error) {
@@ -813,6 +805,7 @@ function readingCompanionEntryScreen(ctx) {
         roleCardId: String(card.id).trim(),
       });
       selectedPersonaState.set(selected);
+      selectedPersonaState.set(await ctx.getReadingCompanionCommentaryCharacter(bookId));
       showCardPickerState.set(false);
       noticeState.set(text.personaSelected);
     } catch (error) {
@@ -1186,13 +1179,8 @@ function readingCompanionEntryScreen(ctx) {
     typeof historyState.value.runs[0] === "object"
       ? historyState.value.runs[0]
       : null;
-  const latestRun = latestRunFromStatus || latestRunFromHistory;
-  const commentaryConfiguration =
-    autoStatusState.value &&
-    autoStatusState.value.configuration &&
-    typeof autoStatusState.value.configuration === "object"
-      ? autoStatusState.value.configuration
-      : null;
+  const latestRun = latestRunFromHistory || latestRunFromStatus;
+  const commentaryConfiguration = selectedPersonaState.value?.configuration || null;
   const selectedRoleCardId = String(
     selectedPersonaState.value &&
       selectedPersonaState.value.roleCardId ||
@@ -1403,6 +1391,19 @@ function readingCompanionEntryScreen(ctx) {
       ctx.UI.Text({ text: page === "reading" ? (task.kind === "cache" ? (useEnglish ? "Past chapter cache" : "旧章缓存") : readingTools.taskLabel(task, useEnglish)) : readingTools.taskLabel(task, useEnglish), style: "titleSmall" }),
       ctx.UI.Text({ text: `${readingTools.taskStatusLabel(task, useEnglish)} · ${readingTools.taskProgress(task, useEnglish)}` }),
       ...(readingTools.taskErrors(task, useEnglish) ? [ctx.UI.Text({ text: readingTools.taskErrors(task, useEnglish) })] : []),
+      ctx.UI.OutlinedButton({onClick: async () => {
+        const attempt = (task.attempts || []).filter(item => !item.archived && item.runId).slice(-1)[0];
+        if (attempt) {
+          await ctx.setEnv(historyTools.RUN_ID_ENV_KEY,String(attempt.runId));
+          await ctx.navigate(historyTools.DETAIL_ROUTE);
+        } else await ctx.navigate(HISTORY_ROUTE);
+      }},ctx.UI.Text({text: useEnglish ? "View progress" : "查看过程"})),
+      ...readingTools.retryChapters(task).map(index => ctx.UI.OutlinedButton({enabled: !isBusy(), onClick: async () => {
+        busyState.set(true);
+        try {await readingTools.retryChapter(ctx,task,index); await watchTasks();}
+        catch (error) {errorState.set(toErrorText(error));}
+        finally {busyState.set(false);}
+      }},ctx.UI.Text({text: useEnglish ? `Retry chapter ${index+1}` : `重试第 ${index+1} 章`}))),
       ...(readingTools.active(task) ? [ctx.UI.OutlinedButton({ onClick: async () => {
         try { await readingTools.tasks.cancel(ctx, task.task_id); await watchTasks(); }
         catch (error) { errorState.set(toErrorText(error)); }
@@ -1773,7 +1774,7 @@ function readingCompanionEntryScreen(ctx) {
     );
   }
 
-  if (page === "settings" && autoEnabledState.value && book) {
+  if (page === "settings" && book) {
     const configuredModel = commentaryConfiguration
       ? `${modelSourceLabel(
           text,
@@ -1781,7 +1782,7 @@ function readingCompanionEntryScreen(ctx) {
         )} · ${String(commentaryConfiguration.modelConfigName || "")} / ${String(
           commentaryConfiguration.model || "",
         )}`
-      : text.modelSourceUnknown;
+      : String(selectedPersonaState.value?.configurationError || text.modelSourceUnknown);
     children.push(
       ctx.UI.Card(
         {

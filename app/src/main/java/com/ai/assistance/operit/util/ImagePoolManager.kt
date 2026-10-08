@@ -128,7 +128,10 @@ object ImagePoolManager {
                 return "error"
             }
 
-            val bitmap = decodeBitmapFromFile(file.absolutePath) ?: run {
+            val resolved = resolveOptions(options)
+            // Percentage scaling is relative to original pixels; keep that path unchanged.
+            val decodeLimit = resolved.maxLongEdge.takeIf { resolved.scalePercent == 100 }
+            val bitmap = decodeBitmapFromFile(file.absolutePath, decodeLimit) ?: run {
                 AppLogger.e(TAG, "无法将文件解码为位图: $filePath")
                 return "error"
             }
@@ -156,7 +159,9 @@ object ImagePoolManager {
         return try {
             val normalized = normalizeBase64Input(base64, mimeType)
             val bytes = Base64.decode(normalized.base64, Base64.DEFAULT)
-            val bitmap = decodeBitmapFromBytes(bytes) ?: run {
+            val resolved = resolveOptions(options)
+            val decodeLimit = resolved.maxLongEdge.takeIf { resolved.scalePercent == 100 }
+            val bitmap = decodeBitmapFromBytes(bytes, decodeLimit) ?: run {
                 AppLogger.e(TAG, "无法将 base64 解码为位图")
                 return "error"
             }
@@ -493,24 +498,34 @@ object ImagePoolManager {
         )
     }
 
-    private fun decodeBitmapFromFile(filePath: String): Bitmap? {
+    private fun decodeBitmapFromFile(filePath: String, maxLongEdge: Int? = null): Bitmap? {
         val options =
             BitmapFactory.Options().apply {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
         return try {
+            if (maxLongEdge != null) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(filePath, bounds)
+                options.inSampleSize = imageDecodeSampleSize(bounds.outWidth, bounds.outHeight, maxLongEdge)
+            }
             BitmapFactory.decodeFile(filePath, options)
         } catch (_: Throwable) {
             null
         }
     }
 
-    private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
+    private fun decodeBitmapFromBytes(bytes: ByteArray, maxLongEdge: Int? = null): Bitmap? {
         val options =
             BitmapFactory.Options().apply {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
         return try {
+            if (maxLongEdge != null) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                options.inSampleSize = imageDecodeSampleSize(bounds.outWidth, bounds.outHeight, maxLongEdge)
+            }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         } catch (_: Throwable) {
             null

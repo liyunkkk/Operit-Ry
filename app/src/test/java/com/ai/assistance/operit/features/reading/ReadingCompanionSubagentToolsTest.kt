@@ -16,6 +16,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReadingCompanionSubagentToolsTest {
+    @Test fun `summary task exposes only its tools and describes successful termination`() {
+        val prompts = ReadingCompanionSubagentTools.prompts(summaryOnly=true)
+        assertFalse(prompts.any { it.name == ReadingCompanionSubagentTools.TOOL_SUBMIT_COMMENTS })
+        assertTrue(prompts.single { it.name == ReadingCompanionSubagentTools.TOOL_SUBMIT_SUMMARY }
+            .description.contains("ends the task"))
+    }
 
     @Test
     fun `long labeled chapters can be fully reconstructed without changing anchors`() {

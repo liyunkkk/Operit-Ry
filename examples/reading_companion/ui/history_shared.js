@@ -126,13 +126,14 @@ function statusColor(status) {
 }
 
 function triggerLabel(trigger, english) {
-  return String(trigger || "").trim() === "manual"
-    ? english
-      ? "Manual"
-      : "手动触发"
-    : english
-      ? "After reading progress"
-      : "阅读进度触发";
+  const labels = {
+    manual: ["手动段评", "Manual commentary"],
+    manual_summary: ["手动摘要", "Manual summary"],
+    conversation: ["对话发起", "From chat"],
+    reading_progress: ["阅读进度触发", "After reading progress"],
+    background: ["阅读进度触发", "After reading progress"],
+  };
+  return (labels[String(trigger || "").trim()] || [String(trigger || "未知来源"), String(trigger || "Unknown trigger")])[english ? 1 : 0];
 }
 
 function stageLabel(stage, english) {
@@ -225,7 +226,7 @@ function modelSourceLabel(source, english) {
         character_card: "角色卡固定模型",
         global_chat: "全局“对话”模型",
       };
-  return labels[String(source || "").trim()] ||
+  return labels[source === "parent_conversation" ? "caller_chat" : String(source || "").trim()] ||
     (english ? "Resolved at generation time" : "生成时解析");
 }
 

@@ -39,7 +39,13 @@ internal fun ResponseActivityHeader(
     val title = when {
         durationMs <= 0L -> stringResource(R.string.collapse_process_title)
         seconds < 60 -> stringResource(R.string.collapse_process_duration_seconds, seconds)
-        else -> stringResource(R.string.collapse_process_duration_minutes, seconds / 60, seconds % 60)
+        seconds < 3600 -> stringResource(R.string.collapse_process_duration_minutes, seconds / 60, seconds % 60)
+        else -> stringResource(
+            R.string.collapse_process_duration_hours,
+            seconds / 3600,
+            (seconds % 3600) / 60,
+            seconds % 60,
+        )
     }
     val action = stringResource(
         if (expanded) R.string.collapse_process_hide else R.string.collapse_process_show

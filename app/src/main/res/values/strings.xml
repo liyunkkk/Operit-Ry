@@ -1,4 +1,5 @@
 <resources>
+    <string name="logcat_flush_incomplete">现有日志已保存至 %1$s；部分日志尚未写入或写入失败，导出可能不完整。</string>
     <string name="local_llm_removed">此版本已移除手机本地大模型推理。请选择云端或远程服务；原模型文件保留在 Download/Operit/models，可通过文件管理器自行清理。</string>
     <string name="openai_error_repetition_truncation">模型因重复输出被服务端截断，已丢弃异常响应并停止本轮工具执行。</string>
     <string name="openai_retry_repetition_truncation">模型出现重复输出，已丢弃异常响应，正在重新请求一次。</string>
@@ -8797,6 +8798,9 @@
     <string name="collapse_process_hide">收起回复过程</string>
     <string name="collapse_process_duration_seconds">用时 %1$d秒</string>
     <string name="collapse_process_duration_minutes">用时 %1$d分钟 %2$d秒</string>
+    <string name="collapse_process_duration_hours">用时 %1$d时%2$d分%3$d秒</string>
+    <string name="duration_compact_minutes">%1$d分%2$d秒</string>
+    <string name="duration_compact_hours">%1$d时%2$d分%3$d秒</string>
     <string name="tool_errors_title">工具调用问题</string>
     <string name="tool_errors_app_logs">应用日志</string>
     <string name="tool_errors_scope">记录 AI 对话与子代理的执行失败和未声明参数，即使工具返回成功。保留原始参数；取消和拒绝授权不计入。从此版本开始记录。</string>
@@ -8811,9 +8815,12 @@
     <string name="tool_repairs_total">共 %1$d 条修复记录</string>
     <string name="tool_repairs_empty">暂无工具调用修复记录</string>
     <string name="tool_repairs_line_range">按行号读取，自动转为分段读取工具</string>
-    <string name="tool_repairs_separator">将终端工具名中的双冒号修正为单冒号</string>
+    <string name="tool_repairs_separator">将终端工具名中重复的冒号修正为单冒号</string>
     <string name="tool_repairs_timeout">将终端 timeout 参数统一为 timeoutMs</string>
     <string name="tool_repairs_package">移除与目标工具包一致的重复 package_name</string>
+    <string name="tool_repairs_flattened_proxy">从 params 文本中还原出被并入的 tool_name</string>
+    <string name="tool_repairs_memory_argument">将记忆工具误写的 new_text 参数改为 content</string>
+    <string name="tool_repairs_memory_finish">将误放在 action 中的结束操作改为独立结束工具</string>
     <string name="tool_repairs_invalid_record">记录格式无效，点击查看原始记录</string>
     <string name="tool_repairs_refresh">刷新</string>
     <string name="tool_errors_totals">%1$d 条记录 · %2$d 个工具</string>
@@ -9031,4 +9038,7 @@
     <string name="resource_download_failed_space">存储空间不足，请清理后重试</string>
     <string name="resource_download_failed_generic">下载失败，请重试</string>
     <string name="plugin_terminal_resource_required">需要先下载 Ubuntu 终端环境（约 64 MB）</string>
+    <string name="terminal_task_start_desc">启动终端任务：%1$s</string>
+    <string name="terminal_task_poll_desc">查看终端任务：%1$s</string>
+    <string name="terminal_task_cancel_desc">取消终端任务：%1$s</string>
 </resources>

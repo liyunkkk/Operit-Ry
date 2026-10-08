@@ -91,18 +91,10 @@ object MemoryLearningCoordinator {
          * list is synchronised instead of relying on both sides happening to hold the same lock.
          */
         private val failures = java.util.Collections.synchronizedList(mutableListOf<String>())
-        private val consecutiveFailures = HashMap<String,Int>()
+        val retryGuard = LearningRetryGuard()
         fun addFailure(detail: String) { failures.add(detail) }
         fun failureList(): List<String> = synchronized(failures) { failures.toList() }
         fun failureCount(): Int = synchronized(failures) { failures.size }
-        /**
-         * Counts repeated failures of one action. A batch that retries the same rejected call burns
-         * its round budget and is then discarded, so after [LEARNING_REPEAT_FAILURE_LIMIT] the action
-         * is closed for this batch and the reviewer is told to finish instead.
-         */
-        fun recordRepeatFailure(key: String): Int = (consecutiveFailures[key] ?: 0) + 1
-            .also { consecutiveFailures[key] = it }
-        fun clearRepeatFailure(key: String) { consecutiveFailures.remove(key) }
         var persistProgress: suspend () -> Unit = {}
         var recordModelRound: () -> Unit = {}
         val evidenceBytes = AtomicLong()
@@ -521,9 +513,8 @@ object MemoryLearningCoordinator {
             })
             val args = tool.parameters.associate { it.name to it.value }
             val actionName = args["action"].orEmpty()
-            // The rejection counter is keyed by the action and the target it was aimed at: three
-            // recoverable mistakes on three different files must not close a whole operation.
-            var repeatKey = actionName
+            // Corrected input must remain executable; retain only a digest of full arguments.
+            var repeatKey = learningRetryKey(actionName,args)
             var repeatTarget = ""
             try {
                 if(tool.name==FINISH) {
@@ -533,10 +524,14 @@ object MemoryLearningCoordinator {
                     val json = JSONObject(args["arguments"].orEmpty().ifBlank { "{}" })
                     val params = json.keys().asSequence().associateWith { json.get(it).toString() }
                     val parts = listOf("target","name","path","section").map { params[it].orEmpty() }
-                    repeatKey = actionName + "|" + parts.joinToString("|")
+                    repeatKey = learningRetryKey(actionName,params)
                     repeatTarget = parts.filter { it.isNotBlank() }.joinToString(" ")
+                    check(!session.retryGuard.isBlocked(repeatKey)) {
+                        "These identical arguments already failed $LEARNING_REPEAT_FAILURE_LIMIT times. " +
+                            "Read the latest content, correct the arguments, or skip this change and call $FINISH."
+                    }
                     val result = session.actions.execute(actionName,params)
-                    session.clearRepeatFailure(repeatKey)
+                    session.retryGuard.onSuccess()
                     session.roundNotice()?.let { result.put("notice",it) }
                     val resultText = result.toString()
                     session.evidenceBytes.addAndGet(resultText.toByteArray(Charsets.UTF_8).size.toLong())
@@ -548,17 +543,15 @@ object MemoryLearningCoordinator {
                 // A run of rejected tool calls is exactly when the reviewer needs to know the budget is
                 // nearly gone, so the pacing hint rides on the error too.
                 val notice = session.roundNotice()
-                val repeats = session.recordRepeatFailure(repeatKey)
+                val repeats = session.retryGuard.onFailure(repeatKey)
                 if (repeats >= LEARNING_REPEAT_FAILURE_LIMIT) {
-                    // Retrying the same rejected call cannot succeed and would spend the whole round
-                    // budget, which discards the batch and its staged changes. The action is closed
-                    // for this batch instead, so the reviewer submits what it already has.
-                    // Only this target is closed, so the message must say which one.
+                    // Rejections are failures, even when we also give a recovery/budget hint.
                     val target = repeatTarget.takeIf { it.isNotBlank() }?.let { " on $it" }.orEmpty()
-                    val message = "$actionName$target was rejected $repeats times and is closed for this batch. " +
-                        "Stop retrying it, submit what already qualifies and call $FINISH." +
+                    val message = "${e.message.orEmpty()} $actionName$target failed with identical arguments $repeats times. " +
+                        "Do not resend unchanged arguments. Read the latest content and correct the input, " +
+                        "or skip this change and call $FINISH." +
                         (notice?.let { " $it" } ?: "")
-                    ToolResult(toolName=tool.name,success=true,result=StringResultData(message))
+                    ToolResult(toolName=tool.name,success=false,result=StringResultData(""),error=message)
                 } else ToolResult(toolName=tool.name,success=false,result=StringResultData(""),
                     error=e.message.orEmpty().let { message -> notice?.let { message+" $it" } ?: message })
             } finally { session.persistProgress() }

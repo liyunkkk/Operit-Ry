@@ -32,6 +32,7 @@ object LogcatExportHelper {
 
     suspend fun exportLogs(context: Context): LogcatExportResult = withContext(Dispatchers.IO) {
         try {
+            val fullyFlushed = AppLogger.flushFileLogs()
             val logFile = AppLogger.getLogFile()?.takeIf { it.isFile && it.length() > 0 }
             val logLineCount = logFile?.let(::countExportableLogLines) ?: 0L
             if (logLineCount == 0L && !MemoryDiagnostics.hasRecords(context)) {
@@ -53,7 +54,8 @@ object LogcatExportHelper {
             }
 
             LogcatExportResult(
-                message = context.getString(R.string.logcat_saved_to, filePath),
+                message = if (fullyFlushed) context.getString(R.string.logcat_saved_to, filePath)
+                    else context.getString(R.string.logcat_flush_incomplete, filePath),
                 success = true
             )
         } catch (e: Exception) {

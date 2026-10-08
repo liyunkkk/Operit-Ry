@@ -19,6 +19,19 @@ internal class RenderBatchCoordinator(
     private var requestedRevision = 0L
     private var appliedRevision = 0L
     private var updateJob: Job? = null
+    private var generation = 0L
+
+    fun cancelPending() {
+        generation++
+        updateJob?.cancel()
+        updateJob = null
+        appliedRevision = requestedRevision
+    }
+
+    fun flushNow() {
+        cancelPending()
+        onFlush()
+    }
 
     fun requestUpdate() {
         requestedRevision++
@@ -26,6 +39,7 @@ internal class RenderBatchCoordinator(
             return
         }
 
+        val scheduledGeneration = generation
         updateJob =
             scope.launch {
                 try {
@@ -36,7 +50,7 @@ internal class RenderBatchCoordinator(
                         appliedRevision = revisionToApply
                     }
                 } finally {
-                    updateJob = null
+                    if (generation == scheduledGeneration) updateJob = null
                 }
             }
     }

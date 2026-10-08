@@ -386,7 +386,11 @@ class MemoryLearningBatchTest {
                 "content" to "y".repeat(50)))
             fail("an add past the capacity must be rejected")
         } catch (e: IllegalArgumentException) {
-            assertTrue(e.message.orEmpty().contains("remove or replace existing text in this batch before adding"))
+            val message = e.message.orEmpty()
+            for (detail in listOf("memory.md capacity exceeded", "current_chars=", "proposed_chars=",
+                "max_chars=", "over_by=", "memory_read", "shorten or remove", "before retrying")) {
+                assertTrue("Missing recovery detail: $detail", message.contains(detail))
+            }
         }
         // A rejected change must not be staged, or the reviewer would believe it landed.
         assertTrue(staged.isEmpty())
@@ -413,11 +417,16 @@ class MemoryLearningBatchTest {
         } catch (e: IllegalArgumentException) {
             e.message.orEmpty()
         }
-        // Ambiguous and missing old_text are refused with the same wording the direct writer uses.
-        assertEquals("old_text must match exactly once",
-            change("operation" to "remove","old_text" to "Kotlin"))
-        assertEquals("old_text must match exactly once",
-            change("operation" to "replace","old_text" to "missing","content" to "x"))
+        // Explain both why the edit was refused and how to obtain a unique, current span.
+        val ambiguous = change("operation" to "remove","old_text" to "Kotlin")
+        val missing = change("operation" to "replace","old_text" to "missing","content" to "x")
+        for (message in listOf(ambiguous, missing)) {
+            assertTrue(message.contains("old_text must match exactly once"))
+            assertTrue(message.contains("memory_read"))
+            assertTrue(message.contains("unique span"))
+        }
+        assertTrue(ambiguous.contains("found more than 1 matches"))
+        assertTrue(missing.contains("found 0 matches"))
         assertEquals("old_text and content are required",
             change("operation" to "remove","old_text" to " "))
         assertEquals("content is required",

@@ -1508,7 +1508,7 @@ class ClaudeProvider(
                     )
                 }
 
-                val builtRequestBody = createRequestBody(
+                val builtRequestBody = withContext(Dispatchers.IO) { createRequestBody(
                     context,
                     chatHistory,
                     modelParameters,
@@ -1516,7 +1516,7 @@ class ClaudeProvider(
                     stream,
                     availableTools,
                     preserveThinkInHistory
-                )
+                ) }
                 attemptedThinkingFormat = builtRequestBody.thinkingFormat
                 onTokensUpdated(
                     tokenCacheManager.totalInputTokenCount,

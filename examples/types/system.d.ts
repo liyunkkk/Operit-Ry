@@ -267,6 +267,15 @@ export namespace System {
      * Terminal operations.
      */
     namespace terminal {
+        /** Start a managed command. yieldMs only limits this wait; timeoutMs limits execution. */
+        function start(sessionId: string, command: string, options?: {
+            yieldMs?: number; timeoutMs?: number;
+        }): Promise<import('./results').TerminalTaskResultData>;
+        /** Return a bounded tail snapshot; polling never cancels the command. */
+        function poll(options: {
+            runId?: string; sessionId?: string; yieldMs?: number;
+        }): Promise<import('./results').TerminalTaskResultData>;
+        function cancel(runId: string): Promise<import('./results').TerminalTaskResultData>;
         /**
          * Create or get a terminal session.
          * @param sessionName The name for the session.

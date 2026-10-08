@@ -63,8 +63,7 @@ class QwenAIProvider(
         preserveThinkInHistory: Boolean
     ): RequestBody {
         // 首先，调用父类的实现来获取一个标准的OpenAI格式的请求体JSON对象
-        val baseRequestBodyJson = super.createRequestBodyInternal(context, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
-        val jsonObject = JSONObject(baseRequestBodyJson)
+        val jsonObject = super.createRequestBodyInternal(context, chatHistory, modelParameters, stream, availableTools, preserveThinkInHistory)
 
         applyQwenReasoningSettings(
             context = context,

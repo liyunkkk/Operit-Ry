@@ -5,6 +5,7 @@
  */
 
 import {
+    TerminalTaskResultData,
     DirectoryListingData, FileContentData, BinaryFileContentData, FileOperationData, FileExistsData,
     FindFilesResultData, FileInfoData, FileConversionResultData, FileFormatConversionsResultData,
     HttpResponseData, VisitWebResultData,
@@ -171,6 +172,9 @@ export interface ToolResultMap {
     'send_broadcast': IntentResultData;
 
     // Terminal operations
+    'start_terminal_task': TerminalTaskResultData;
+    'poll_terminal_task': TerminalTaskResultData;
+    'cancel_terminal_task': TerminalTaskResultData;
     'execute_terminal': TerminalCommandResultData;
     'execute_in_terminal_session_streaming': TerminalCommandResultData;
     'execute_hidden_terminal_command': HiddenTerminalCommandResultData;

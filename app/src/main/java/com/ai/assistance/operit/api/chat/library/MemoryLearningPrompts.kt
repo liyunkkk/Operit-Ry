@@ -10,9 +10,7 @@ import com.ai.assistance.operit.data.preferences.LearnedSkillRepository
 internal const val LEARNING_ROUND_LIMIT = 20
 internal const val LEARNING_TOOL_CALL_LIMIT = 60
 /**
- * How often one action may fail in a row before it is closed for the rest of the batch. Retrying a
- * rejected call cannot succeed, and a batch that spends its rounds on it is discarded along with
- * everything it already staged.
+ * Identical failures allowed without successful intervening work. Corrected inputs remain usable.
  */
 internal const val LEARNING_REPEAT_FAILURE_LIMIT = 3
 
@@ -103,10 +101,11 @@ internal fun buildMemoryLearningInstructions(chatId: String, notes: Boolean, ski
             user must clear that list before more are accepted.
             No fabricated successful testing. If nothing qualifies, do not invent a change.
             If an operation is outside this run's scope, do not retry it; continue the enabled work or finish.
-            If the same operation on the same target is rejected, the reason will not change by resending
-            it: fix the input or drop that change. Repeating it $LEARNING_REPEAT_FAILURE_LIMIT times closes
-            that operation for this batch, so switch to the rest of the work instead.
+            Do not resend rejected arguments unchanged. After $LEARNING_REPEAT_FAILURE_LIMIT identical failures,
+            that input is blocked until a successful read or edit. Read the latest staged content, correct
+            the input (including capacity), or skip that change. Other corrected operations remain available.
             Call $finish after reviewing all provided source, even when no changes qualify. This is mandatory.
+            $finish is a separate tool called without arguments, never an action inside the action tool.
             A final summary alone does not confirm completion. At most $LEARNING_ROUND_LIMIT model rounds and $LEARNING_TOOL_CALL_LIMIT tool calls.
             Once within two rounds of that limit, stop exploring: submit the best complete change you
             already have and call $finish, because an unfinished batch is discarded and reviewed again later.

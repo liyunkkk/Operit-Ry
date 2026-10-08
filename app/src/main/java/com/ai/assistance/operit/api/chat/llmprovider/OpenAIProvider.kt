@@ -675,7 +675,7 @@ open class OpenAIProvider(
     ): RequestBody {
         val automaticReasoningRequestParameters =
             consumeAutomaticReasoningSuppression(modelParameters)
-        val jsonString =
+        val requestJson =
             createRequestBodyInternal(
                 context,
                 chatHistory,
@@ -688,9 +688,8 @@ open class OpenAIProvider(
             automaticReasoningRequestParameters.suppressAutomaticReasoning ||
                 !supportsOpenAiChatReasoningEffort()
         ) {
-            return createJsonRequestBody(jsonString)
+            return createJsonRequestBody(requestJson.toString())
         }
-        val requestJson = JSONObject(jsonString)
         applyOpenAiChatReasoning(context, requestJson, enableThinking)
         return createJsonRequestBody(requestJson.toString())
     }
@@ -763,7 +762,7 @@ open class OpenAIProvider(
     }
 
     /**
-     * 内部方法，用于构建请求体的JSON字符串，以便子类可以重用和扩展。
+     * Build a mutable request so providers can add options without copying the entire payload.
      */
     protected fun createRequestBodyInternal(
         context: Context,
@@ -772,7 +771,7 @@ open class OpenAIProvider(
         stream: Boolean = true,
         availableTools: List<ToolPrompt>? = null,
         preserveThinkInHistory: Boolean = false
-    ): String {
+    ): JSONObject {
         val jsonObject = JSONObject()
         jsonObject.put("model", modelName)
         jsonObject.put("stream", stream) // 根据stream参数设置
@@ -867,7 +866,7 @@ open class OpenAIProvider(
         logRequestBodyForDebugging("AIService", "Request body: ") {
             finalRequestObject
         }
-        return finalRequestObject.toString()
+        return finalRequestObject
     }
 
     protected open fun comparableRoleForTurn(turn: PromptTurn): String {
@@ -3029,7 +3028,7 @@ open class OpenAIProvider(
                     "【发送消息】准备构建请求体，模型参数数量: ${modelParameters.size}，已启用参数: ${modelParameters.count { it.isEnabled }}"
                 )
                 // 直接传递原始历史记录给createRequestBody，让具体的Provider决定如何处理（例如Deepseek需要保留<think>标签）
-                val requestBody = createRequestBody(
+                val requestBody = withContext(Dispatchers.IO) { createRequestBody(
                     context,
                     currentHistory,
                     modelParameters,
@@ -3037,7 +3036,7 @@ open class OpenAIProvider(
                     effectiveStream,
                     availableTools,
                     preserveThinkInHistory
-                )
+                ) }
                 onTokensUpdated(
                     tokenCacheManager.totalInputTokenCount,
                     tokenCacheManager.cachedInputTokenCount,

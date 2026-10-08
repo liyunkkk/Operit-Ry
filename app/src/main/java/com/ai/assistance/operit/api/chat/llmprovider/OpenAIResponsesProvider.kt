@@ -64,7 +64,7 @@ open class OpenAIResponsesProvider(
             } else {
                 ChatUtils.stripOpenAiResponsesReasoningMetaTurns(chatHistory)
             }
-        val baseRequestBodyJson = super.createRequestBodyInternal(
+        val jsonObject = super.createRequestBodyInternal(
             context,
             requestChatHistory,
             automaticReasoningRequestParameters.modelParameters,
@@ -72,7 +72,6 @@ open class OpenAIResponsesProvider(
             availableTools,
             preserveThinkInHistory
         )
-        val jsonObject = JSONObject(baseRequestBodyJson)
 
         if (!automaticReasoningRequestParameters.suppressAutomaticReasoning) {
             applyResponsesReasoningEffort(

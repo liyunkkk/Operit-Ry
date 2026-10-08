@@ -360,12 +360,16 @@ class CollaborationCoordinator private constructor(context: Context) {
             val text = (result as? SubagentTaskResult.Completed)?.outcome?.finalAssistantText
                 ?.let { com.ai.assistance.operit.core.agent.SubagentResultExtractor.extract(it, "$path completed with an empty response") }
                 ?: "$path: $status${errorText?.let { ": $it" }.orEmpty()}"
-            write(state.update(agent.copy(
+            val finished = state.update(agent.copy(
                 status = status, lastError = errorText,
                 finalAnswer = text.takeIf { status == CollaborationStatus.COMPLETED },
-            )))
-            if (agent.chatId in deleting || agent.parentPath == null) return
-            write(state.enqueue(root, AgentMessage(
+            ))
+            if (agent.chatId in deleting || agent.parentPath == null) {
+                write(finished)
+                return
+            }
+            // Commit the terminal state and its parent notification together.
+            write(finished.enqueue(root, AgentMessage(
                 UUID.randomUUID().toString(), path, agent.parentPath,
                 if (status == CollaborationStatus.COMPLETED) AgentMessageKind.FINAL_ANSWER else AgentMessageKind.STATUS,
                 text.ifBlank { "$path completed with an empty response" },

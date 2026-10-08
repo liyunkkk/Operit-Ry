@@ -1433,7 +1433,7 @@ class EnhancedAIService private constructor(
                     // 使用新的Stream API
                     AppLogger.d(TAG, "sendMessage请求前准备耗时: ${tAfterGetTools - startTime}ms, 流式输出: $stream")
                     val requestStartTime = messageTimingNow()
-                    notifyModelRequestStarted(chatId, isSubTask)
+                    notifyModelRequestStarted(chatId, isSubTask, modelSnapshot)
                     val inputUsage = beginInputUsage(serviceForFunction, requestHistory, availableTools)
                     val responseStream =
                             serviceForFunction.sendMessage(
@@ -2031,8 +2031,14 @@ class EnhancedAIService private constructor(
      * report model rounds. A chat with its own run observer (the reading companion) already
      * persists its rounds, so it is skipped here.
      */
-    private suspend fun notifyModelRequestStarted(chatId: String?, isSubTask: Boolean) {
-        com.ai.assistance.operit.core.agent.AgentRunObservers.forChat(chatId)?.onModelRequest()
+    private suspend fun notifyModelRequestStarted(chatId: String?, isSubTask: Boolean, snapshot: ModelExecutionSnapshot) {
+        val identity = com.ai.assistance.operit.api.chat.llmprovider.resolveTokenStatIdentity(snapshot.service)
+        com.ai.assistance.operit.core.agent.AgentRunObservers.forChat(chatId)?.onModelRequest(
+            com.ai.assistance.operit.core.agent.AgentModelIdentity(
+                snapshot.config.id, snapshot.config.name, snapshot.lease.modelIndex,
+                identity.first, identity.second,
+            )
+        )
         val childChatId = chatId?.takeIf { it.isNotBlank() }
         if (!isSubTask || childChatId == null) return
         if (com.ai.assistance.operit.core.agent.AgentRunObservers.hasObserver(childChatId)) return
@@ -2172,7 +2178,9 @@ class EnhancedAIService private constructor(
         }
 
         val terminalInvocations =
-            toolInvocations.filter { invocation -> invocation.tool.name in context.terminalToolNames }
+            toolInvocations.filter { invocation ->
+                com.ai.assistance.operit.core.tools.ToolCallRepairRouter.terminalToolName(invocation) in context.terminalToolNames
+            }
         if (terminalInvocations.isNotEmpty() && toolInvocations.size != 1) {
             AppLogger.w(TAG, "Terminal result turn must contain exactly one tool call")
             finalizeAssistantResponse(
@@ -2316,7 +2324,9 @@ class EnhancedAIService private constructor(
                 }
                 if (
                     turnSignal == ToolTurnSignal.COMPLETE ||
-                    toolInvocations.singleOrNull()?.tool?.name in context.terminalToolNames
+                    toolInvocations.singleOrNull()?.let {
+                        com.ai.assistance.operit.core.tools.ToolCallRepairRouter.terminalToolName(it)
+                    } in context.terminalToolNames
                 ) {
                     finalizeAssistantResponse(
                         context = context,
@@ -2605,7 +2615,7 @@ class EnhancedAIService private constructor(
             try {
                 // 发送消息并获取响应流
                 val aiStartTime = messageTimingNow()
-                notifyModelRequestStarted(chatId, isSubTask)
+                notifyModelRequestStarted(chatId, isSubTask, modelSnapshot)
                 val inputUsage = beginInputUsage(serviceForFunction, currentChatHistory, availableTools)
                 val responseStream =
                         serviceForFunction.sendMessage(

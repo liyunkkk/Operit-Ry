@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.ui.features.chat.components
 
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
@@ -1195,16 +1196,24 @@ private fun hasDisplayableMessageTimestamp(message: ChatMessage): Boolean {
         message.completedAt > 0L
 }
 
-private fun formatCompactDuration(durationMs: Long): String {
+/** Sub-minute spans stay compact; longer ones read as minutes and hours instead of a huge seconds count. */
+private fun formatCompactDuration(context: Context, durationMs: Long): String {
     if (durationMs <= 0L) return "0ms"
-    return if (durationMs >= 1000L) {
-        if (durationMs >= 10_000L) {
+    if (durationMs < 1000L) return "${durationMs}ms"
+    if (durationMs < 60_000L) {
+        return if (durationMs >= 10_000L) {
             String.format(Locale.getDefault(), "%.0fs", durationMs / 1000f)
         } else {
             String.format(Locale.getDefault(), "%.1fs", durationMs / 1000f)
         }
+    }
+    val totalSeconds = durationMs / 1000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return if (minutes < 60L) {
+        context.getString(R.string.duration_compact_minutes, minutes, seconds)
     } else {
-        "${durationMs}ms"
+        context.getString(R.string.duration_compact_hours, minutes / 60L, minutes % 60L, seconds)
     }
 }
 
@@ -1242,9 +1251,9 @@ internal fun MessageFooterBar(
             val totalDuration = (message.waitDurationMs + message.outputDurationMs).coerceAtLeast(0L)
             context.getString(
                 R.string.chat_message_timing_stats_compact,
-                formatCompactDuration(totalDuration),
-                formatCompactDuration(message.waitDurationMs),
-                formatCompactDuration(message.outputDurationMs),
+                formatCompactDuration(context, totalDuration),
+                formatCompactDuration(context, message.waitDurationMs),
+                formatCompactDuration(context, message.outputDurationMs),
             )
         }
     val messageTimeSummary =

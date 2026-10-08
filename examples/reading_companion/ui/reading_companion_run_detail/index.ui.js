@@ -1,3 +1,4 @@
+const readingTools = require("../reading_client.js");
 const {
   HISTORY_ROUTE,
   RUN_ID_ENV_KEY,
@@ -129,25 +130,20 @@ function detailScreen(ctx) {
   const [error, setError] = ctx.useState("detailError", "");
   const [detail, setDetail] = ctx.useState("detailValue", null);
   const [auditNotice, setAuditNotice] = ctx.useState("detailAuditNotice", "");
+  const [showDiagnostics, setShowDiagnostics] = ctx.useState("detailDiagnostics", false);
   const runId = Number(ctx.getEnv(RUN_ID_ENV_KEY) || 0);
-
-  const load = async () => {
+  const watchKey = `detail_${runId}`;
+  const watch = () => {
     if (!Number.isFinite(runId) || runId <= 0) {
       setError(english ? "No run was selected." : "没有选中段评任务。");
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError("");
-    try {
-      setDetail(
-        await callHistoryTool(ctx, "auto_commentary_run_detail", { runId }),
-      );
-    } catch (loadError) {
-      setError(toErrorText(loadError));
-    } finally {
-      setLoading(false);
-    }
+    return readingTools.watchResource(watchKey,
+      () => callHistoryTool(ctx,"auto_commentary_run_detail",{runId}),
+      result => {setDetail(result); setLoading(false); setError("");},
+      error => {setError(toErrorText(error)); setLoading(false);},
+      result => !!result?.run && !Number(result.run.finishedAt));
   };
 
   const backToHistory = async () => {
@@ -168,16 +164,16 @@ function detailScreen(ctx) {
     }
   };
 
-  const title = english ? "Commentary run detail" : "段评任务详情";
+  const title = english ? "Generation detail" : "生成详情";
   const children = [];
-  if (loading) {
+  if (loading && !detail) {
     children.push(
       UI.Row({ fillMaxWidth: true, padding: 16, spacing: 10, verticalAlignment: "center" }, [
         UI.CircularProgressIndicator({ width: 20, height: 20, strokeWidth: 2 }),
         UI.Text({ text: english ? "Loading task…" : "正在加载任务…", color: colors.onSurfaceVariant }),
       ]),
     );
-  } else if (error) {
+  } else if (error && !detail) {
     children.push(
       UI.Card({ fillMaxWidth: true, containerColor: colors.errorContainer },
         UI.Column({ fillMaxWidth: true, padding: 16, spacing: 10 }, [
@@ -216,16 +212,8 @@ function detailScreen(ctx) {
       const modelParts = [
         source,
         String(run.modelConfigName || "").trim(),
-        String(run.modelConfigId || "").trim() &&
-        String(run.modelConfigId || "").trim() !==
-          String(run.modelConfigName || "").trim()
-          ? String(run.modelConfigId || "").trim()
-          : "",
         String(run.provider || "").trim(),
         String(run.model || "").trim(),
-        Number.isFinite(Number(run.modelIndex))
-          ? `#${Number(run.modelIndex)}`
-          : "",
       ].filter(Boolean);
       const targetParts = [
         String(run.chapterTitle || "").trim(),
@@ -281,6 +269,7 @@ function detailScreen(ctx) {
           : (english ? "actual usage unavailable; estimate is labeled" : "实际用量不可用；仅显示预估"),
       ].filter(Boolean);
       const errorText = String(run.error || "").trim();
+      if (error) children.push(UI.Text({text: error, color: colors.error}));
       children.push(
         UI.Card({ fillMaxWidth: true, containerColor: colors.primaryContainer },
           UI.Column({ fillMaxWidth: true, padding: 16, spacing: 8 }, [
@@ -301,6 +290,9 @@ function detailScreen(ctx) {
               style: "bodySmall",
               color: colors.onPrimaryContainer,
             }),
+            ...(run.childChatId ? [UI.Button({onClick: openAuditChat},
+              UI.Text({text: english ? "View tool conversation" : "查看工具调用对话"}))] : []),
+            ...(auditNotice ? [UI.Text({text: auditNotice, style: "bodySmall"})] : []),
           ]),
         ),
         UI.Card({ fillMaxWidth: true, containerColor: colors.surface },
@@ -368,9 +360,14 @@ function detailScreen(ctx) {
         children.push(
           UI.Card({ fillMaxWidth: true, containerColor: colors.secondaryContainer },
             UI.Text({
-              text: english
-                ? `Result: ${Number(run.commentCount || 0)} comments stored for safe unlock in Legado.`
-                : `结果：已保存 ${Number(run.commentCount || 0)} 条段评，按阅读进度在 Legado 安全解锁。`,
+              text: !Number(run.finishedAt)
+                ? (english ? "Generation in progress. Results have not been published." : "正在生成，结果尚未发布。")
+                : run.status !== "generated"
+                  ? statusLabel(run.status, english)
+                  : run.trigger === "manual_summary"
+                    ? (english ? "Chapter summary saved." : "章节摘要已保存。")
+                    : (english ? `${Number(run.commentCount || 0)} comments saved for safe unlock in Legado.`
+                      : `已保存 ${Number(run.commentCount || 0)} 条段评，按阅读进度在 Legado 解锁。`),
               style: "bodyMedium",
               color: colors.onSecondaryContainer,
               padding: 16,
@@ -378,7 +375,7 @@ function detailScreen(ctx) {
           ),
         );
       }
-      children.push(
+      if (run.trigger !== "manual_summary") children.push(
         UI.Card({ fillMaxWidth: true, containerColor: colors.surface },
           UI.Column({ fillMaxWidth: true, padding: 16, spacing: 10 }, [
             UI.Text({
@@ -449,6 +446,10 @@ function detailScreen(ctx) {
           ]),
         ),
       );
+      children.push(UI.OutlinedButton({onClick: () => setShowDiagnostics(!showDiagnostics)},
+        UI.Text({text: showDiagnostics ? (english ? "Hide diagnostics" : "收起诊断记录")
+          : (english ? "Show diagnostics" : "展开诊断记录")})));
+      if (showDiagnostics) {
       children.push(
         UI.Card({ fillMaxWidth: true, containerColor: colors.surface },
           UI.Column({ fillMaxWidth: true, padding: 16, spacing: 10 }, [
@@ -560,9 +561,10 @@ function detailScreen(ctx) {
           ]),
         ),
       );
+      }
     }
 
-    if (run) {
+    if (run && showDiagnostics) {
       children.push(
         UI.Card({ fillMaxWidth: true, containerColor: colors.surface },
           UI.Column({ fillMaxWidth: true, padding: 16, spacing: 8 }, [
@@ -614,6 +616,8 @@ function detailScreen(ctx) {
   }
 
   children.push(
+    UI.OutlinedButton({fillMaxWidth: true, onClick: watch},
+      UI.Text({text: english ? "Refresh" : "刷新"})),
     UI.OutlinedButton(
       { fillMaxWidth: true, onClick: backToHistory },
       UI.Text({ text: english ? "Back to history" : "返回历史" }),
@@ -623,11 +627,14 @@ function detailScreen(ctx) {
   return UI.Box(
     {
       fillMaxSize: true,
+      onResume: async () => {readingTools.activate(watchKey); await watch();},
+      onPause: () => readingTools.pause(watchKey),
       topBarTitle: UI.Text({ text: title, maxLines: 1, overflow: "ellipsis" }),
       onLoad: async () => {
         if (!initialized) {
           setInitialized(true);
-          await load();
+          readingTools.activate(watchKey);
+          await watch();
         }
       },
     },

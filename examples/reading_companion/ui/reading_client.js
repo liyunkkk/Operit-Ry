@@ -56,16 +56,23 @@ function stop(key) {
   if (old) { old.stopped = true; if (old.timer) clearTimeout(old.timer); watchers.delete(key); }
 }
 async function watch(ctx, key, onUpdate, onError) {
+  return watchResource(key, () => call(ctx, "list_tasks", { limit: 50 }),
+    result => onUpdate(Array.isArray(result.tasks) ? result.tasks : []), onError);
+}
+async function watchResource(key, fetch, onUpdate, onError, keepWatching = () => true) {
   if (paused.has(key)) return;
   stop(key);
   const state = { stopped: false, timer: null };
   watchers.set(key, state);
   const refresh = async () => {
     try {
-      const result = await call(ctx, "list_tasks", { limit: 50 });
-      if (!state.stopped) onUpdate(Array.isArray(result.tasks) ? result.tasks : []);
+      const result = await fetch();
+      if (!state.stopped) {
+        await onUpdate(result);
+        if (!keepWatching(result)) { stop(key); return; }
+      }
     } catch (error) { if (!state.stopped && onError) onError(error); }
-    if (!state.stopped) state.timer = setTimeout(refresh, 2000);
+    if (!state.stopped) state.timer = setTimeout(refresh, 4000);
   };
   await refresh();
 }
@@ -97,6 +104,27 @@ function taskLabel(task, english) {
     : `${first == null ? "…" : Number(first) + 1}–${last == null ? "…" : Number(last) + 1}`;
   return `${task.kind === "cache" ? (english ? "Chapter cache" : "旧章缓存") : task.kind === "summary" ? (english ? "Summary" : "摘要") : (english ? "Commentary" : "段评")} · ${task.bookName || task.bookId} · ${range} · ${request.mode === "regenerate" ? (english ? "Regenerate" : "重生成") : (english ? "Fill missing" : "补缺")}`;
 }
-module.exports = { call, unwrapToolResult, OWNERS, active, watch, stop, activate, pause, taskLabel, taskStatusLabel, taskErrors, taskProgress,
+function retryChapters(task) {
+  if (active(task) || task.kind === "cache") return [];
+  const completed = new Set((task.completedChapterIndices || []).map(Number));
+  const result = task.result || task.progress || {};
+  const failures = [...(result.failures || []), ...(task.attempts || []).filter(
+    item => ["failed","interrupted","cancelled"].includes(item.status))];
+  return [...new Set(failures.filter(item => item.chapterIndex != null).map(item => Number(item.chapterIndex)).filter(
+    index => Number.isInteger(index) && index >= 0 && !completed.has(index)))];
+}
+const pendingRetries = new Map();
+function retryChapter(ctx, task, index) {
+  const key = `${task.task_id}_${index}`;
+  if (pendingRetries.has(key)) return pendingRetries.get(key);
+  const request = call(ctx, "start_task", {kind: task.kind, book_id: task.bookId,
+    mode: task.kind === "commentary" ? "regenerate" : "fill_missing",
+    count: 1, start_chapter: index + 1, end_chapter: index + 1,
+    request_id: `retry_${task.task_id}_${index}_${Date.now()}`})
+    .finally(() => pendingRetries.delete(key));
+  pendingRetries.set(key, request);
+  return request;
+}
+module.exports = { call, unwrapToolResult, OWNERS, active, watch, watchResource, stop, activate, pause, retryChapters, retryChapter, taskLabel, taskStatusLabel, taskErrors, taskProgress,
   tasks: { start: (ctx, p) => call(ctx, "start_task", p), get: (ctx, id) => call(ctx, "get_task", { task_id: id }),
     cancel: (ctx, id) => call(ctx, "cancel_task", { task_id: id }) } };

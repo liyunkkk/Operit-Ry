@@ -2,6 +2,7 @@ package com.ai.assistance.operit.util
 
 import android.content.Context
 import android.util.Log
+import android.os.Looper
 import com.ai.assistance.operit.core.application.OperitApplication
 import java.io.File
 import java.io.FileWriter
@@ -9,8 +10,6 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
 import java.util.regex.Pattern
 
 /**
@@ -86,11 +85,15 @@ object AppLogger {
 
     @Volatile
     private var boundContext: Context? = null
-    private val fileLogExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "OperitAppLogger").apply {
-            isDaemon = true
-        }
-    }
+    private data class Record(
+        val priority: Int = INFO, val tag: String = "", val message: String = "",
+        val throwable: String? = null, val timestamp: Long = System.currentTimeMillis(),
+        val reset: Boolean = false,
+    )
+    private val fileQueue = BatchLogQueue<Record>(sink = ::writeBatch)
+    private var batchLogWriter: java.io.BufferedWriter? = null
+    private var batchPackageWriter: java.io.BufferedWriter? = null
+    private var batchFailed = false
 
     @JvmStatic
     fun bindContext(context: Context) {
@@ -255,6 +258,13 @@ object AppLogger {
 
     @JvmStatic
     fun resetLogFile() {
+        fileQueue.reset(Record(reset = true))
+    }
+
+    /** Call from a background export path, never block the UI waiting for storage. */
+    fun flushFileLogs(timeoutMs: Long = 5000): Boolean = fileQueue.flush(timeoutMs)
+
+    private fun resetLogFileSync() {
         try {
             val appContext: Context = OperitApplication.instance.applicationContext
             val dir = File(appContext.filesDir, LOG_DIR_NAME)
@@ -273,21 +283,42 @@ object AppLogger {
 
     private fun writeToFile(priority: Int, tag: String, msg: String, tr: Throwable?) {
         if (!enableFileLogging) return
-        try {
-            fileLogExecutor.execute {
-                writeToFileSync(priority, tag, msg, tr)
-            }
-        } catch (_: RejectedExecutionException) {
+        // Bound retained memory before enqueueing; never retain a Throwable's object graph.
+        val record = Record(priority, tag.take(256), normalizeLogMessage(msg),
+            tr?.let { ThrowableTextFormatter.format(it, MAX_LOG_THROWABLE_CHARS) })
+        val accepted = fileQueue.submit(record, Looper.myLooper() != Looper.getMainLooper())
+        if (!accepted) {
+            Log.w("OperitAppLogger", "File log queue overloaded; UI record omitted (count will be saved)")
         }
     }
 
-    private fun writeToFileSync(priority: Int, tag: String, msg: String, tr: Throwable?) {
-        if (!enableFileLogging) return
-        val file = resolveLogFile() ?: return
+    private fun writeBatch(records: List<Record>, dropped: Long): Boolean {
+        batchFailed = false
+        fun closeWriters() {
+            try { batchLogWriter?.close() } catch (_: IOException) { batchFailed = true }
+            try { batchPackageWriter?.close() } catch (_: IOException) { batchFailed = true }
+            batchLogWriter = null
+            batchPackageWriter = null
+        }
+        try {
+            records.forEach { record ->
+                if (record.reset) {
+                    closeWriters()
+                    resetLogFileSync()
+                } else writeToFileSync(record)
+            }
+            if (dropped > 0) writeToFileSync(Record(WARN, "OperitAppLogger",
+                "File log queue overload: $dropped UI/interrupted records omitted; background producers use backpressure."))
+        } finally { closeWriters() }
+        return !batchFailed
+    }
 
-        val time = dateFormat.format(Date())
-        val normalizedMessage = normalizeLogMessage(msg)
-        val throwableText = tr?.let { ThrowableTextFormatter.format(it, MAX_LOG_THROWABLE_CHARS) }
+    private fun writeToFileSync(record: Record) {
+        if (!enableFileLogging) return
+        val file = resolveLogFile() ?: run { batchFailed = true; return }
+        val (priority, tag, normalizedMessage, throwableText) = record
+
+        val time = dateFormat.format(Date(record.timestamp))
         val levelChar = when (priority) {
             VERBOSE -> 'V'
             DEBUG -> 'D'
@@ -314,11 +345,10 @@ object AppLogger {
         builder.append('\n')
 
         try {
-            FileWriter(file, true).use { writer ->
-                writer.write(builder.toString())
-            }
+            val writer = batchLogWriter ?: FileWriter(file, true).buffered().also { batchLogWriter = it }
+            writer.write(builder.toString())
         } catch (e: IOException) {
-            // Avoid recursive logging here; swallow to prevent crashes
+            batchFailed = true
         }
 
         writeToPackageLogIfNeeded(
@@ -380,10 +410,10 @@ object AppLogger {
         builder.append('\n')
 
         try {
-            FileWriter(file, true).use { writer ->
-                writer.write(builder.toString())
-            }
+            val writer = batchPackageWriter ?: FileWriter(file, true).buffered().also { batchPackageWriter = it }
+            writer.write(builder.toString())
         } catch (_: IOException) {
+            batchFailed = true
         }
     }
 
