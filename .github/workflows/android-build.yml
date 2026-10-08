@@ -193,7 +193,16 @@ jobs:
           set -euo pipefail
           case "$EVENT_NAME" in
             push)
-              bash ci/script/run_android_checks.sh --lane full --continue
+              # YUNKe local patch: the push lane used to run --lane full, whose default task is
+              # :app:assembleDebug. That produced unoptimised APKs (no dex optimisation, unstripped
+              # native libraries, debuggable flag set) and forced an uninstall before upgrading.
+              # Build the release variant on push too, keeping the unit-test and lint checks that
+              # the full lane provided.
+              bash ci/script/run_android_checks.sh --lane build \
+                --task ':app:assembleRelease' \
+                --unit-tests \
+                --lint \
+                --continue
               ;;
             workflow_dispatch)
               flags=(--lane build --task "$DISPATCH_GRADLE_TASK" --continue)
