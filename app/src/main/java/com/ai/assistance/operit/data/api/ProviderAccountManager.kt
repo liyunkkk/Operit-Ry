@@ -163,7 +163,9 @@ class ProviderAccountManager private constructor(context: Context, val provider:
                         if (provider == AccountProvider.GROK) appendQueryParameter("nonce", UUID.randomUUID().toString())
                         else {
                             appendQueryParameter("access_type", "offline")
-                            appendQueryParameter("prompt", "consent select_account")
+                            // Antigravity 的原生客户端用 `prompt=consent`；`select_account` 会让
+                            // Google 返回一个 Antigravity OAuth 客户端无法处理的账号选择提示。
+                            appendQueryParameter("prompt", if (provider == AccountProvider.ANTIGRAVITY) "consent" else "consent select_account")
                         }
                     }.build().toString()
             }
@@ -208,7 +210,7 @@ class ProviderAccountManager private constructor(context: Context, val provider:
                 add("grant_type", "authorization_code"); add("code", code)
                 add("redirect_uri", session.server.redirectUri); add("code_verifier", session.verifier)
             }.build()
-            requestJson(session.tokenEndpoint, form)
+            requestJson(session.tokenEndpoint, form, oauthTokenRequest = true)
         }
         val value = parseTokens(tokens)
         val complete = if (provider == AccountProvider.ANTIGRAVITY) {
@@ -240,7 +242,7 @@ class ProviderAccountManager private constructor(context: Context, val provider:
         }
         val updated = withContext(NonCancellable) {
             // Refresh grants can rotate. Persist the successful response even if the caller stops.
-            parseTokens(requestJson(endpoint, body), current).also(::save)
+            parseTokens(requestJson(endpoint, body, oauthTokenRequest = true), current).also(::save)
         }
         currentCoroutineContext().ensureActive()
         updated
@@ -491,6 +493,7 @@ class ProviderAccountManager private constructor(context: Context, val provider:
         body: RequestBody? = null,
         token: String? = null,
         extraHeaders: Map<String, String> = emptyMap(),
+        oauthTokenRequest: Boolean = false,
     ): JSONObject = withContext(Dispatchers.IO) {
             val request = Request.Builder().url(url).header("Accept", "application/json").apply {
                 if (body != null) post(body)
@@ -498,6 +501,12 @@ class ProviderAccountManager private constructor(context: Context, val provider:
                     header("Authorization", "Bearer $token")
                     if (provider == AccountProvider.ANTIGRAVITY) header("User-Agent", ANTIGRAVITY_UA)
                     else if (provider == AccountProvider.GROK) GROK_HEADERS.forEach { (key, value) -> header(key, value) }
+                }
+                // Antigravity 的 OAuth token 交换/刷新必须伪装成原生客户端，否则上游网关能识别
+                // 非官方调用者并在刷新时拒绝轮换。
+                if (oauthTokenRequest) {
+                    header("Host", "oauth2.googleapis.com")
+                    header("User-Agent", "Go-http-client/2.0")
                 }
                 extraHeaders.forEach { (key, value) -> header(key, value) }
             }.build()
@@ -510,8 +519,13 @@ class ProviderAccountManager private constructor(context: Context, val provider:
         }
 
     companion object {
-        const val CCA = "https://cloudcode-pa.googleapis.com"
-        const val ANTIGRAVITY_UA = "antigravity/ide/2.5.5 (aidev_client; os_type=windows; arch=amd64)"
+        // Cloud Code Assist 的多端点：daily 为原生 Antigravity 默认的每日端点，prod 为正式端点。
+        // 不这么做后果：只打 prod 会让原生客户端的激活/模型发现路径拿不到 daily 独有的数据。
+        const val CCA = "https://daily-cloudcode-pa.googleapis.com"
+        const val CCA_PROD = "https://cloudcode-pa.googleapis.com"
+        // 意图：伪装 Antigravity Hub 原生客户端版本与平台指纹。
+        // 不这么做后果：上游 Cloud Code 会拒绝低于 2.9.0 的客户端访问新模型并标记异常流量。
+        const val ANTIGRAVITY_UA = "antigravity/hub/2.9.1 darwin/arm64"
         val GROK_HEADERS = mapOf(
             "x-grok-client-identifier" to "operit", "x-grok-client-version" to "0.2.93",
             "x-xai-token-auth" to "xai-grok-cli", "x-authenticateresponse" to "authenticate-response",

@@ -144,9 +144,24 @@ class AntigravityTransport(private val manager: ProviderAccountManager, private 
         names.clear()
         val session = currentCoroutineContext()[OpenCodeSessionContext]?.sessionId ?: fallbackSession
         val compiled = compile(JSONObject(raw), model, session, names)
+        val isImageModel = model.contains("image", ignoreCase = true)
+        val requestBody = compiled.second
+        // 意图：非生图对话基于首条用户消息派生稳定的负数会话标识，模拟原生会话追踪指纹。
+        // 不这么做后果：随机 sessionId 无法被上游关联为同一会话，长上下文续轮会被视为新会话。
+        if (!isImageModel) {
+            requestBody.put("sessionId", deriveSessionId(requestBody))
+        }
         val envelope = JSONObject().put("project", account.projectId).put("model", compiled.first)
-            .put("userAgent", "antigravity").put("requestType", "agent")
-            .put("requestId", "agent-${UUID.randomUUID()}").put("request", compiled.second)
+            .put("userAgent", "antigravity")
+            .put("requestType", if (isImageModel) "image_gen" else "agent")
+            // 意图：按 CLIProxyAPI 伪装 requestId 格式；生图用 image_gen 前缀，对话用 agent-<uuid>。
+            // 不这么做后果：带有 operit- 前缀的标识会被上游日志轻易识别为第三方客户端。
+            .put("requestId", if (isImageModel) {
+                "image_gen/${System.currentTimeMillis()}/${UUID.randomUUID()}/12"
+            } else {
+                "agent-${UUID.randomUUID()}"
+            })
+            .put("request", requestBody)
         return Request.Builder()
             .url("${ProviderAccountManager.CCA}/v1internal:" +
                 if (streaming) "streamGenerateContent?alt=sse" else "generateContent")
@@ -172,6 +187,31 @@ class AntigravityTransport(private val manager: ProviderAccountManager, private 
 
     suspend fun models(): List<ModelOption> = parseModels(manager.availableModels())
 
+    /**
+     * 意图：从第一条用户消息内容计算稳定的负数会话 ID，保证同一轮对话拥有连续的上下文会话标识。
+     * 不这么做后果：上游无法把多轮请求归并为同一会话，工具续轮的上下文会断链。
+     */
+    private fun deriveSessionId(request: JSONObject): String {
+        val contents = request.optJSONArray("contents") ?: return randomSessionId()
+        for (i in 0 until contents.length()) {
+            val content = contents.optJSONObject(i) ?: continue
+            if (content.optString("role") == "user") {
+                val parts = content.optJSONArray("parts") ?: continue
+                val text = parts.optJSONObject(0)?.optString("text").orEmpty()
+                if (text.isNotBlank()) {
+                    val hash = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+                    var value = 0L
+                    for (b in 0 until 8) {
+                        value = (value shl 8) or (hash[b].toLong() and 0xFFL)
+                    }
+                    return "-${value and 0x7FFFFFFFFFFFFFFFL}"
+                }
+            }
+        }
+        return randomSessionId()
+    }
+    private fun randomSessionId(): String =
+        "-${java.security.SecureRandom().nextLong().and(0x7FFFFFFFFFFFFFFFL) % 9_000_000_000_000_000_000L}"
     companion object {
         internal fun parseModels(root: JSONObject): List<ModelOption> {
             val models = root.optJSONObject("models") ?: throw IOException("Antigravity models are missing")
@@ -198,6 +238,9 @@ class AntigravityTransport(private val manager: ProviderAccountManager, private 
         internal fun compile(input: JSONObject, model: String, session: String,
             names: MutableMap<String, String> = mutableMapOf()): Pair<String, JSONObject> {
             val body = JSONObject(input.toString())
+            // 意图：移除 safetySettings，避免 Antigravity 网关因未知字段或非预期的安全设置返回校验错误。
+            // 不这么做后果：Gemini 通用请求体里的 safetySettings 会让 CCA 返回 400 校验失败。
+            body.remove("safetySettings")
             // CCA accepts the Gemini wire shape, not arbitrary GenerateContent extensions.
             body.keys().asSequence().toList().filter {
                 it !in setOf("contents", "systemInstruction", "tools", "generationConfig", "toolConfig")
@@ -210,7 +253,7 @@ class AntigravityTransport(private val manager: ProviderAccountManager, private 
             val thinking = generation?.optJSONObject("thinkingConfig")
             val effort = thinking?.optString("thinkingLevel").orEmpty()
             generation?.remove("thinkingConfig")
-            val wire = if (model == "gemini-3.7-flash") "gemini-3.7-flash-tiered" else model
+            val wire = AntigravityModelRouting.runtimeModelId(model)
             if (effort.isNotBlank() && wire !in setOf("gemini-pro-agent", "gemini-3.1-pro-low")) {
                 generation?.put("thinkingConfig", JSONObject().put("thinkingLevel",
                     when (effort.lowercase()) { "minimal", "low" -> "low"; "medium" -> "medium"; else -> "high" }))
