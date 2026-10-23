@@ -15,16 +15,14 @@ object WorkspaceAttachmentProcessor {
         workspaceEnv: String?,
         workspacePath: String?,
     ): String {
-        val workspaceTag = workspaceEnv?.trim().orEmpty()
+        val workspaceTag = workspaceEnv?.trim().orEmpty().ifBlank { "android" }
         val workspaceRoot = workspacePath?.trim().orEmpty()
         return buildString {
             appendLine(context.getString(R.string.workspace_attachment_attached))
             if (workspaceRoot.isNotEmpty()) {
                 appendLine(context.getString(R.string.workspace_attachment_path, escapeText(workspaceRoot)))
             }
-            if (workspaceTag.isNotEmpty()) {
-                appendLine(context.getString(R.string.workspace_attachment_environment, escapeText(workspaceTag)))
-            }
+            appendLine(context.getString(R.string.workspace_attachment_environment, escapeText(workspaceTag)))
         }.trim()
     }
 

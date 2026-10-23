@@ -47,12 +47,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.util.ChatMarkupRegex
 
 /**
  * 消息编辑器组件，用于编辑包含XML标签的消息
  */
-data class ParsedMessagePart(val type: PartType, val content: String, val tag: String? = null, val attributes: String? = null, val sourceTimestamp: Long? = null)
-enum class PartType { TEXT, XML, COLLABORATION }
+data class ParsedMessagePart(val type: PartType, val content: String, val tag: String? = null, val attributes: String? = null, val sourceTimestamp: Long? = null, val isSeparator: Boolean = false)
+enum class PartType { TEXT, XML, DYNAMIC_UI, COLLABORATION }
 
 internal fun memoryEditorParts(fragments: List<MemoryEditFragment>): List<ParsedMessagePart> =
     fragments.flatMap { fragment ->
@@ -62,6 +63,21 @@ internal fun memoryEditorParts(fragments: List<MemoryEditFragment>): List<Parsed
             listOf(ParsedMessagePart(PartType.COLLABORATION, "", sourceTimestamp = fragment.timestamp))
         }
     }
+
+/** Display grouping only: indices and source timestamps retain the original storage order. */
+internal fun memoryEditorProcessIndices(
+    parts: List<ParsedMessagePart>,
+    fragments: List<MemoryEditFragment>,
+): Set<Int> {
+    val processRows = fragments.filter { it.isProcess }.map { it.timestamp }.toSet()
+    val processTags = setOf("think", "thinking", "tool", "tool_result", "search", "status")
+    return parts.indices.filterTo(mutableSetOf()) { index ->
+        val part = parts[index]
+        part.type == PartType.COLLABORATION || part.sourceTimestamp in processRows ||
+            (part.type == PartType.XML &&
+                ChatMarkupRegex.normalizeToolLikeTagName(part.tag)?.lowercase() in processTags)
+    }
+}
 
 internal fun updatedMemoryEditorFragments(
     originals: List<MemoryEditFragment>,
@@ -98,37 +114,43 @@ private val XmlTagSuggestions = listOf(
 
 fun parseMessageContentForEditor(content: String): List<ParsedMessagePart> {
     val parts = mutableListOf<ParsedMessagePart>()
-    // 支持带属性的标签
-    val regex = "<([a-zA-Z0-9_-]+)([^>]*)>([\\s\\S]*?)</\\1>".toRegex(RegexOption.DOT_MATCHES_ALL)
+    // Treat fenced content as opaque before looking for XML inside it. HTML embedded in a card's
+    // JSON is source text, not an editable XML tag. Keep the entire fence byte for byte.
+    val regex = Regex("(?m)^ {0,3}(`{3,}|~{3,})([^\\r\\n]*)(?:\\r?\\n|$)|<([a-zA-Z0-9_-]+)([^>]*)>([\\s\\S]*?)</\\3>")
     var lastIndex = 0
 
-    regex.findAll(content).forEach { matchResult ->
+    while (lastIndex < content.length) {
+        val matchResult = regex.find(content, lastIndex) ?: break
         val startIndex = matchResult.range.first
         if (startIndex > lastIndex) {
             val textPart = content.substring(lastIndex, startIndex)
-            if (textPart.isNotBlank()) {
-                parts.add(ParsedMessagePart(PartType.TEXT, textPart, null, null))
-            }
+            parts.add(ParsedMessagePart(PartType.TEXT, textPart, isSeparator = textPart.isBlank()))
         }
-        val tag = matchResult.groupValues[1]
-        val attributes = matchResult.groupValues[2]
-        val tagContent = matchResult.groupValues[3]
-        parts.add(ParsedMessagePart(PartType.XML, tagContent, tag, attributes))
-        lastIndex = matchResult.range.last + 1
+        val fence = matchResult.groupValues[1]
+        if (fence.isNotEmpty()) {
+            val end = Regex("(?m)^ {0,3}${Regex.escape(fence.first().toString())}{${fence.length},}[ \\t]*(?:\\r?\\n|$)")
+                .find(content, matchResult.range.last + 1)?.range?.last?.plus(1) ?: content.length
+            val type = if (matchResult.groupValues[2].trim() in setOf("a2ui", "a2ui-ref"))
+                PartType.DYNAMIC_UI else PartType.TEXT
+            parts.add(ParsedMessagePart(type, content.substring(startIndex, end)))
+            lastIndex = end
+        } else {
+            parts.add(ParsedMessagePart(PartType.XML, matchResult.groupValues[5],
+                matchResult.groupValues[3], matchResult.groupValues[4]))
+            lastIndex = matchResult.range.last + 1
+        }
     }
 
     if (lastIndex < content.length) {
         val trailingText = content.substring(lastIndex)
-        if (trailingText.isNotBlank()) {
-            parts.add(ParsedMessagePart(PartType.TEXT, trailingText, null, null))
-        }
+        parts.add(ParsedMessagePart(PartType.TEXT, trailingText, isSeparator = trailingText.isBlank()))
     }
     return parts
 }
 
 fun recomposeMessageFromParts(parts: List<ParsedMessagePart>): String {
     return parts.joinToString(separator = "") { part ->
-        if (part.type == PartType.TEXT) {
+        if (part.type == PartType.TEXT || part.type == PartType.DYNAMIC_UI) {
             part.content
         } else {
             "<${part.tag}${part.attributes ?: ""}>${part.content}</${part.tag}>"
@@ -157,6 +179,13 @@ internal fun MessageEditor(
     var partToEdit by remember { mutableStateOf<Pair<Int, ParsedMessagePart>?>(null) }
     var showCreateTagDialog by remember { mutableStateOf(false) }
     var isRawEditMode by remember { mutableStateOf(false) }
+    var processExpanded by remember { mutableStateOf(false) }
+    val processIndices = remember(partsState, memoryFragments, isRawEditMode) {
+        if (isRawEditMode) emptySet() else memoryEditorProcessIndices(partsState, memoryFragments)
+    }
+    fun revealProcessPart(index: Int) {
+        if (index in memoryEditorProcessIndices(partsState, memoryFragments)) processExpanded = true
+    }
 
     LaunchedEffect(partsState) {
         if (!isRawEditMode && memoryFragments.isEmpty()) {
@@ -300,7 +329,26 @@ internal fun MessageEditor(
 
                             // Rows the reply is made of. Each one is its own message, so what is
                             // edited here is written back to that message, not into this body.
+                            // Fold process records together, without moving or rewriting the parts.
+                            listOf(true, false).forEach { processGroup ->
+                            if (processGroup && processIndices.isNotEmpty()) {
+                                TextButton(
+                                    onClick = { processExpanded = !processExpanded },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(stringResource(R.string.memory_editor_process_records),
+                                        modifier = Modifier.weight(1f),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Start)
+                                    Icon(Icons.Default.KeyboardArrowDown,
+                                        contentDescription = stringResource(if (processExpanded)
+                                            R.string.memory_editor_collapse_process else R.string.memory_editor_expand_process),
+                                        modifier = Modifier.rotate(if (processExpanded) 180f else 0f))
+                                }
+                            }
+                            if (!processGroup || processExpanded) {
                             partsState.forEachIndexed { index, part ->
+                              if ((index in processIndices) == processGroup) {
+                              key(index) {
                               if (part.type == PartType.COLLABORATION) {
                                 val fragment = memoryFragments.first { it.timestamp == part.sourceTimestamp }
                                 key(fragment.messageIndex) {
@@ -340,7 +388,7 @@ internal fun MessageEditor(
                                 }
                               } else {
                                 when (part.type) {
-                                    PartType.TEXT -> {
+                                    PartType.TEXT -> if (!part.isSeparator || isRawEditMode) {
                                         Box(modifier = Modifier.padding(bottom = 8.dp)) {
                                             OutlinedTextField(
                                                 value = part.content,
@@ -379,7 +427,7 @@ internal fun MessageEditor(
                                             )
                                         }
                                     }
-                                    PartType.XML -> {
+                                    PartType.XML, PartType.DYNAMIC_UI -> {
                                         XmlTagItem(
                                             part = part,
                                             onClick = { partToEdit = index to part },
@@ -394,6 +442,10 @@ internal fun MessageEditor(
                                     PartType.COLLABORATION -> Unit
                                 }
                               }
+                              }
+                              }
+                            }
+                            }
                             }
 
                             // Add part buttons
@@ -405,7 +457,10 @@ internal fun MessageEditor(
                             ) {
                                 // Add text button
                                 OutlinedButton(
-                                    onClick = { partsState = partsState + ParsedMessagePart(PartType.TEXT, "", sourceTimestamp = memoryFragments.lastOrNull { it.isAssistant }?.timestamp) },
+                                    onClick = {
+                                        partsState = partsState + ParsedMessagePart(PartType.TEXT, "", sourceTimestamp = memoryFragments.lastOrNull { it.isAssistant }?.timestamp)
+                                        revealProcessPart(partsState.lastIndex)
+                                    },
                                     shape = RoundedCornerShape(16.dp),
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                                     colors = ButtonDefaults.outlinedButtonColors(
@@ -536,11 +591,13 @@ internal fun MessageEditor(
                 showCreateTagDialog = false
             },
             onSave = { updatedPart ->
+                val updatedIndex = partToEdit?.first ?: partsState.size
                 if (partToEdit != null) {
                     partsState = partsState.toMutableList().apply { set(partToEdit!!.first, updatedPart.copy(sourceTimestamp = partToEdit!!.second.sourceTimestamp)) }
                 } else {
                     partsState = partsState + updatedPart.copy(sourceTimestamp = memoryFragments.lastOrNull { it.isAssistant }?.timestamp)
                 }
+                revealProcessPart(updatedIndex)
                 partToEdit = null
                 showCreateTagDialog = false
             }
@@ -591,13 +648,17 @@ private fun XmlTagItem(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = part.tag ?: "XML",
+                        text = if (part.type == PartType.DYNAMIC_UI) stringResource(R.string.memory_editor_dynamic_ui) else part.tag ?: "XML",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    if (!part.attributes.isNullOrBlank()) {
+                    if (part.type == PartType.DYNAMIC_UI) {
+                        Text(stringResource(R.string.memory_editor_dynamic_ui_hint),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else if (!part.attributes.isNullOrBlank()) {
                         Text(
                             text = part.attributes,
                             style = MaterialTheme.typography.labelSmall,
@@ -611,7 +672,7 @@ private fun XmlTagItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ActionIconButton(
                         icon = Icons.Default.Edit,
-                        contentDescription = context.getString(R.string.edit),
+                        contentDescription = context.getString(if (part.type == PartType.DYNAMIC_UI) R.string.memory_editor_edit_source else R.string.edit),
                         onClick = onClick
                     )
 
@@ -649,6 +710,8 @@ private fun XmlTagItem(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(if (part.type == PartType.DYNAMIC_UI)
+                                Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()) else Modifier)
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     )
                 }
@@ -813,6 +876,28 @@ private fun TagEditorDialog(
     onDismiss: () -> Unit,
     onSave: (ParsedMessagePart) -> Unit
 ) {
+    if (part?.type == PartType.DYNAMIC_UI) {
+        var source by remember(part) { mutableStateOf(part.content) }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(stringResource(R.string.memory_editor_edit_source)) },
+            text = {
+                OutlinedTextField(
+                    value = source, onValueChange = { source = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    minLines = 6, maxLines = 14,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { onSave(part.copy(content = source)) }) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+        )
+        return
+    }
     val context = LocalContext.current
     var tagName by remember { mutableStateOf(part?.tag ?: "") }
     var attributes by remember { mutableStateOf(part?.attributes ?: "") }

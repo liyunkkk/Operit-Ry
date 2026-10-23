@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -119,7 +120,7 @@ internal fun FloatingConversationSurface(floatContext: FloatContext, fullscreen:
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.floating_voice_mode)) },
-                                leadingIcon = { Icon(Icons.Default.Mic, null) },
+                                leadingIcon = { Icon(Icons.Rounded.GraphicEq, null) },
                                 onClick = {
                                     menu = false
                                     floatContext.voiceAutoTimeout = false

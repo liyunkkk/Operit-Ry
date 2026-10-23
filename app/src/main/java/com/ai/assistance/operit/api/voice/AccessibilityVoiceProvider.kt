@@ -12,6 +12,7 @@ import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +41,8 @@ class SimpleVoiceProvider(
 
     private data class PendingUtterance(
         val utteranceId: String,
-        val text: String
+        val text: String,
+        val completion: CompletableDeferred<Boolean> = CompletableDeferred()
     )
 
     // TextToSpeech引擎实例
@@ -70,7 +72,7 @@ class SimpleVoiceProvider(
     private var currentUtteranceId: String? = null
     private var currentUtteranceText: String = ""
     private var currentUtteranceRangeStart: Int = 0
-    private var pausedSegments: List<String> = emptyList()
+    private var pausedSegments: List<PendingUtterance> = emptyList()
     private var isPausedInternally: Boolean = false
 
     private fun logQueueState(event: String, extra: String = "") {
@@ -98,15 +100,15 @@ class SimpleVoiceProvider(
         return null
     }
 
-    private fun buildPausedSegmentsLocked(): List<String> {
+    private fun buildPausedSegmentsLocked(): List<PendingUtterance> {
         if (queuedUtterances.isEmpty()) return emptyList()
 
         val currentId = currentUtteranceId
         if (currentId == null) {
-            return queuedUtterances.map { it.text }.filter { it.isNotBlank() }
+            return queuedUtterances.filter { it.text.isNotBlank() }
         }
 
-        val result = mutableListOf<String>()
+        val result = mutableListOf<PendingUtterance>()
         var foundCurrent = false
         queuedUtterances.forEach { entry ->
             if (!foundCurrent && entry.utteranceId == currentId) {
@@ -114,15 +116,15 @@ class SimpleVoiceProvider(
                 val safeStart = currentUtteranceRangeStart.coerceIn(0, entry.text.length)
                 val remaining = entry.text.substring(safeStart).trimStart()
                 if (remaining.isNotBlank()) {
-                    result += remaining
-                }
+                    result += entry.copy(text = remaining)
+                } else entry.completion.complete(true)
             } else if (foundCurrent && entry.text.isNotBlank()) {
-                result += entry.text
+                result += entry
             }
         }
 
         if (!foundCurrent) {
-            return queuedUtterances.map { it.text }.filter { it.isNotBlank() }
+            return queuedUtterances.filter { it.text.isNotBlank() }
         }
         return result
     }
@@ -193,7 +195,7 @@ class SimpleVoiceProvider(
                                     override fun onDone(utteranceId: String) {
                                         synchronized(queueLock) {
                                             val removed =
-                                                removeQueuedUtteranceLocked(utteranceId)
+                                                removeQueuedUtteranceLocked(utteranceId)?.also { it.completion.complete(true) }
                                             if (currentUtteranceId == utteranceId) {
                                                 currentUtteranceId = null
                                                 currentUtteranceText = ""
@@ -210,7 +212,7 @@ class SimpleVoiceProvider(
                                     @Deprecated("Deprecated in Java")
                                     override fun onError(utteranceId: String) {
                                         synchronized(queueLock) {
-                                            removeQueuedUtteranceLocked(utteranceId)
+                                            removeQueuedUtteranceLocked(utteranceId)?.completion?.complete(false)
                                             if (currentUtteranceId == utteranceId) {
                                                 currentUtteranceId = null
                                                 currentUtteranceText = ""
@@ -230,7 +232,7 @@ class SimpleVoiceProvider(
                                     ) {
                                         super.onError(utteranceId, errorCode)
                                         synchronized(queueLock) {
-                                            removeQueuedUtteranceLocked(utteranceId)
+                                            removeQueuedUtteranceLocked(utteranceId)?.completion?.complete(false)
                                             if (currentUtteranceId == utteranceId) {
                                                 currentUtteranceId = null
                                                 currentUtteranceText = ""
@@ -314,83 +316,39 @@ class SimpleVoiceProvider(
                 "speak request interrupt=$interrupt len=${text.length} preview=\"${speechPreview(text)}\" rate=$effectiveRate pitch=$effectivePitch voice=$currentVoiceId locale=$currentLocaleTag initialized=$isInitialized speaking=$isSpeaking queueSize=$queueSizeBefore paused=$isPausedInternally"
             )
 
-            return@withContext suspendCancellableCoroutine { continuation ->
-                tts?.let { textToSpeech ->
-                    ensureVoiceAndLocaleReady(textToSpeech)
-
-                    if (currentRate != effectiveRate) {
-                        textToSpeech.setSpeechRate(effectiveRate)
-                        currentRate = effectiveRate
+            val engine = tts ?: return@withContext false
+            ensureVoiceAndLocaleReady(engine)
+            val entry = PendingUtterance(UUID.randomUUID().toString(), text)
+            synchronized(queueLock) {
+                if (interrupt) {
+                    clearWaitingLocked()
+                    isPausedInternally = false
+                    currentUtteranceId = null
+                }
+                engine.setSpeechRate(effectiveRate)
+                engine.setPitch(effectivePitch)
+                currentRate = effectiveRate
+                currentPitch = effectivePitch
+                if (isPausedInternally) pausedSegments = pausedSegments + entry
+                else {
+                    queuedUtterances.addLast(entry)
+                    if (!submitUtterance(engine, entry,
+                            if (interrupt) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD)) {
+                        removeQueuedUtteranceLocked(entry.utteranceId)
+                        entry.completion.complete(false)
                     }
-
-                    if (currentPitch != effectivePitch) {
-                        textToSpeech.setPitch(effectivePitch)
-                        currentPitch = effectivePitch
-                    }
-
-                    val success =
-                        synchronized(queueLock) {
-                            if (interrupt) {
-                                AppLogger.d(
-                                    TAG,
-                                    "speak request flushing existing queue size=${queuedUtterances.size}"
-                                )
-                                queuedUtterances.clear()
-                                pausedSegments = emptyList()
-                                isPausedInternally = false
-                                currentUtteranceId = null
-                                currentUtteranceText = ""
-                                currentUtteranceRangeStart = 0
-                            }
-
-                            if (isPausedInternally && !interrupt) {
-                                pausedSegments = pausedSegments + text
-                                logQueueState(
-                                    event = "speak.bufferedWhilePaused",
-                                    extra = "len=${text.length} preview=\"${speechPreview(text)}\""
-                                )
-                                return@synchronized true
-                            }
-
-                            val entry =
-                                PendingUtterance(
-                                    utteranceId = UUID.randomUUID().toString(),
-                                    text = text
-                                )
-                            queuedUtterances.addLast(entry)
-
-                            val submitSuccess =
-                                submitUtterance(
-                                    textToSpeech = textToSpeech,
-                                    entry = entry,
-                                    queueMode =
-                                        if (interrupt) {
-                                            TextToSpeech.QUEUE_FLUSH
-                                        } else {
-                                            TextToSpeech.QUEUE_ADD
-                                        }
-                                )
-                            if (!submitSuccess) {
-                                removeQueuedUtteranceLocked(entry.utteranceId)
-                                updateSpeakingStateLocked("speak.submitFailed")
-                                AppLogger.e(TAG, "TTS播放失败: submitResult=false")
-                            } else {
-                                _isSpeaking.value = true
-                                logQueueState(
-                                    event = "speak.submitted",
-                                    extra = "utteranceId=${entry.utteranceId} queueMode=${if (interrupt) "QUEUE_FLUSH" else "QUEUE_ADD"} len=${entry.text.length}"
-                                )
-                            }
-                            submitSuccess
-                        }
-
-                    continuation.resume(success)
-                } ?: run {
-                    AppLogger.e(TAG, "TTS引擎未初始化")
-                    continuation.resume(false)
+                    updateSpeakingStateLocked("speak.submitted")
                 }
             }
+            entry.completion.await()
         }
+
+    private fun clearWaitingLocked() {
+        queuedUtterances.forEach { it.completion.complete(false) }
+        pausedSegments.forEach { it.completion.complete(false) }
+        queuedUtterances.clear()
+        pausedSegments = emptyList()
+    }
 
     /** 停止当前正在播放的语音 */
     override suspend fun stop(): Boolean =
@@ -400,8 +358,7 @@ class SimpleVoiceProvider(
             AppLogger.d(TAG, "stop request speaking=$isSpeaking")
             tts?.let { textToSpeech ->
                 synchronized(queueLock) {
-                    queuedUtterances.clear()
-                    pausedSegments = emptyList()
+                    clearWaitingLocked()
                     isPausedInternally = false
                     currentUtteranceId = null
                     currentUtteranceText = ""
@@ -447,7 +404,7 @@ class SimpleVoiceProvider(
                         _isSpeaking.value = false
                         logQueueState(
                             "pause.capture",
-                            "lengths=${captured.joinToString(prefix = "[", postfix = "]") { it.length.toString() }}"
+                            "lengths=${captured.joinToString(prefix = "[", postfix = "]") { it.text.length.toString() }}"
                         )
                         captured
                     }
@@ -459,7 +416,7 @@ class SimpleVoiceProvider(
                 synchronized(queueLock) {
                     if (!result) {
                         isPausedInternally = false
-                        pausedSegments = emptyList()
+                        clearWaitingLocked()
                     }
                     _isSpeaking.value = false
                     logQueueState(
@@ -498,10 +455,13 @@ class SimpleVoiceProvider(
 
             AppLogger.d(
                 TAG,
-                "resume request initialized=$isInitialized speaking=$isSpeaking segments=${segmentsToResume.size} lengths=${segmentsToResume.joinToString(prefix = "[", postfix = "]") { it.length.toString() }}"
+                "resume request initialized=$isInitialized speaking=$isSpeaking segments=${segmentsToResume.size} lengths=${segmentsToResume.joinToString(prefix = "[", postfix = "]") { it.text.length.toString() }}"
             )
 
-            val textToSpeech = tts ?: return@withContext false
+            val textToSpeech = tts ?: run {
+                segmentsToResume.forEach { it.completion.complete(false) }
+                return@withContext false
+            }
             ensureVoiceAndLocaleReady(textToSpeech)
 
             val success =
@@ -509,10 +469,7 @@ class SimpleVoiceProvider(
                     var failed = false
                     segmentsToResume.forEachIndexed { index, segment ->
                         val entry =
-                            PendingUtterance(
-                                utteranceId = UUID.randomUUID().toString(),
-                                text = segment
-                            )
+                            segment.copy(utteranceId = UUID.randomUUID().toString())
                         queuedUtterances.addLast(entry)
                         val submitSuccess =
                             submitUtterance(
@@ -531,7 +488,7 @@ class SimpleVoiceProvider(
                     }
 
                     if (failed) {
-                        queuedUtterances.clear()
+                        clearWaitingLocked()
                         currentUtteranceId = null
                         currentUtteranceText = ""
                         currentUtteranceRangeStart = 0
@@ -562,8 +519,7 @@ class SimpleVoiceProvider(
                 AppLogger.e(TAG, "关闭TTS引擎失败", e)
             } finally {
                 synchronized(queueLock) {
-                    queuedUtterances.clear()
-                    pausedSegments = emptyList()
+                    clearWaitingLocked()
                     isPausedInternally = false
                     currentUtteranceId = null
                     currentUtteranceText = ""

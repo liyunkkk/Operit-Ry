@@ -47,6 +47,7 @@ class SpeechServiceProfilesPreferences(private val context: Context) {
         val pitch: Float,
         val createdAt: Long,
         val updatedAt: Long,
+        val localModelId: String = "aishell3-int8",
     )
 
     @Serializable
@@ -57,6 +58,7 @@ class SpeechServiceProfilesPreferences(private val context: Context) {
         val httpConfig: SpeechServicesPreferences.SttHttpConfig,
         val createdAt: Long,
         val updatedAt: Long,
+        val localModelId: String = "sensevoice-int8",
     )
 
     companion object {
@@ -266,6 +268,33 @@ class SpeechServiceProfilesPreferences(private val context: Context) {
         }
         val updated = getSttProfile(normalized.id)
         return updated
+    }
+
+    /** A download may finish after other edits; patch only its model selection atomically. */
+    internal suspend fun selectLocalVoiceModel(profileId: String, recognition: Boolean, modelId: String) {
+        val model = com.ai.assistance.operit.api.speech.LocalVoiceModels.find(modelId)
+        require(model.recognition == recognition)
+        dataStore.edit { preferences ->
+            if (recognition) {
+                val profiles = decodeSttProfiles(preferences[STT_PROFILES])
+                check(profiles.any { it.id == profileId }) { "Speech profile was deleted" }
+                preferences[STT_PROFILES] = json.encodeToString(profiles.map {
+                    if (it.id != profileId) it else it.copy(
+                        serviceType = SpeechServiceFactory.SpeechServiceType.SHERPA_ONNX,
+                        localModelId = modelId, updatedAt = System.currentTimeMillis())
+                })
+            } else {
+                val profiles = decodeTtsProfiles(preferences[TTS_PROFILES])
+                check(profiles.any { it.id == profileId }) { "Voice profile was deleted" }
+                preferences[TTS_PROFILES] = json.encodeToString(profiles.map {
+                    if (it.id != profileId) it else it.copy(
+                        serviceType = VoiceServiceFactory.VoiceServiceType.SHERPA_ONNX,
+                        localModelId = modelId,
+                        httpConfig = it.httpConfig.copy(voiceId = "0"),
+                        updatedAt = System.currentTimeMillis())
+                })
+            }
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.data.api
 
 import android.content.Context
+import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.CodexAuthPreferences
 import com.ai.assistance.operit.data.preferences.CodexAuthState
 import com.ai.assistance.operit.data.preferences.CodexStoredUsageSnapshot
@@ -14,8 +15,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 
 class CodexAuthManager private constructor(context: Context) {
@@ -24,16 +23,29 @@ class CodexAuthManager private constructor(context: Context) {
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
         .build()
     private val oauthClient = CodexOAuthClient(client = httpClient)
     private val usageClient = CodexUsageClient(client = httpClient)
     private val usagePreferences = CodexUsagePreferences.getInstance(context)
-    private val refreshMutex = Mutex()
+    internal val authMessages = CodexAuthMessages(
+        context.getString(R.string.codex_auth_sign_in_required),
+        context.getString(R.string.codex_auth_login_changed),
+        context.getString(R.string.codex_auth_login_required),
+        context.getString(R.string.codex_auth_refresh_temporary),
+        context.getString(R.string.codex_auth_recovery_rejected),
+    )
+    private val recovery = CodexAuthRecovery(
+        read = preferences::currentState,
+        refreshAndSave = ::refreshAccessToken,
+        messages = authMessages,
+        log = { AppLogger.i(TAG, it) },
+    )
 
     val authState: StateFlow<CodexAuthState?> = preferences.authState
     val usageSnapshotFlow: Flow<CodexStoredUsageSnapshot?> = usagePreferences.snapshotFlow
 
-    suspend fun saveLoginTokens(tokens: CodexOAuthTokenResponse): CodexAuthState = refreshMutex.withLock {
+    suspend fun saveLoginTokens(tokens: CodexOAuthTokenResponse): CodexAuthState = recovery.changeLogin {
         val completeTokens = tokens.requireComplete()
         val accessToken = requireNotNull(completeTokens.accessToken)
         val idToken = requireNotNull(completeTokens.idToken)
@@ -58,20 +70,26 @@ class CodexAuthManager private constructor(context: Context) {
         state
     }
 
-    suspend fun getValidAccessToken(): String {
-        val current = preferences.currentState()
-            ?: throw IOException("Codex is not logged in")
-        if (current.expiresAtMillis - System.currentTimeMillis() > REFRESH_WINDOW_MILLIS) {
-            return current.accessToken
-        }
+    suspend fun getValidAccessToken(): String = recovery.credentials().state.accessToken
 
-        return refreshMutex.withLock {
-            val latest = preferences.currentState()
-                ?: throw IOException("Codex is not logged in")
-            if (latest.expiresAtMillis - System.currentTimeMillis() > REFRESH_WINDOW_MILLIS) {
-                latest.accessToken
-            } else {
-                persistCodexRefreshBeforeCancellation { refreshAccessToken(latest) }.accessToken
+    internal suspend fun credentials(): CodexAuthLease = recovery.credentials()
+    internal suspend fun ensureCurrent(lease: CodexAuthLease) = recovery.ensureCurrent(lease)
+    internal suspend fun refreshAfterUnauthorized(lease: CodexAuthLease): CodexAuthLease =
+        recovery.afterUnauthorized(lease)
+
+    internal suspend fun <T> withAuthRecovery(block: suspend (CodexAuthState) -> T): T {
+        var lease = credentials()
+        val attempt = CodexRecoveryAttempt(authMessages.recoveryRejected)
+        while (true) {
+            ensureCurrent(lease)
+            try {
+                val result = block(lease.state)
+                ensureCurrent(lease)
+                return result
+            } catch (error: CodexHttpException) {
+                if (error.status != 401) throw error
+                if (!error.expiredToken) throw CodexAuthenticationException(authMessages.loginRequired)
+                lease = attempt.recover(lease, ::refreshAfterUnauthorized)
             }
         }
     }
@@ -99,7 +117,7 @@ class CodexAuthManager private constructor(context: Context) {
         return updated
     }
 
-    suspend fun logout() = refreshMutex.withLock {
+    suspend fun logout() = recovery.changeLogin {
         val current = preferences.currentState()
         try {
             if (current != null) {
@@ -122,18 +140,13 @@ class CodexAuthManager private constructor(context: Context) {
 
     suspend fun fetchUsage(): Result<CodexUsageSnapshot> {
         return try {
-            val accessToken = getValidAccessToken()
-            val account = accountForAccessToken(accessToken)
-            val accountId = account.accountId
-            val result = usageClient.fetch(
-                accessToken = accessToken,
-                accountId = accountId,
-                residency = account.residency,
-            )
-            if (result.isSuccess) {
-                usagePreferences.save(accountId, result.getOrThrow())
+            val (accountId, result) = withAuthRecovery { account ->
+                account.accountId to usageClient.fetch(account.accessToken, account.accountId, account.residency).getOrThrow()
             }
-            result
+            usagePreferences.save(accountId, result)
+            Result.success(result)
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
         } catch (error: Exception) {
             AppLogger.e(TAG, "Failed to prepare Codex usage request", error)
             Result.failure(error)
@@ -142,7 +155,6 @@ class CodexAuthManager private constructor(context: Context) {
 
     companion object {
         private const val TAG = "CodexAuthManager"
-        private const val REFRESH_WINDOW_MILLIS = 5 * 60 * 1000L
 
         @Volatile
         private var instance: CodexAuthManager? = null

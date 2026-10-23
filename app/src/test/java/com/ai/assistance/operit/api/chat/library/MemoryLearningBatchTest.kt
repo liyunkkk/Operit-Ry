@@ -18,6 +18,44 @@ import org.junit.rules.TemporaryFolder
 import org.mockito.kotlin.*
 
 class MemoryLearningBatchTest {
+    @Test fun failedImportRetainsBatchAndRecoversWithoutDuplicatingIds() = runBlocking {
+        val context = context()
+        val journal = MemoryLearningJournal(context, "space", "chat")
+        journal.enqueue(true, false, 10)
+        journal.complete(listOf("notes"), LearningCursor(7), false,
+            listOf(MemoryReviewChange("retained-id", "notes", "memory.md", "proposal", sourceChatId="chat")))
+        // A regular file in place of the storage directory simulates an unavailable store.
+        val blocked = java.io.File(context.filesDir, "memory_reviews")
+        blocked.writeText("blocked")
+        try {
+            journal.export()
+            fail("Import must fail")
+        } catch (_: java.io.IOException) { }
+        assertTrue(MemoryLearningJournal.pending(context).contains("space" to "chat"))
+        assertTrue(blocked.delete())
+        val restored = MemoryLearningJournal(context, "space", "chat")
+        restored.export()
+        restored.export()
+        assertEquals(listOf("retained-id"), MemoryReviewRepository(context,"space").list().map { it.id })
+        assertEquals(7, restored.cursor("notes").messageId)
+        assertFalse(MemoryLearningJournal.pending(context).contains("space" to "chat"))
+    }
+    @Test fun newDraftCompanionCanBeCreatedButNotBlindlyOverwritten() = runBlocking {
+        val context = context()
+        val staged = mutableListOf(MemoryReviewChange("draft", "skill", "demo-skill",
+            "A repeatable procedure with prerequisites, steps and checks.", description="Demo skill"))
+        val actions = MemoryLearningActions(context,"space","chat",false,true,true,staged)
+        val args = mapOf("name" to "demo-skill", "path" to "scripts/example.py", "content" to "print(1)")
+        actions.execute("skill_write", args)
+        assertEquals("print(1)", staged.single().files["scripts/example.py"])
+        try {
+            actions.execute("skill_write", args + ("content" to "print(2)"))
+            fail("Existing draft file must be read")
+        } catch (e: IllegalStateException) { assertTrue(e.message!!.contains("skill_read")) }
+        actions.execute("skill_read", args)
+        actions.execute("skill_write", args + ("content" to "print(2)"))
+        assertEquals("print(2)", staged.single().files["scripts/example.py"])
+    }
     @get:Rule val folder=TemporaryFolder()
     private fun context(): Context=mock<Context>().also {
         whenever(it.filesDir).thenReturn(folder.root)
@@ -497,5 +535,27 @@ class MemoryLearningBatchTest {
             } while (batch.more)
         }
         assertEquals(source,rebuilt.toString())
+    }
+    @Test fun learningReadsCardsAsTextAndRestartsCursorsSavedAgainstRawText() = runBlocking {
+        val dao=mock<ChatContentDao>()
+        val card="""{"version":"v0.9","updateComponents":{"surfaceId":"c","components":[{"id":"root","component":"Text","text":"卡片正文"}]}}"""
+        val bytes="开头\n```a2ui\n$card\n```\n结尾".toByteArray()
+        whenever(dao.nextLearningSource(eq("chat"),any(),eq(1L))).thenAnswer {
+            if (it.getArgument<Long>(1)<=1) ChatRecallPart(1,"chat","ai",1,"",0) else null
+        }
+        whenever(dao.readLearningMessageBytes(eq(1L),any())).thenAnswer {
+            val offset=it.getArgument<Long>(1).toInt()
+            bytes.copyOfRange(offset,minOf(offset+32768,bytes.size))
+        }
+        val raw=com.ai.assistance.operit.data.repository.RecallEvidenceReader.read(
+            { dao.readLearningMessageBytes(1,it) },true,true,limit=1,onEvidence={})!!.revision
+        MemoryLearningSource(context(),dao,"chat",1,true).use { reader ->
+            // A cursor saved before cards were converted points past the end of the shorter text.
+            val batch=reader.next(LearningCursor(1,bytes.size.toLong()-2,raw,true),4000)
+            assertTrue(batch.text.contains("source_byte_offset=0]"))
+            assertTrue(batch.text.contains("Visible content: 卡片正文"))
+            assertTrue(!batch.text.contains("updateComponents"))
+            assertTrue(batch.text.contains("结尾"))
+        }
     }
 }

@@ -72,6 +72,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -244,16 +245,17 @@ fun AttachmentSelectorPanel(
                                         Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                                                 .heightIn(min = 96.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top
                         ) {
                             paddedItems.take(4).forEach { item ->
                                 if (item == null) {
-                                    AttachmentOptionPlaceholder()
+                                    Spacer(modifier = Modifier.weight(1f))
                                 } else {
                                     AttachmentOption(
                                             icon = item.icon,
                                             label = item.label,
-                                            onClick = item.onClick
+                                            onClick = item.onClick,
+                                            modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -267,16 +269,17 @@ fun AttachmentSelectorPanel(
                                         Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                                                 .heightIn(min = 96.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top
                         ) {
                             paddedItems.drop(4).take(4).forEach { item ->
                                 if (item == null) {
-                                    AttachmentOptionPlaceholder()
+                                    Spacer(modifier = Modifier.weight(1f))
                                 } else {
                                     AttachmentOption(
                                             icon = item.icon,
                                             label = item.label,
-                                            onClick = item.onClick
+                                            onClick = item.onClick,
+                                            modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -607,13 +610,17 @@ private fun getAttachmentSource(uri: Uri): String? {
 
 /** 简约的附件选项组件 */
 @Composable
-private fun AttachmentOption(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun AttachmentOption(
+        icon: ImageVector,
+        label: String,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+) {
     Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier =
-                    Modifier.clickable(onClick = onClick)
-                            .width(70.dp)
-                            .padding(horizontal = 8.dp, vertical = 8.dp)
+                    modifier.clickable(onClick = onClick)
+                            .padding(horizontal = 4.dp, vertical = 8.dp)
     ) {
         // 图标区域 - 改为圆角方形
         Box(
@@ -642,15 +649,10 @@ private fun AttachmentOption(icon: ImageVector, label: String, onClick: () -> Un
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
         )
     }
-}
-
-@Composable
-private fun AttachmentOptionPlaceholder() {
-    Spacer(modifier = Modifier.width(70.dp).padding(horizontal = 8.dp, vertical = 8.dp))
 }
 
 /** 包选择对话框 */

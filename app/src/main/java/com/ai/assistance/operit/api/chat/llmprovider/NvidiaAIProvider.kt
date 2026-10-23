@@ -89,6 +89,7 @@ class NvidiaAIProvider(
             "NVIDIA thinking params applied: enable_thinking=$enableThinking, gpt_oss_reasoning_effort=$gptOssEffort"
         )
 
+        logRequestBodyForDebugging("NvidiaAIProvider", "Final NVIDIA request body: ") { jsonObject }
         return createJsonRequestBody(jsonObject.toString())
     }
 

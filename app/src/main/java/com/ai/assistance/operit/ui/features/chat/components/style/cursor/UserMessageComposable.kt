@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -110,14 +111,32 @@ fun UserMessageComposable(
     val selectedImageBitmap = remember { mutableStateOf<Bitmap?>(null) }
 
     // Parse message content to separate text and attachments
-    val parseResult =
+    val parsedState =
         remember(message.content, isHiddenPlaceholder) {
-            if (isHiddenPlaceholder) {
+            mutableStateOf(if (isHiddenPlaceholder) {
                 MessageParseResult(processedText = "", trailingAttachments = emptyList())
             } else {
                 parseMessageContent(context, message.content)
-            }
+            })
         }
+    LaunchedEffect(parsedState) {
+        val initial = parsedState.value
+        if (initial.imageLinks.isNotEmpty()) {
+            val loaded = withContext(Dispatchers.IO) {
+                initial.imageLinks.map { image ->
+                    val data = ImagePoolManager.resolveImage(image.id, image.sourcePath)
+                    val bitmap = data?.let {
+                        runCatching {
+                            ImageBitmapLimiter.decodeDownsampledBitmap(Base64.decode(it.base64, Base64.DEFAULT))
+                        }.getOrNull()
+                    }
+                    image.copy(bitmap = bitmap, loading = false)
+                }
+            }
+            parsedState.value = initial.copy(imageLinks = loaded)
+        }
+    }
+    val parseResult = parsedState.value
     val textContent = parseResult.processedText
     val trailingAttachments = parseResult.trailingAttachments
     val replyInfo = parseResult.replyInfo
@@ -186,7 +205,13 @@ fun UserMessageComposable(
             ) {
                 // Display image links as tags
                 imageLinks.forEach { imageLink ->
-                    val displayText = if (imageLink.bitmap != null) context.getString(R.string.image) else context.getString(R.string.image_expired)
+                    val displayText = context.getString(
+                        when {
+                            imageLink.loading -> R.string.chat_image_loading
+                            imageLink.bitmap != null -> R.string.image
+                            else -> R.string.image_expired
+                        }
+                    )
                     AttachmentTag(
                         attachment = AttachmentData(
                             id = imageLink.id,
@@ -407,7 +432,9 @@ data class ReplyInfo(
 /** Data class for image link information */
 data class ImageLinkData(
     val id: String,
-    val bitmap: Bitmap? // null表示图片已过期
+    val bitmap: Bitmap?,
+    val sourcePath: String? = null,
+    val loading: Boolean = false
 )
 
 /**
@@ -425,20 +452,10 @@ private fun parseMessageContent(context: android.content.Context, content: Strin
         cleanedContent = cleanedContent.replace(proxySenderMatch.value, "").trim()
     }
 
-    // Extract image link tags and load from pool
+    // Parse immediately; disk access and legacy source recovery happen off the UI thread.
     val imageLinks = mutableListOf<ImageLinkData>()
-    MediaLinkParser.extractImageLinkIds(cleanedContent).forEach { id ->
-        val imageData = ImagePoolManager.getImage(id)
-        val bitmap = imageData?.let {
-            try {
-                val bytes = Base64.decode(it.base64, Base64.DEFAULT)
-                ImageBitmapLimiter.decodeDownsampledBitmap(bytes)
-            } catch (e: Exception) {
-                com.ai.assistance.operit.util.AppLogger.e("UserMessageComposable", "Failed to decode image: $id", e)
-                null
-            }
-        }
-        imageLinks.add(ImageLinkData(id, bitmap))
+    MediaLinkParser.extractImageLinkTags(cleanedContent).forEach { tag ->
+        imageLinks.add(ImageLinkData(tag.id, null, tag.sourcePath, loading = true))
     }
     cleanedContent = MediaLinkParser.removeImageLinks(cleanedContent).trim()
 

@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,10 +27,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Summarize
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -64,11 +63,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,11 +79,12 @@ import com.ai.assistance.operit.core.config.FunctionalPrompts
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.ModelConfigData
 import com.ai.assistance.operit.data.model.SummarySectionConfig
-import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.data.preferences.FunctionConfigMapping
 import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
 import com.ai.assistance.operit.ui.components.CustomScaffold
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSearchFocus
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.LocaleUtils
@@ -95,29 +93,16 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
 fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
     val context = LocalContext.current
-    val apiPreferences = remember { ApiPreferences.getInstance(context) }
     val userPreferences = remember { UserPreferencesManager.getInstance(context) }
     val functionalConfigManager = remember { FunctionalConfigManager(context) }
     val modelConfigManager = remember { ModelConfigManager(context) }
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
-
-    var maxImageHistoryUserTurnsInput by remember { mutableStateOf("") }
-    var maxMediaHistoryUserTurnsInput by remember { mutableStateOf("") }
-    val savedMaxImageHistoryUserTurns by
-        apiPreferences.maxImageHistoryUserTurnsFlow.collectAsState(
-            initial = ApiPreferences.DEFAULT_MAX_IMAGE_HISTORY_USER_TURNS
-        )
-    val savedMaxMediaHistoryUserTurns by
-        apiPreferences.maxMediaHistoryUserTurnsFlow.collectAsState(
-            initial = ApiPreferences.DEFAULT_MAX_MEDIA_HISTORY_USER_TURNS
-        )
 
     val hasBackgroundImage by userPreferences.useBackgroundImage.collectAsState(initial = false)
     val componentBackgroundColor =
@@ -126,11 +111,6 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
         } else {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         }
-
-    LaunchedEffect(Unit) {
-        maxImageHistoryUserTurnsInput = apiPreferences.maxImageHistoryUserTurnsFlow.first().toString()
-        maxMediaHistoryUserTurnsInput = apiPreferences.maxMediaHistoryUserTurnsFlow.first().toString()
-    }
 
     val functionMappings by
         functionalConfigManager.functionConfigMappingWithIndexFlow.collectAsState(initial = emptyMap())
@@ -145,26 +125,6 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
         modelConfigManager.getModelConfigFlow(currentChatConfigId).collect { config ->
             value = config
         }
-    }
-    var contextLengthInput by remember(currentConfig?.id) {
-        mutableStateOf(formatFloatValue(currentConfig?.contextLength))
-    }
-    var maxContextLengthInput by remember(currentConfig?.id) {
-        mutableStateOf(formatFloatValue(currentConfig?.maxContextLength))
-    }
-    var contextError by remember { mutableStateOf<String?>(null) }
-
-    var enableSummary by remember(currentConfig?.id) {
-        mutableStateOf(currentConfig?.enableSummary ?: false)
-    }
-    var summaryTokenThresholdInput by remember(currentConfig?.id) {
-        mutableStateOf(formatFloatValue(currentConfig?.summaryTokenThreshold))
-    }
-    var enableSummaryByMessageCount by remember(currentConfig?.id) {
-        mutableStateOf(currentConfig?.enableSummaryByMessageCount ?: false)
-    }
-    var summaryMessageCountThresholdInput by remember(currentConfig?.id) {
-        mutableStateOf(currentConfig?.summaryMessageCountThreshold?.toString().orEmpty())
     }
     var summaryCustomRulesInput by remember(currentConfig?.id) {
         mutableStateOf(currentConfig?.summaryCustomRules.orEmpty())
@@ -184,25 +144,6 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
     }
     var summaryError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(currentConfig?.id, currentConfig?.contextLength) {
-        contextLengthInput = formatFloatValue(currentConfig?.contextLength)
-    }
-    LaunchedEffect(currentConfig?.id, currentConfig?.maxContextLength) {
-        maxContextLengthInput = formatFloatValue(currentConfig?.maxContextLength)
-    }
-    LaunchedEffect(currentConfig?.id, currentConfig?.enableSummary) {
-        enableSummary = currentConfig?.enableSummary ?: false
-    }
-    LaunchedEffect(currentConfig?.id, currentConfig?.summaryTokenThreshold) {
-        summaryTokenThresholdInput = formatFloatValue(currentConfig?.summaryTokenThreshold)
-    }
-    LaunchedEffect(currentConfig?.id, currentConfig?.enableSummaryByMessageCount) {
-        enableSummaryByMessageCount = currentConfig?.enableSummaryByMessageCount ?: false
-    }
-    LaunchedEffect(currentConfig?.id, currentConfig?.summaryMessageCountThreshold) {
-        summaryMessageCountThresholdInput =
-            currentConfig?.summaryMessageCountThreshold?.toString().orEmpty()
-    }
     LaunchedEffect(currentConfig?.id, currentConfig?.summaryCustomRules) {
         summaryCustomRulesInput = currentConfig?.summaryCustomRules.orEmpty()
     }
@@ -219,52 +160,14 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
         )
     }
 
-    val errorValidContextLength = stringResource(id = R.string.model_config_error_valid_context_length)
-    val errorValidMaxContextLength =
-        stringResource(id = R.string.model_config_error_valid_max_context_length)
     val errorSaveFailed = stringResource(id = R.string.model_config_error_save_failed)
-    val errorSummaryThresholdRange =
-        stringResource(id = R.string.model_config_error_summary_threshold_range)
-    val errorValidMessageCount = stringResource(id = R.string.model_config_error_valid_message_count)
 
     var showSaveSuccessMessage by remember { mutableStateOf(false) }
-    var historyError by remember { mutableStateOf<String?>(null) }
 
     val currentConfigDisplayName = remember(currentConfig, currentChatConfigId) {
         buildBoundConfigDisplayName(currentConfig, currentChatConfigId)
     }
 
-    ContextSummaryAutoSaveEffects(
-        currentConfig = currentConfig,
-        contextInputsProvider = { contextLengthInput to maxContextLengthInput },
-        summaryInputsProvider = {
-            listOf(
-                enableSummary,
-                summaryTokenThresholdInput,
-                enableSummaryByMessageCount,
-                summaryMessageCountThresholdInput
-            )
-        },
-        modelConfigManager = modelConfigManager,
-        errorValidContextLength = errorValidContextLength,
-        errorValidMaxContextLength = errorValidMaxContextLength,
-        errorSaveFailed = errorSaveFailed,
-        errorSummaryThresholdRange = errorSummaryThresholdRange,
-        errorValidMessageCount = errorValidMessageCount,
-        onContextErrorChange = { contextError = it },
-        onSummaryErrorChange = { summaryError = it }
-    )
-    HistoryRetentionAutoSaveEffects(
-        historyInputsProvider = {
-            maxImageHistoryUserTurnsInput to maxMediaHistoryUserTurnsInput
-        },
-        savedHistoryValuesProvider = {
-            savedMaxImageHistoryUserTurns to savedMaxMediaHistoryUserTurns
-        },
-        apiPreferences = apiPreferences,
-        errorSaveFailed = errorSaveFailed,
-        onHistoryErrorChange = { historyError = it }
-    )
     ContextSummarySectionsAutoSaveEffect(
         currentConfig = currentConfig,
         summarySectionsInputProvider = { summarySectionsInput },
@@ -281,66 +184,78 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
         onSummaryErrorChange = { summaryError = it }
     )
 
+    // 自定义总结规则自动保存
+    ContextSummaryCustomRulesAutoSaveEffect(
+        currentConfig = currentConfig,
+        summaryCustomRulesInputProvider = { summaryCustomRulesInput },
+        modelConfigManager = modelConfigManager,
+        errorSaveFailed = errorSaveFailed,
+        onSummaryErrorChange = { summaryError = it }
+    )
+
+    val contextDefaults = remember { com.ai.assistance.operit.data.preferences.ChatContextPreferences(context) }
+    val defaultPolicy by contextDefaults.defaults.collectAsState(initial = com.ai.assistance.operit.data.model.ChatContextPolicy())
+    var savingDefaults by remember { mutableStateOf(false) }
+    // A settings search for an option inside the folded section opens it, so the row can be shown.
+    val advancedTitles = listOf(
+        stringResource(id = R.string.settings_summary_custom_rules),
+        stringResource(id = R.string.settings_summary_structure),
+        stringResource(id = R.string.settings_summary_dialogue_review)
+    )
+    var advancedExpanded by rememberSaveable { mutableStateOf(SettingsSearchFocus.peek() in advancedTitles) }
+
     CustomScaffold() { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             Column(
                 modifier =
                     Modifier.fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                         .verticalScroll(scrollState)
             ) {
                 SettingsInfoBanner(
                     text = stringResource(id = R.string.context_summary_note),
                     backgroundColor = componentBackgroundColor
                 )
-                Spacer(modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.size(20.dp))
 
-                SectionTitle(
-                    text = stringResource(id = R.string.model_config),
-                    icon = Icons.Default.Link
-                )
-                BoundModelConfigCard(
+                SectionTitle(text = stringResource(R.string.chat_context_defaults), icon = Icons.Default.Tune)
+                SettingsCard(backgroundColor = componentBackgroundColor) {
+                    com.ai.assistance.operit.ui.features.chat.components.ChatContextPolicyEditor(defaultPolicy, saving = savingDefaults, onSave = { policy ->
+                        savingDefaults = true
+                        scope.launch {
+                            try { contextDefaults.saveDefaults(policy); showSaveSuccessMessage = true }
+                            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                            catch (e: Exception) { summaryError = errorSaveFailed }
+                            finally { savingDefaults = false }
+                        }
+                    })
+                }
+                summaryError?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.size(20.dp))
+
+                AdvancedSummaryHeader(
                     configDisplayName = currentConfigDisplayName,
+                    expanded = advancedExpanded,
+                    onExpandedChange = { advancedExpanded = it },
                     backgroundColor = componentBackgroundColor
                 )
-                Spacer(modifier = Modifier.size(12.dp))
-
-                // 自定义总结规则自动保存
-                ContextSummaryCustomRulesAutoSaveEffect(
-                    currentConfig = currentConfig,
-                    summaryCustomRulesInputProvider = { summaryCustomRulesInput },
-                    modelConfigManager = modelConfigManager,
-                    errorSaveFailed = errorSaveFailed,
-                    onSummaryErrorChange = { summaryError = it }
+                AnimatedVisibility(visible = advancedExpanded) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                Text(
+                    text = stringResource(id = R.string.context_summary_bound_config_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp)
                 )
-
                 RenderContextSummaryConfigSections(
                     componentBackgroundColor = componentBackgroundColor,
-                    contextLengthInput = contextLengthInput,
-                    onContextLengthInputChange = {
-                        contextLengthInput = it
-                        contextError = null
-                    },
-                    maxContextLengthInput = maxContextLengthInput,
-                    onMaxContextLengthInputChange = {
-                        maxContextLengthInput = it
-                        contextError = null
-                    },
-                    contextError = contextError,
-                    enableSummary = enableSummary,
-                    onEnableSummaryChange = { enableSummary = it },
-                    summaryTokenThresholdInput = summaryTokenThresholdInput,
-                    onSummaryTokenThresholdInputChange = {
-                        summaryTokenThresholdInput = it
-                        summaryError = null
-                    },
-                    enableSummaryByMessageCount = enableSummaryByMessageCount,
-                    onEnableSummaryByMessageCountChange = { enableSummaryByMessageCount = it },
-                    summaryMessageCountThresholdInput = summaryMessageCountThresholdInput,
-                    onSummaryMessageCountThresholdInputChange = {
-                        summaryMessageCountThresholdInput = it
-                        summaryError = null
-                    },
                     summaryCustomRulesInput = summaryCustomRulesInput,
                     onSummaryCustomRulesInputChange = {
                         summaryCustomRulesInput = it
@@ -357,32 +272,12 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
                             value = value,
                             onValueChange = onValueChange
                         )
-                    },
-                    summaryError = summaryError
+                    }
                 )
+                }
+                }
 
-                Spacer(modifier = Modifier.size(12.dp))
-                RenderHistoryRetentionSection(
-                    componentBackgroundColor = componentBackgroundColor,
-                    maxImageHistoryUserTurnsInput = maxImageHistoryUserTurnsInput,
-                    onMaxImageHistoryUserTurnsInputChange = { maxImageHistoryUserTurnsInput = it },
-                    maxMediaHistoryUserTurnsInput = maxMediaHistoryUserTurnsInput,
-                    onMaxMediaHistoryUserTurnsInputChange = { maxMediaHistoryUserTurnsInput = it },
-                    onReset = {
-                        scope.launch {
-                            historyError = null
-                            apiPreferences.resetHistoryRetentionSettings()
-                            maxImageHistoryUserTurnsInput =
-                                apiPreferences.maxImageHistoryUserTurnsFlow.first().toString()
-                            maxMediaHistoryUserTurnsInput =
-                                apiPreferences.maxMediaHistoryUserTurnsFlow.first().toString()
-                            showSaveSuccessMessage = true
-                        }
-                    },
-                    historyError = historyError
-                )
-
-                Spacer(modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.size(24.dp))
             }
 
             RenderContextSummaryDialogs(
@@ -396,172 +291,6 @@ fun ContextSummarySettingsScreen(onBackPressed: () -> Unit) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ContextSummaryAutoSaveEffects(
-    currentConfig: ModelConfigData?,
-    contextInputsProvider: () -> Pair<String, String>,
-    summaryInputsProvider: () -> List<Any>,
-    modelConfigManager: ModelConfigManager,
-    errorValidContextLength: String,
-    errorValidMaxContextLength: String,
-    errorSaveFailed: String,
-    errorSummaryThresholdRange: String,
-    errorValidMessageCount: String,
-    onContextErrorChange: (String?) -> Unit,
-    onSummaryErrorChange: (String?) -> Unit
-) {
-    val latestConfig by rememberUpdatedState(currentConfig)
-
-    LaunchedEffect(currentConfig?.id) {
-        val configId = currentConfig?.id ?: return@LaunchedEffect
-        snapshotFlow { contextInputsProvider() }
-            .drop(1)
-            .debounce(700)
-            .distinctUntilChanged()
-            .collectLatest { (contextText, maxText) ->
-                val contextValue = contextText.toFloatOrNull()
-                val maxValue = maxText.toFloatOrNull()
-                when {
-                    contextValue == null || contextValue <= 0f ->
-                        onContextErrorChange(errorValidContextLength)
-                    maxValue == null || maxValue <= 0f ->
-                        onContextErrorChange(errorValidMaxContextLength)
-                    else -> {
-                        val current = latestConfig ?: return@collectLatest
-                        if (current.id != configId) return@collectLatest
-                        if (current.contextLength == contextValue && current.maxContextLength == maxValue) {
-                            onContextErrorChange(null)
-                            return@collectLatest
-                        }
-                        try {
-                            modelConfigManager.updateContextSettings(
-                                configId = current.id,
-                                contextLength = contextValue,
-                                maxContextLength = maxValue,
-                                enableMaxContextMode = current.enableMaxContextMode
-                            )
-                            onContextErrorChange(null)
-                        } catch (e: Exception) {
-                            onContextErrorChange(e.message ?: errorSaveFailed)
-                        }
-                    }
-                }
-            }
-    }
-
-    LaunchedEffect(currentConfig?.id) {
-        val configId = currentConfig?.id ?: return@LaunchedEffect
-        snapshotFlow { summaryInputsProvider() }
-            .drop(1)
-            .debounce(700)
-            .distinctUntilChanged()
-            .collectLatest {
-                val current = latestConfig ?: return@collectLatest
-                if (current.id != configId) return@collectLatest
-
-                val enableSummary = it[0] as Boolean
-                val summaryTokenThresholdInput = it[1] as String
-                val enableSummaryByMessageCount = it[2] as Boolean
-                val summaryMessageCountThresholdInput = it[3] as String
-
-                if (!enableSummary) {
-                    if (current.enableSummary) {
-                        try {
-                            modelConfigManager.updateSummarySettings(
-                                configId = current.id,
-                                enableSummary = false,
-                                summaryTokenThreshold = current.summaryTokenThreshold,
-                                enableSummaryByMessageCount = current.enableSummaryByMessageCount,
-                                summaryMessageCountThreshold = current.summaryMessageCountThreshold
-                            )
-                            onSummaryErrorChange(null)
-                        } catch (e: Exception) {
-                            onSummaryErrorChange(e.message ?: errorSaveFailed)
-                        }
-                    }
-                    return@collectLatest
-                }
-
-                val threshold = summaryTokenThresholdInput.toFloatOrNull()
-                val messageCount = summaryMessageCountThresholdInput.toIntOrNull()
-                when {
-                    threshold == null || threshold <= 0f || threshold >= 1f ->
-                        onSummaryErrorChange(errorSummaryThresholdRange)
-                    enableSummaryByMessageCount && (messageCount == null || messageCount <= 0) ->
-                        onSummaryErrorChange(errorValidMessageCount)
-                    else -> {
-                        val nextMessageCount =
-                            if (enableSummaryByMessageCount) {
-                                messageCount ?: current.summaryMessageCountThreshold
-                            } else {
-                                current.summaryMessageCountThreshold
-                            }
-                        val isNoOp =
-                            current.enableSummary == enableSummary &&
-                                current.summaryTokenThreshold == threshold &&
-                                current.enableSummaryByMessageCount == enableSummaryByMessageCount &&
-                                current.summaryMessageCountThreshold == nextMessageCount
-                        if (isNoOp) {
-                            onSummaryErrorChange(null)
-                            return@collectLatest
-                        }
-                        try {
-                            modelConfigManager.updateSummarySettings(
-                                configId = current.id,
-                                enableSummary = enableSummary,
-                                summaryTokenThreshold = threshold,
-                                enableSummaryByMessageCount = enableSummaryByMessageCount,
-                                summaryMessageCountThreshold = nextMessageCount
-                            )
-                            onSummaryErrorChange(null)
-                        } catch (e: Exception) {
-                            onSummaryErrorChange(e.message ?: errorSaveFailed)
-                        }
-                    }
-                }
-            }
-    }
-}
-
-@Composable
-private fun HistoryRetentionAutoSaveEffects(
-    historyInputsProvider: () -> Pair<String, String>,
-    savedHistoryValuesProvider: () -> Pair<Int, Int>,
-    apiPreferences: ApiPreferences,
-    errorSaveFailed: String,
-    onHistoryErrorChange: (String?) -> Unit
-) {
-    val latestSavedHistoryValues by rememberUpdatedState(savedHistoryValuesProvider())
-
-    LaunchedEffect(apiPreferences) {
-        snapshotFlow { historyInputsProvider() }
-            .drop(1)
-            .debounce(700)
-            .distinctUntilChanged()
-            .collectLatest { (imageTurnsText, mediaTurnsText) ->
-                val imageTurns = imageTurnsText.toIntOrNull()
-                val mediaTurns = mediaTurnsText.toIntOrNull()
-                if (imageTurns == null || imageTurns < 0 || mediaTurns == null || mediaTurns < 0) {
-                    return@collectLatest
-                }
-
-                val (savedImageTurns, savedMediaTurns) = latestSavedHistoryValues
-                if (imageTurns == savedImageTurns && mediaTurns == savedMediaTurns) {
-                    onHistoryErrorChange(null)
-                    return@collectLatest
-                }
-
-                try {
-                    apiPreferences.saveMaxImageHistoryUserTurns(imageTurns)
-                    apiPreferences.saveMaxMediaHistoryUserTurns(mediaTurns)
-                    onHistoryErrorChange(null)
-                } catch (e: Exception) {
-                    onHistoryErrorChange(e.message ?: errorSaveFailed)
-                }
-            }
     }
 }
 
@@ -677,19 +406,6 @@ private fun ContextSummaryDialogueReviewAutoSaveEffect(
 @Composable
 private fun RenderContextSummaryConfigSections(
     componentBackgroundColor: Color,
-    contextLengthInput: String,
-    onContextLengthInputChange: (String) -> Unit,
-    maxContextLengthInput: String,
-    onMaxContextLengthInputChange: (String) -> Unit,
-    contextError: String?,
-    enableSummary: Boolean,
-    onEnableSummaryChange: (Boolean) -> Unit,
-    summaryTokenThresholdInput: String,
-    onSummaryTokenThresholdInputChange: (String) -> Unit,
-    enableSummaryByMessageCount: Boolean,
-    onEnableSummaryByMessageCountChange: (Boolean) -> Unit,
-    summaryMessageCountThresholdInput: String,
-    onSummaryMessageCountThresholdInputChange: (String) -> Unit,
     summaryCustomRulesInput: String,
     onSummaryCustomRulesInputChange: (String) -> Unit,
     dialogueReviewEnabled: Boolean,
@@ -698,112 +414,22 @@ private fun RenderContextSummaryConfigSections(
     onDialogueReviewTitleChange: (String) -> Unit,
     summarySectionsInput: List<SummarySectionConfig>,
     onSummarySectionsInputChange: (List<SummarySectionConfig>) -> Unit,
-    onOpenFullscreenEditor: (String, String, (String) -> Unit) -> Unit,
-    summaryError: String?
+    onOpenFullscreenEditor: (String, String, (String) -> Unit) -> Unit
 ) {
-    SectionTitle(
-        text = stringResource(id = R.string.settings_context_title),
-        icon = Icons.Default.Analytics
-    )
-    SettingsInfoBanner(
-        text = stringResource(id = R.string.settings_context_card_content),
-        backgroundColor = componentBackgroundColor
-    )
-    SettingsInputField(
-        title = stringResource(id = R.string.settings_context_length),
-        subtitle = stringResource(id = R.string.settings_context_length_subtitle),
-        value = contextLengthInput,
-        onValueChange = onContextLengthInputChange,
-        unitText = "K",
-        backgroundColor = componentBackgroundColor,
-        allowDecimal = true,
-        keyboardOptions =
-            KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
-    )
-    SettingsInputField(
-        title = stringResource(id = R.string.settings_max_context_length),
-        subtitle = stringResource(id = R.string.settings_max_context_length_subtitle),
-        value = maxContextLengthInput,
-        onValueChange = onMaxContextLengthInputChange,
-        unitText = "K",
-        backgroundColor = componentBackgroundColor,
-        allowDecimal = true,
-        keyboardOptions =
-            KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done)
-    )
-    contextError?.let {
-        Text(
-            text = it,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-    }
-
-    Spacer(modifier = Modifier.size(8.dp))
-    SectionTitle(
-        text = stringResource(id = R.string.settings_summary_title),
-        icon = Icons.Default.Summarize
-    )
-    SettingsSwitchRow(
-        title = stringResource(id = R.string.settings_enable_summary),
-        subtitle = stringResource(id = R.string.settings_enable_summary_desc),
-        checked = enableSummary,
-        onCheckedChange = onEnableSummaryChange,
-        backgroundColor = componentBackgroundColor
-    )
-    SettingsInputField(
-        title = stringResource(id = R.string.settings_summary_threshold),
-        subtitle = stringResource(id = R.string.settings_summary_threshold_subtitle),
-        value = summaryTokenThresholdInput,
-        onValueChange = onSummaryTokenThresholdInputChange,
-        backgroundColor = componentBackgroundColor,
-        enabled = enableSummary,
-        allowDecimal = true,
-        keyboardOptions =
-            KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
-    )
-    SettingsSwitchRow(
-        title = stringResource(id = R.string.settings_enable_summary_by_message_count),
-        subtitle = stringResource(id = R.string.settings_enable_summary_by_message_count_desc),
-        checked = enableSummaryByMessageCount,
-        onCheckedChange = onEnableSummaryByMessageCountChange,
-        backgroundColor = componentBackgroundColor,
-        enabled = enableSummary
-    )
-    SettingsInputField(
-        title = stringResource(id = R.string.settings_summary_message_count_threshold),
-        subtitle = stringResource(id = R.string.settings_summary_message_count_threshold_subtitle),
-        value = summaryMessageCountThresholdInput,
-        onValueChange = onSummaryMessageCountThresholdInputChange,
-        unitText = stringResource(id = R.string.model_config_unit_items),
-        backgroundColor = componentBackgroundColor,
-        enabled = enableSummary && enableSummaryByMessageCount
-    )
-    summaryError?.let {
-        Text(
-            text = it,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 4.dp)
-        )
-    }
-
-    Spacer(modifier = Modifier.size(8.dp))
     val globalRulesTitle = stringResource(id = R.string.settings_summary_custom_rules)
     GlobalSummaryRulesEditor(
         title = globalRulesTitle,
         subtitle = stringResource(id = R.string.settings_summary_custom_rules_desc),
         backgroundColor = componentBackgroundColor,
-        enabled = enableSummary,
+        enabled = true,
         value = summaryCustomRulesInput,
         onValueChange = onSummaryCustomRulesInputChange,
         onOpenFullscreenEditor = onOpenFullscreenEditor
     )
-    Spacer(modifier = Modifier.size(12.dp))
+    Spacer(modifier = Modifier.size(16.dp))
     SectionTitle(
         text = stringResource(id = R.string.settings_summary_structure),
-        icon = Icons.Default.Summarize
+        icon = Icons.Default.ViewAgenda
     )
     summarySectionsInput.forEachIndexed { index, section ->
         SummarySectionEditor(
@@ -816,7 +442,7 @@ private fun RenderContextSummaryConfigSections(
                 )
             },
             backgroundColor = componentBackgroundColor,
-            enabled = enableSummary,
+            enabled = true,
             onOpenFullscreenEditor = onOpenFullscreenEditor
         )
     }
@@ -826,7 +452,7 @@ private fun RenderContextSummaryConfigSections(
         title = dialogueReviewTitleInput,
         onTitleChange = onDialogueReviewTitleChange,
         backgroundColor = componentBackgroundColor,
-        summaryEnabled = enableSummary
+        summaryEnabled = true
     )
 }
 
@@ -964,12 +590,13 @@ private fun SummaryConfigEditorHeader(
     Row(
         modifier =
             Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(backgroundColor)
+                .settingsSearchTarget(title)
                 .alpha(contentAlpha)
                 .clickable(enabled = enabled) { onExpandedChange(!expanded) }
-                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
@@ -1005,12 +632,13 @@ private fun SummaryEditorHeader(
     Row(
         modifier =
             Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(backgroundColor)
+                .settingsSearchTarget(title)
                 .alpha(contentAlpha)
                 .clickable(enabled = enabled) { onExpandedChange(!expanded) }
-                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
@@ -1029,62 +657,6 @@ private fun SummaryEditorHeader(
                 )
             )
         }
-    }
-}
-
-@Composable
-private fun RenderHistoryRetentionSection(
-    componentBackgroundColor: Color,
-    maxImageHistoryUserTurnsInput: String,
-    onMaxImageHistoryUserTurnsInputChange: (String) -> Unit,
-    maxMediaHistoryUserTurnsInput: String,
-    onMaxMediaHistoryUserTurnsInputChange: (String) -> Unit,
-    onReset: () -> Unit,
-    historyError: String?
-) {
-    SectionTitle(
-        text = stringResource(id = R.string.settings_history_retention_title),
-        icon = Icons.Default.History
-    )
-    SettingsInputField(
-        title = stringResource(id = R.string.settings_max_image_history_user_turns),
-        subtitle = stringResource(id = R.string.settings_max_image_history_user_turns_subtitle),
-        value = maxImageHistoryUserTurnsInput,
-        onValueChange = onMaxImageHistoryUserTurnsInputChange,
-        unitText = stringResource(id = R.string.context_unit_times),
-        backgroundColor = componentBackgroundColor
-    )
-
-    SettingsInputField(
-        title = stringResource(id = R.string.settings_max_media_history_user_turns),
-        subtitle = stringResource(id = R.string.settings_max_media_history_user_turns_subtitle),
-        value = maxMediaHistoryUserTurnsInput,
-        onValueChange = onMaxMediaHistoryUserTurnsInputChange,
-        unitText = stringResource(id = R.string.context_unit_times),
-        backgroundColor = componentBackgroundColor
-    )
-
-    Button(
-        onClick = onReset,
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        colors =
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-    ) {
-        Icon(imageVector = Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = stringResource(id = R.string.context_reset_all_settings), style = MaterialTheme.typography.bodyLarge)
-    }
-
-    historyError?.let {
-        Text(
-            text = it,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-        )
     }
 }
 
@@ -1111,11 +683,6 @@ private fun BoxScope.RenderContextSummaryDialogs(
     }
 }
 
-private fun formatFloatValue(value: Float?): String {
-    if (value == null) return ""
-    return if (value % 1f == 0f) value.toInt().toString() else value.toString()
-}
-
 private fun buildBoundConfigDisplayName(config: ModelConfigData?, fallbackConfigId: String): String {
     val effectiveConfig = config ?: return fallbackConfigId.ifBlank { FunctionalConfigManager.DEFAULT_CONFIG_ID }
     return if (effectiveConfig.name.isBlank()) {
@@ -1125,51 +692,115 @@ private fun buildBoundConfigDisplayName(config: ModelConfigData?, fallbackConfig
     }
 }
 
+/** One rounded block of related settings; every group on this page sits in one. */
 @Composable
-private fun BoundModelConfigCard(configDisplayName: String, backgroundColor: Color) {
-    Column(
-        modifier =
-            Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(backgroundColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+private fun SettingsCard(backgroundColor: Color, content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = backgroundColor,
+        tonalElevation = 1.dp
     ) {
-        Text(
-            text = stringResource(id = R.string.context_summary_current_model_config, configDisplayName),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.size(2.dp))
-        Text(
-            text = stringResource(id = R.string.context_summary_bound_config_description),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) { content() }
+    }
+}
+
+/** The folded summary format settings, named after the model configuration they belong to. */
+@Composable
+private fun AdvancedSummaryHeader(
+    configDisplayName: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    backgroundColor: Color
+) {
+    val advancedTitle = stringResource(R.string.chat_context_advanced)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = backgroundColor,
+        tonalElevation = 1.dp,
+        onClick = { onExpandedChange(!expanded) }
+    ) {
+        Row(
+            modifier = Modifier
+                .settingsSearchTarget(advancedTitle)
+                .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier =
+                    Modifier.size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Summarize,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = advancedTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(id = R.string.context_summary_current_model_config, configDisplayName),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = stringResource(
+                    if (expanded) R.string.model_config_collapse else R.string.model_config_expand
+                ),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(8.dp)
+            )
+        }
     }
 }
 
 @Composable
 private fun SettingsInfoBanner(text: String, backgroundColor: Color) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    // The tint sits on the page's card color, which is opaque over a background image, so the
+    // note stays readable on any wallpaper.
+    Row(
         modifier =
             Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(backgroundColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-    )
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
 }
 
 @Composable
 private fun SectionTitle(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 8.dp)
+        modifier = Modifier.settingsSearchTarget(text).padding(start = 4.dp, bottom = 10.dp)
     ) {
         Icon(
             imageVector = icon,
@@ -1180,8 +811,8 @@ private fun SectionTitle(text: String, icon: androidx.compose.ui.graphics.vector
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = text,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary
         )
     }
@@ -1200,10 +831,10 @@ private fun SettingsSwitchRow(
     Row(
         modifier =
             Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(backgroundColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .alpha(contentAlpha),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -1224,98 +855,6 @@ private fun SettingsSwitchRow(
 }
 
 @Composable
-private fun SettingsInputField(
-    title: String,
-    subtitle: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    unitText: String? = null,
-    backgroundColor: Color,
-    enabled: Boolean = true,
-    allowDecimal: Boolean = false,
-    keyboardOptions: KeyboardOptions =
-        KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done)
-) {
-    val focusManager = LocalFocusManager.current
-    val contentAlpha = if (enabled) 1f else 0.38f
-    Row(
-        modifier =
-            Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(backgroundColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .alpha(contentAlpha),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column(
-            modifier = Modifier.weight(1f).padding(end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BasicTextField(
-                value = value,
-                onValueChange = { newText ->
-                    if (enabled) {
-                        onValueChange(if (allowDecimal) filterDecimalInput(newText) else newText.filter { it.isDigit() })
-                    }
-                },
-                enabled = enabled,
-                modifier =
-                    Modifier.width(if (allowDecimal) 88.dp else 72.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                textStyle =
-                    TextStyle(
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center
-                    ),
-                keyboardOptions = keyboardOptions,
-                keyboardActions = KeyboardActions(onDone = { if (enabled) focusManager.clearFocus() }),
-                singleLine = true
-            )
-            if (unitText != null) {
-                Text(
-                    text = unitText,
-                    style =
-                        MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        ),
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-            }
-        }
-    }
-}
-
-private fun filterDecimalInput(input: String): String {
-    var dotSeen = false
-    val result = StringBuilder()
-    input.forEachIndexed { index, c ->
-        when {
-            c.isDigit() -> result.append(c)
-            c == '.' && !dotSeen -> {
-                dotSeen = true
-                if (result.isEmpty() && index == 0) result.append("0.") else result.append(c)
-            }
-        }
-    }
-    return result.toString()
-}
-
-@Composable
 private fun SettingsMultilineTextField(
     title: String,
     subtitle: String,
@@ -1331,10 +870,10 @@ private fun SettingsMultilineTextField(
     Column(
         modifier =
             Modifier.fillMaxWidth()
-                .padding(bottom = 4.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(backgroundColor)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .alpha(contentAlpha)
     ) {
         Text(
@@ -1359,12 +898,12 @@ private fun SettingsMultilineTextField(
             modifier =
                 Modifier.fillMaxWidth()
                     .let { if (singleLine) it.heightIn(min = minHeight) else it.heightIn(min = 120.dp) }
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             textStyle =
                 TextStyle(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 14.sp
                 ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             singleLine = singleLine,

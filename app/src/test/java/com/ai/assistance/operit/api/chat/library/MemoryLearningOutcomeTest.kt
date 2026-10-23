@@ -5,8 +5,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MemoryLearningOutcomeTest {
-    @Test fun `natural completion does not require a finish tool`() {
+    @Test fun `committed completion reports success`() {
         assertEquals("success", memoryLearningFinalStatus(null, 3, 0))
+    }
+    @Test fun `unfinished text receives exactly one continuation`() = kotlinx.coroutines.runBlocking {
+        val attempts = mutableListOf<Boolean>()
+        var finished = false
+        runLearningWithFinishRecovery({ finished }) { recovery ->
+            attempts += recovery
+            if (recovery) finished = true
+        }
+        assertEquals(listOf(false, true), attempts)
+        attempts.clear()
+        runLearningWithFinishRecovery({ true }) { attempts += it }
+        assertEquals(listOf(false), attempts)
+        attempts.clear()
+        runLearningWithFinishRecovery({ false }) { attempts += it }
+        assertEquals(listOf(false, true), attempts)
+    }
+    @Test fun `cancelled review is never continued`() = kotlinx.coroutines.runBlocking {
+        var attempts = 0
+        try {
+            runLearningWithFinishRecovery({ false }) {
+                attempts++
+                throw CancellationException("cancel")
+            }
+            fail("Expected cancellation")
+        } catch (_: CancellationException) { }
+        assertEquals(1, attempts)
     }
     @Test fun `tool errors remain auditable without marking a completed run failed`() {
         assertEquals("warnings", memoryLearningFinalStatus(null, 3, 1))

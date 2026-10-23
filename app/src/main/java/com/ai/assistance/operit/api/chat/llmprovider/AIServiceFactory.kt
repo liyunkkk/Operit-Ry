@@ -252,9 +252,11 @@ object AIServiceFactory {
     fun createService(
         config: ModelConfigData,
         modelConfigManager: ModelConfigManager,
-        context: Context
+        context: Context,
+        allowPluginProviders: Boolean = true,
+        useSnapshotApiKeys: Boolean = false,
     ): AIService {
-        val rawService = buildService(config.withModelProtocol(), modelConfigManager, context)
+        val rawService = buildService(config.withModelProtocol(), modelConfigManager, context, allowPluginProviders, useSnapshotApiKeys)
         return TokenTrackingAIService(
             delegate = rawService,
             context = context,
@@ -265,10 +267,13 @@ object AIServiceFactory {
     private fun buildService(
         config: ModelConfigData,
         modelConfigManager: ModelConfigManager,
-        context: Context
+        context: Context,
+        allowPluginProviders: Boolean,
+        useSnapshotApiKeys: Boolean,
     ): AIService {
         val providerTypeId = config.apiProviderTypeId.trim()
         ToolPkgAiProviderRegistry.get(providerTypeId)?.let { provider ->
+            require(allowPluginProviders) { "Plugin providers do not support isolated prediction requests" }
             return ToolPkgJsAiProviderService(
                 config = config,
                 provider = provider
@@ -291,7 +296,8 @@ object AIServiceFactory {
         val apiKeyProvider = if (providerType == ApiProviderType.OPENCODE_ZEN_FREE) {
             SingleApiKeyProvider(config.apiKey)
         } else if (config.useMultipleApiKeys) {
-            MultiApiKeyProvider(config.id, modelConfigManager)
+            if (useSnapshotApiKeys) SnapshotApiKeyProvider(config)
+            else MultiApiKeyProvider(config.id, modelConfigManager)
         } else {
             SingleApiKeyProvider(config.apiKey)
         }

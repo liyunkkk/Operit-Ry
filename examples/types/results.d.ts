@@ -623,6 +623,12 @@ export interface TerminalTaskResultData {
     /** Latest tail snapshot, not a new output chunk. */
     output: string;
     outputMode: 'tail_snapshot';
+    /** Command result for local automation shells; null means unknown. completed is not success. */
+    exitCode: number | null;
+    /** Exit of the session process, separate from the command result. */
+    sessionExitCode: number | null;
+    /** Current terminal display, replacing the preceding screen snapshot; may include prior output. */
+    screen: string | null;
     outputTruncated: boolean;
     terminationReason?: string;
     timedOut: boolean;
@@ -1463,6 +1469,7 @@ export interface ModelConfigDeleteResultData {
     deleted: boolean;
     configId: string;
     affectedFunctions: string[];
+    /** Empty when affected functions require an explicit model selection. */
     fallbackConfigId: string;
     toString(): string;
 }

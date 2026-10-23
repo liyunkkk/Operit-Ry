@@ -751,7 +751,7 @@ fun MCPConfigScreen(
                                 OutlinedTextField(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .menuAnchor(),
+                                        .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                                     value = remoteConnectionType,
                                     onValueChange = {},
                                     readOnly = true,
@@ -1905,7 +1905,7 @@ fun RemoteServerEditDialog(
                         OutlinedTextField(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .menuAnchor(),
+                                .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                             value = connectionType,
                             onValueChange = {},
                             readOnly = true,

@@ -337,6 +337,7 @@ export async function selectMemoryProfile(
 export async function updateInputSettings(
   token: string,
   payload: Partial<{
+    chat_id: string;
     enable_thinking_mode: boolean;
     thinking_quality_level: number;
     enable_memory_auto_update: boolean;

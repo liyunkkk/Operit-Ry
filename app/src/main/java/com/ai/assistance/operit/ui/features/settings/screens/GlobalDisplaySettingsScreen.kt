@@ -1,6 +1,6 @@
 package com.ai.assistance.operit.ui.features.settings.screens
 
-import androidx.compose.foundation.background
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +29,11 @@ import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.data.preferences.androidPermissionPreferences
 import com.ai.assistance.operit.services.floating.StatusIndicatorStyle
 import com.ai.assistance.operit.ui.components.CustomScaffold
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
+import com.ai.assistance.operit.ui.features.settings.components.SettingsRowDivider
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSwitchRow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -43,6 +47,7 @@ fun GlobalDisplaySettingsScreen(
     val apiPreferences = remember { ApiPreferences.getInstance(context) }
     val userPreferences = remember { UserPreferencesManager.getInstance(context) }
     val scope = rememberCoroutineScope()
+    val resetDoneMessage = stringResource(R.string.reset_display_settings_done)
     val scrollState = rememberScrollState()
 
     val collapseCompletedProcess by displayPreferencesManager.collapseCompletedProcess.collectAsState(initial = true)
@@ -51,6 +56,9 @@ fun GlobalDisplaySettingsScreen(
     val enableReplyNotification by displayPreferencesManager.enableReplyNotification.collectAsState(initial = true)
     val enableReplyNotificationSound by displayPreferencesManager.enableReplyNotificationSound.collectAsState(initial = false)
     val enableReplyNotificationVibration by displayPreferencesManager.enableReplyNotificationVibration.collectAsState(initial = false)
+    val composerPredictionsEnabled by displayPreferencesManager.composerPredictionsEnabled.collectAsState(
+        initial = DisplayPreferencesManager.DEFAULT_COMPOSER_PREDICTIONS_ENABLED
+    )
     val enableEnterToSend by displayPreferencesManager.enableEnterToSend.collectAsState(initial = false)
     val enableNavigationAnimation by displayPreferencesManager.enableNavigationAnimation.collectAsState(initial = true)
     val startWithNewChat by displayPreferencesManager.startWithNewChat.collectAsState(initial = false)
@@ -67,15 +75,13 @@ fun GlobalDisplaySettingsScreen(
 
     val hasBackgroundImage by userPreferences.useBackgroundImage.collectAsState(initial = false)
     val uiAccessibilityMode by userPreferences.uiAccessibilityMode.collectAsState(initial = false)
-    val softwareIdentity by userPreferences.softwareIdentity.collectAsState(
-        initial = UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT
-    )
     val preferredPermissionLevel by androidPermissionPreferences.preferredPermissionLevelFlow.collectAsState(initial = null)
     val rootExecutionMode by androidPermissionPreferences.rootExecutionModeFlow.collectAsState(initial = RootCommandExecutionMode.AUTO)
     val customSuCommand by androidPermissionPreferences.customSuCommandFlow.collectAsState(initial = AndroidPermissionPreferences.DEFAULT_SU_COMMAND)
 
     var userNameInput by remember { mutableStateOf(globalUserName ?: "") }
     var customSuCommandInput by remember { mutableStateOf(customSuCommand) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val collapseModeOptions = remember {
         listOf(ToolCollapseMode.READ_ONLY, ToolCollapseMode.ALL, ToolCollapseMode.FULL)
     }
@@ -175,669 +181,641 @@ fun GlobalDisplaySettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .verticalScroll(scrollState)
         ) {
-            SectionTitle(
+            SettingsSectionTitle(
                 text = stringResource(R.string.message_display_settings),
                 icon = Icons.Default.Message
             )
 
-            DisplayToggleItem(
-                title = stringResource(R.string.collapse_completed_process_title),
-                subtitle = stringResource(R.string.collapse_completed_process_description),
-                checked = collapseCompletedProcess,
-                onCheckedChange = { enabled ->
-                    scope.launch { displayPreferencesManager.saveDisplaySettings(collapseCompletedProcess = enabled) }
-                },
-                backgroundColor = componentBackgroundColor,
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(componentBackgroundColor)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.tool_collapse_mode_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(id = R.string.tool_collapse_mode_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(id = collapseModeLabelRes(selectedCollapseMode)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Slider(
-                    value = collapseModeSliderValue,
-                    onValueChange = { collapseModeSliderValue = it },
-                    valueRange = 0f..(collapseModeOptions.size - 1).toFloat(),
-                    steps = collapseModeOptions.size - 2,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                )
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    collapseModeOptions.forEachIndexed { index, mode ->
-                        val selected = selectedCollapseMode == mode
-                        Text(
-                            text = stringResource(id = collapseModeLabelRes(mode)),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    collapseModeSliderValue = index.toFloat()
-                                }
-                                .padding(top = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            OutlinedTextField(
-                value = userNameInput,
-                onValueChange = { userNameInput = it },
-                label = { Text(stringResource(R.string.global_user_name)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                singleLine = true,
-                trailingIcon = {
-                    if (userNameInput != globalUserName) {
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    displayPreferencesManager.saveDisplaySettings(
-                                        globalUserName = userNameInput,
-                                    )
-                                }
-                            },
-                        ) {
-                            Icon(
-                                Icons.Default.Save,
-                                contentDescription = stringResource(R.string.save),
-                            )
-                        }
-                    }
-                },
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ======= 系统显示设置 =======
-            SectionTitle(
-                text = stringResource(R.string.system_display_settings),
-                icon = Icons.Default.Settings
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.show_fps_counter),
-                subtitle = stringResource(R.string.show_fps_counter_description),
-                checked = showFpsCounter,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(showFpsCounter = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_reply_notification),
-                subtitle = stringResource(R.string.enable_reply_notification_description),
-                checked = enableReplyNotification,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(enableReplyNotification = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_reply_notification_sound),
-                subtitle = stringResource(R.string.enable_reply_notification_sound_description),
-                checked = enableReplyNotificationSound,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(enableReplyNotificationSound = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_reply_notification_vibration),
-                subtitle = stringResource(R.string.enable_reply_notification_vibration_description),
-                checked = enableReplyNotificationVibration,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(enableReplyNotificationVibration = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_enter_to_send),
-                subtitle = stringResource(R.string.enable_enter_to_send_description),
-                checked = enableEnterToSend,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(enableEnterToSend = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.keep_screen_on),
-                subtitle = stringResource(R.string.keep_screen_on_description),
-                checked = keepScreenOn,
-                onCheckedChange = {
-                    scope.launch {
-                        apiPreferences.saveKeepScreenOn(it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_navigation_animation),
-                subtitle = stringResource(R.string.enable_navigation_animation_description),
-                checked = enableNavigationAnimation,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(
-                            enableNavigationAnimation = it
-                        )
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.start_with_new_chat),
-                subtitle = stringResource(R.string.start_with_new_chat_description),
-                checked = startWithNewChat,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(startWithNewChat = it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(componentBackgroundColor)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.visit_web_wait_time_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.visit_web_wait_time_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = visitWebWaitSliderValue,
-                        onValueChange = { visitWebWaitSliderValue = it.roundToInt().toFloat() },
-                        valueRange = 0f..10f,
-                        steps = 9,
-                        modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.visit_web_wait_time_value, visitWebWaitSliderValue.roundToInt()),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(componentBackgroundColor)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.software_identity_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = stringResource(id = R.string.software_identity_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = softwareIdentity == UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT,
-                        onClick = {
-                            if (softwareIdentity != UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT) {
-                                scope.launch {
-                                    userPreferences.saveSoftwareIdentity(UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT)
-                                }
-                            }
-                        },
-                        label = { Text(stringResource(id = R.string.software_identity_option_operit)) }
-                    )
-                    FilterChip(
-                        selected = softwareIdentity == UserPreferencesManager.SOFTWARE_IDENTITY_LINGSHU,
-                        onClick = {
-                            if (softwareIdentity != UserPreferencesManager.SOFTWARE_IDENTITY_LINGSHU) {
-                                scope.launch {
-                                    userPreferences.saveSoftwareIdentity(UserPreferencesManager.SOFTWARE_IDENTITY_LINGSHU)
-                                }
-                            }
-                        },
-                        label = { Text(stringResource(id = R.string.software_identity_option_lingshu)) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ======= 自动化状态指示样式 =======
-            SectionTitle(
-                text = stringResource(id = R.string.global_display_automation_behavior),
-                icon = Icons.Default.AutoAwesome
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.ui_accessibility_mode),
-                subtitle = stringResource(R.string.ui_accessibility_mode_description),
-                checked = uiAccessibilityMode,
-                onCheckedChange = {
-                    scope.launch {
-                        userPreferences.saveUiAccessibilityMode(it)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.enable_background_keep_alive),
-                subtitle = stringResource(R.string.enable_background_keep_alive_description),
-                checked = enableBackgroundKeepAlive,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(
-                            enableBackgroundKeepAlive = it
-                        )
-                        AIForegroundService.refreshBackgroundKeepAlive(context)
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.experimental_virtual_display),
-                subtitle = stringResource(R.string.experimental_virtual_display_description),
-                checked = enableExperimentalVirtualDisplay,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(
-                            enableExperimentalVirtualDisplay = it
-                        )
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            DisplayToggleItem(
-                title = stringResource(R.string.hide_runtime_task_view),
-                subtitle = stringResource(R.string.hide_runtime_task_view_description),
-                checked = hideRuntimeTaskView,
-                onCheckedChange = {
-                    scope.launch {
-                        displayPreferencesManager.saveDisplaySettings(
-                            hideRuntimeTaskView = it
-                        )
-                    }
-                },
-                backgroundColor = componentBackgroundColor
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(componentBackgroundColor)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.global_display_virtual_screen_bitrate),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = virtualDisplayBitrateKbps == 1500,
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 1500)
-                            }
-                        },
-                        label = { Text("1.5 Mbps") }
-                    )
-                    FilterChip(
-                        selected = virtualDisplayBitrateKbps == 3000,
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 3000)
-                            }
-                        },
-                        label = { Text("3 Mbps") }
-                    )
-                    FilterChip(
-                        selected = virtualDisplayBitrateKbps == 5000,
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 5000)
-                            }
-                        },
-                        label = { Text("5 Mbps") }
-                    )
-                    FilterChip(
-                        selected = virtualDisplayBitrateKbps == 10000,
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 10000)
-                            }
-                        },
-                        label = { Text("10 Mbps") }
-                    )
-                    FilterChip(
-                        selected = virtualDisplayBitrateKbps == 20000,
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 20000)
-                            }
-                        },
-                        label = { Text("20 Mbps") }
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(componentBackgroundColor)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.global_display_status_indicator_style),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = statusIndicatorStyle == StatusIndicatorStyle.FULLSCREEN_RAINBOW,
-                        onClick = {
-                            statusIndicatorStyle = StatusIndicatorStyle.FULLSCREEN_RAINBOW
-                            statusIndicatorPrefs.edit()
-                                .putString(
-                                    "status_indicator_style",
-                                    StatusIndicatorStyle.FULLSCREEN_RAINBOW.name
-                                )
-                                .apply()
-                        },
-                        label = { Text(stringResource(R.string.display_rainbow_border)) }
-                    )
-                    FilterChip(
-                        selected = statusIndicatorStyle == StatusIndicatorStyle.TOP_BAR,
-                        onClick = {
-                            statusIndicatorStyle = StatusIndicatorStyle.TOP_BAR
-                            statusIndicatorPrefs.edit()
-                                .putString(
-                                    "status_indicator_style",
-                                    StatusIndicatorStyle.TOP_BAR.name
-                                )
-                                .apply()
-                        },
-                        label = { Text(stringResource(R.string.display_top_hint)) }
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(componentBackgroundColor)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.global_display_screenshot_settings),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+            SettingsCard(backgroundColor = componentBackgroundColor, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+                DisplayToggleItem(
+                    title = stringResource(R.string.collapse_completed_process_title),
+                    subtitle = stringResource(R.string.collapse_completed_process_description),
+                    checked = collapseCompletedProcess,
+                    onCheckedChange = { enabled ->
+                        scope.launch { displayPreferencesManager.saveDisplaySettings(collapseCompletedProcess = enabled) }
+                    },
+                    backgroundColor = componentBackgroundColor,
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = stringResource(id = R.string.global_display_image_format),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Normal
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = screenshotFormat.equals("PNG", ignoreCase = true),
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(screenshotFormat = "PNG")
-                            }
-                        },
-                        label = { Text(stringResource(R.string.display_png_default)) }
-                    )
-                    FilterChip(
-                        selected = screenshotFormat.equals("JPG", ignoreCase = true) ||
-                                screenshotFormat.equals("JPEG", ignoreCase = true),
-                        onClick = {
-                            scope.launch {
-                                displayPreferencesManager.saveDisplaySettings(screenshotFormat = "JPG")
-                            }
-                        },
-                        label = { Text(stringResource(R.string.display_jpg_smaller)) }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = stringResource(id = R.string.global_display_image_quality),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Normal
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = qualitySliderValue,
-                        onValueChange = { qualitySliderValue = it },
-                        valueRange = 50f..100f,
-                        modifier = Modifier.weight(1f).padding(vertical = 8.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${qualitySliderValue.roundToInt()}%",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = stringResource(id = R.string.global_display_resolution_scale),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Normal
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Slider(
-                        value = scaleSliderValue,
-                        onValueChange = { scaleSliderValue = it },
-                        valueRange = 50f..100f,
-                        modifier = Modifier.weight(1f).padding(vertical = 8.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${scaleSliderValue.roundToInt()}%",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-
-            if (preferredPermissionLevel == AndroidPermissionLevel.ROOT) {
+                SettingsRowDivider(inset = false)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 4.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(componentBackgroundColor)
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 8.dp, vertical = 10.dp)
                 ) {
                     Text(
-                        text = stringResource(id = R.string.root_execution_mode_title),
+                        text = stringResource(id = R.string.tool_collapse_mode_title),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.tool_collapse_mode_title)),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = stringResource(id = R.string.root_execution_mode_description),
+                        text = stringResource(id = R.string.tool_collapse_mode_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(id = collapseModeLabelRes(selectedCollapseMode)),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Slider(
+                        value = collapseModeSliderValue,
+                        onValueChange = { collapseModeSliderValue = it },
+                        valueRange = 0f..(collapseModeOptions.size - 1).toFloat(),
+                        steps = collapseModeOptions.size - 2,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    )
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        collapseModeOptions.forEachIndexed { index, mode ->
+                            val selected = selectedCollapseMode == mode
+                            Text(
+                                text = stringResource(id = collapseModeLabelRes(mode)),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        collapseModeSliderValue = index.toFloat()
+                                    }
+                                    .padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                SettingsRowDivider(inset = false)
+                OutlinedTextField(
+                    value = userNameInput,
+                    onValueChange = { userNameInput = it },
+                    label = { Text(stringResource(R.string.global_user_name)) },
+                    modifier = Modifier
+                        .settingsSearchTarget(stringResource(R.string.global_user_name))
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    singleLine = true,
+                    trailingIcon = {
+                        if (userNameInput != globalUserName) {
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        displayPreferencesManager.saveDisplaySettings(
+                                            globalUserName = userNameInput,
+                                        )
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.Save,
+                                    contentDescription = stringResource(R.string.save),
+                                )
+                            }
+                        }
+                    },
+                )
+
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ======= 系统显示设置 =======
+            SettingsSectionTitle(
+                text = stringResource(R.string.system_display_settings),
+                icon = Icons.Default.Settings
+            )
+
+            SettingsCard(backgroundColor = componentBackgroundColor, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+                DisplayToggleItem(
+                    title = stringResource(R.string.show_fps_counter),
+                    subtitle = stringResource(R.string.show_fps_counter_description),
+                    checked = showFpsCounter,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(showFpsCounter = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.enable_reply_notification),
+                    subtitle = stringResource(R.string.enable_reply_notification_description),
+                    checked = enableReplyNotification,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(enableReplyNotification = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.enable_reply_notification_sound),
+                    subtitle = stringResource(R.string.enable_reply_notification_sound_description),
+                    checked = enableReplyNotificationSound,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(enableReplyNotificationSound = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.enable_reply_notification_vibration),
+                    subtitle = stringResource(R.string.enable_reply_notification_vibration_description),
+                    checked = enableReplyNotificationVibration,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(enableReplyNotificationVibration = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.enable_enter_to_send),
+                    subtitle = stringResource(R.string.enable_enter_to_send_description),
+                    checked = enableEnterToSend,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(enableEnterToSend = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.composer_predictions),
+                    subtitle = stringResource(R.string.composer_predictions_description),
+                    checked = composerPredictionsEnabled,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(composerPredictionsEnabled = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.keep_screen_on),
+                    subtitle = stringResource(R.string.keep_screen_on_description),
+                    checked = keepScreenOn,
+                    onCheckedChange = {
+                        scope.launch {
+                            apiPreferences.saveKeepScreenOn(it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.enable_navigation_animation),
+                    subtitle = stringResource(R.string.enable_navigation_animation_description),
+                    checked = enableNavigationAnimation,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(
+                                enableNavigationAnimation = it
+                            )
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.start_with_new_chat),
+                    subtitle = stringResource(R.string.start_with_new_chat_description),
+                    checked = startWithNewChat,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(startWithNewChat = it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.visit_web_wait_time_title),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.visit_web_wait_time_title)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.visit_web_wait_time_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Slider(
+                            value = visitWebWaitSliderValue,
+                            onValueChange = { visitWebWaitSliderValue = it.roundToInt().toFloat() },
+                            valueRange = 0f..10f,
+                            steps = 9,
+                            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.visit_web_wait_time_value, visitWebWaitSliderValue.roundToInt()),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ======= 自动化状态指示样式 =======
+            SettingsSectionTitle(
+                text = stringResource(id = R.string.global_display_automation_behavior),
+                icon = Icons.Default.AutoAwesome
+            )
+
+            SettingsCard(backgroundColor = componentBackgroundColor, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)) {
+                DisplayToggleItem(
+                    title = stringResource(R.string.ui_accessibility_mode),
+                    subtitle = stringResource(R.string.ui_accessibility_mode_description),
+                    checked = uiAccessibilityMode,
+                    onCheckedChange = {
+                        scope.launch {
+                            userPreferences.saveUiAccessibilityMode(it)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.enable_background_keep_alive),
+                    subtitle = stringResource(R.string.enable_background_keep_alive_description),
+                    checked = enableBackgroundKeepAlive,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(
+                                enableBackgroundKeepAlive = it
+                            )
+                            AIForegroundService.refreshBackgroundKeepAlive(context)
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.experimental_virtual_display),
+                    subtitle = stringResource(R.string.experimental_virtual_display_description),
+                    checked = enableExperimentalVirtualDisplay,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(
+                                enableExperimentalVirtualDisplay = it
+                            )
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                DisplayToggleItem(
+                    title = stringResource(R.string.hide_runtime_task_view),
+                    subtitle = stringResource(R.string.hide_runtime_task_view_description),
+                    checked = hideRuntimeTaskView,
+                    onCheckedChange = {
+                        scope.launch {
+                            displayPreferencesManager.saveDisplaySettings(
+                                hideRuntimeTaskView = it
+                            )
+                        }
+                    },
+                    backgroundColor = componentBackgroundColor
+                )
+
+                SettingsRowDivider(inset = false)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.global_display_virtual_screen_bitrate),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.global_display_virtual_screen_bitrate)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
-                            selected = rootExecutionMode == RootCommandExecutionMode.AUTO,
+                            selected = virtualDisplayBitrateKbps == 1500,
                             onClick = {
                                 scope.launch {
-                                    androidPermissionPreferences.saveRootExecutionMode(RootCommandExecutionMode.AUTO)
+                                    displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 1500)
                                 }
                             },
-                            label = { Text(stringResource(R.string.root_execution_mode_auto)) }
+                            label = { Text("1.5 Mbps") }
                         )
                         FilterChip(
-                            selected = rootExecutionMode == RootCommandExecutionMode.FORCE_LIBSU,
+                            selected = virtualDisplayBitrateKbps == 3000,
                             onClick = {
                                 scope.launch {
-                                    androidPermissionPreferences.saveRootExecutionMode(RootCommandExecutionMode.FORCE_LIBSU)
+                                    displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 3000)
                                 }
                             },
-                            label = { Text(stringResource(R.string.root_execution_mode_force_libsu)) }
+                            label = { Text("3 Mbps") }
                         )
                         FilterChip(
-                            selected = rootExecutionMode == RootCommandExecutionMode.FORCE_EXEC,
+                            selected = virtualDisplayBitrateKbps == 5000,
                             onClick = {
                                 scope.launch {
-                                    androidPermissionPreferences.saveRootExecutionMode(RootCommandExecutionMode.FORCE_EXEC)
+                                    displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 5000)
                                 }
                             },
-                            label = { Text(stringResource(R.string.root_execution_mode_force_exec)) }
+                            label = { Text("5 Mbps") }
+                        )
+                        FilterChip(
+                            selected = virtualDisplayBitrateKbps == 10000,
+                            onClick = {
+                                scope.launch {
+                                    displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 10000)
+                                }
+                            },
+                            label = { Text("10 Mbps") }
+                        )
+                        FilterChip(
+                            selected = virtualDisplayBitrateKbps == 20000,
+                            onClick = {
+                                scope.launch {
+                                    displayPreferencesManager.saveDisplaySettings(virtualDisplayBitrateKbps = 20000)
+                                }
+                            },
+                            label = { Text("20 Mbps") }
+                        )
+                    }
+                }
+
+                SettingsRowDivider(inset = false)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.global_display_status_indicator_style),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.global_display_status_indicator_style)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = statusIndicatorStyle == StatusIndicatorStyle.FULLSCREEN_RAINBOW,
+                            onClick = {
+                                statusIndicatorStyle = StatusIndicatorStyle.FULLSCREEN_RAINBOW
+                                statusIndicatorPrefs.edit()
+                                    .putString(
+                                        "status_indicator_style",
+                                        StatusIndicatorStyle.FULLSCREEN_RAINBOW.name
+                                    )
+                                    .apply()
+                            },
+                            label = { Text(stringResource(R.string.display_rainbow_border)) }
+                        )
+                        FilterChip(
+                            selected = statusIndicatorStyle == StatusIndicatorStyle.TOP_BAR,
+                            onClick = {
+                                statusIndicatorStyle = StatusIndicatorStyle.TOP_BAR
+                                statusIndicatorPrefs.edit()
+                                    .putString(
+                                        "status_indicator_style",
+                                        StatusIndicatorStyle.TOP_BAR.name
+                                    )
+                                    .apply()
+                            },
+                            label = { Text(stringResource(R.string.display_top_hint)) }
+                        )
+                    }
+                }
+
+                SettingsRowDivider(inset = false)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = stringResource(id = R.string.global_display_screenshot_settings),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = stringResource(id = R.string.global_display_image_format),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.global_display_image_format)),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Normal
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = screenshotFormat.equals("PNG", ignoreCase = true),
+                            onClick = {
+                                scope.launch {
+                                    displayPreferencesManager.saveDisplaySettings(screenshotFormat = "PNG")
+                                }
+                            },
+                            label = { Text(stringResource(R.string.display_png_default)) }
+                        )
+                        FilterChip(
+                            selected = screenshotFormat.equals("JPG", ignoreCase = true) ||
+                                    screenshotFormat.equals("JPEG", ignoreCase = true),
+                            onClick = {
+                                scope.launch {
+                                    displayPreferencesManager.saveDisplaySettings(screenshotFormat = "JPG")
+                                }
+                            },
+                            label = { Text(stringResource(R.string.display_jpg_smaller)) }
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = customSuCommandInput,
-                        onValueChange = { customSuCommandInput = it },
-                        label = { Text(stringResource(id = R.string.root_custom_su_command)) },
-                        supportingText = {
-                            Text(stringResource(id = R.string.root_custom_su_command_description))
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (customSuCommandInput.trim() != customSuCommand.trim()) {
-                                IconButton(
-                                    onClick = {
-                                        scope.launch {
-                                            androidPermissionPreferences.saveCustomSuCommand(customSuCommandInput)
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Save,
-                                        contentDescription = stringResource(id = R.string.save)
-                                    )
-                                }
-                            }
-                        }
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = stringResource(id = R.string.global_display_image_quality),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.global_display_image_quality)),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Normal
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Slider(
+                            value = qualitySliderValue,
+                            onValueChange = { qualitySliderValue = it },
+                            valueRange = 50f..100f,
+                            modifier = Modifier.weight(1f).padding(vertical = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${qualitySliderValue.roundToInt()}%",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = stringResource(id = R.string.global_display_resolution_scale),
+                        modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.global_display_resolution_scale)),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Normal
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Slider(
+                            value = scaleSliderValue,
+                            onValueChange = { scaleSliderValue = it },
+                            valueRange = 50f..100f,
+                            modifier = Modifier.weight(1f).padding(vertical = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${scaleSliderValue.roundToInt()}%",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                if (preferredPermissionLevel == AndroidPermissionLevel.ROOT) {
+                    SettingsRowDivider(inset = false)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = stringResource(id = R.string.root_execution_mode_title),
+                            modifier = Modifier.fillMaxWidth().settingsSearchTarget(stringResource(R.string.root_execution_mode_title)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(id = R.string.root_execution_mode_description),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = rootExecutionMode == RootCommandExecutionMode.AUTO,
+                                onClick = {
+                                    scope.launch {
+                                        androidPermissionPreferences.saveRootExecutionMode(RootCommandExecutionMode.AUTO)
+                                    }
+                                },
+                                label = { Text(stringResource(R.string.root_execution_mode_auto)) }
+                            )
+                            FilterChip(
+                                selected = rootExecutionMode == RootCommandExecutionMode.FORCE_LIBSU,
+                                onClick = {
+                                    scope.launch {
+                                        androidPermissionPreferences.saveRootExecutionMode(RootCommandExecutionMode.FORCE_LIBSU)
+                                    }
+                                },
+                                label = { Text(stringResource(R.string.root_execution_mode_force_libsu)) }
+                            )
+                            FilterChip(
+                                selected = rootExecutionMode == RootCommandExecutionMode.FORCE_EXEC,
+                                onClick = {
+                                    scope.launch {
+                                        androidPermissionPreferences.saveRootExecutionMode(RootCommandExecutionMode.FORCE_EXEC)
+                                    }
+                                },
+                                label = { Text(stringResource(R.string.root_execution_mode_force_exec)) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = customSuCommandInput,
+                            onValueChange = { customSuCommandInput = it },
+                            label = { Text(stringResource(id = R.string.root_custom_su_command)) },
+                            supportingText = {
+                                Text(stringResource(id = R.string.root_custom_su_command_description))
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                if (customSuCommandInput.trim() != customSuCommand.trim()) {
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                androidPermissionPreferences.saveCustomSuCommand(customSuCommandInput)
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Save,
+                                            contentDescription = stringResource(id = R.string.save)
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // ======= 重置按钮 =======
             Button(
-                onClick = {
-                    scope.launch {
-                        displayPreferencesManager.resetDisplaySettings()
-                        AIForegroundService.refreshBackgroundKeepAlive(context)
-                        androidPermissionPreferences.resetRootExecutionSettings()
-                    }
-                },
+                onClick = { showResetConfirm = true },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -855,6 +833,36 @@ fun GlobalDisplaySettingsScreen(
                 )
             }
 
+            if (showResetConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showResetConfirm = false },
+                    title = { Text(stringResource(R.string.reset_all_display_settings)) },
+                    text = { Text(stringResource(R.string.reset_display_settings_confirm)) },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showResetConfirm = false
+                                scope.launch {
+                                    displayPreferencesManager.resetDisplaySettings()
+                                    AIForegroundService.refreshBackgroundKeepAlive(context)
+                                    androidPermissionPreferences.resetRootExecutionSettings()
+                                    Toast.makeText(context, resetDoneMessage, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text(
+                                text = stringResource(R.string.reset_display_settings_action),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetConfirm = false }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                    }
+                )
+            }
             // 底部间距
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -864,60 +872,17 @@ fun GlobalDisplaySettingsScreen(
 }
 
 @Composable
-private fun SectionTitle(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 8.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@Composable
 private fun DisplayToggleItem(
     title: String,
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    backgroundColor: androidx.compose.ui.graphics.Color
+    @Suppress("UNUSED_PARAMETER") backgroundColor: androidx.compose.ui.graphics.Color
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(backgroundColor)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
-    }
+    SettingsSwitchRow(
+        title = title,
+        subtitle = subtitle,
+        checked = checked,
+        onCheckedChange = onCheckedChange
+    )
 }

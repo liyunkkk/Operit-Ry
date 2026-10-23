@@ -171,6 +171,8 @@ class MessageProcessingDelegate(
 
     private val _userMessage = MutableStateFlow(TextFieldValue(""))
     val userMessage: StateFlow<TextFieldValue> = _userMessage.asStateFlow()
+    var draftRevision: Long = 0
+        private set
     private val userMessageDraftsByChatId = ConcurrentHashMap<String, TextFieldValue>()
     @Volatile
     private var activeDraftChatId: String? = null
@@ -193,6 +195,30 @@ class MessageProcessingDelegate(
 
     private val _nonFatalErrorEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val nonFatalErrorEvent = _nonFatalErrorEvent.asSharedFlow()
+
+    private val _composerPredictionSnapshots = MutableStateFlow<Map<String, com.ai.assistance.operit.api.chat.prediction.ComposerPredictionSnapshot>>(emptyMap())
+    val composerPredictionSnapshots = _composerPredictionSnapshots.asStateFlow()
+
+    private val composerPredictionGenerations = ConcurrentHashMap<String, String>()
+    private val composerPredictionAttempts = ConcurrentHashMap<String, String>()
+
+    /** Shared across ViewModel recreation: even cancelled/failed auxiliary calls count as attempted. */
+    fun claimComposerPrediction(snapshot: com.ai.assistance.operit.api.chat.prediction.ComposerPredictionSnapshot): Boolean {
+        if (_composerPredictionSnapshots.value[snapshot.chatId]?.sourceTurnId != snapshot.sourceTurnId) return false
+        var claimed = false
+        composerPredictionAttempts.compute(snapshot.chatId) { _, previous ->
+            if (previous != snapshot.sourceTurnId) claimed = true
+            snapshot.sourceTurnId
+        }
+        return claimed
+    }
+
+    fun invalidateComposerPrediction(chatId: String): String {
+        val generation = java.util.UUID.randomUUID().toString()
+        composerPredictionGenerations[chatId] = generation
+        _composerPredictionSnapshots.update { it - chatId }
+        return generation
+    }
 
     private val _turnCompleteCounterByChatId = MutableStateFlow<Map<String, Long>>(emptyMap())
     val turnCompleteCounterByChatId: StateFlow<Map<String, Long>> =
@@ -248,6 +274,9 @@ class MessageProcessingDelegate(
 
     fun pendingTurnInputKind(chatId: String): TurnInputInbox.PendingInputKind? =
         chatRuntimes[chatId]?.inputInbox?.pendingInputKind()
+
+    fun turnInputInbox(chatId: String): TurnInputInbox? =
+        chatRuntimes[chatId]?.takeIf { it.canSteer }?.inputInbox
 
     fun trySteerMessage(chatId: String, expectedTurnId: String, input: TurnInputInbox.Input): Boolean {
         val runtime = chatRuntimes[chatId] ?: return false
@@ -527,6 +556,7 @@ class MessageProcessingDelegate(
     }
 
     private suspend fun cancelMessageInternal(chatId: String, keepPartialResponse: Boolean) {
+        invalidateComposerPrediction(chatId)
         val chatRuntime = runtimeFor(chatId)
         chatRuntime.canSteer = false
         chatRuntime.prepareSteeringInput = null
@@ -626,6 +656,7 @@ class MessageProcessingDelegate(
         if (previousChatId == chatId) {
             return
         }
+        draftRevision++
 
         val currentValue = _userMessage.value
         if (previousChatId != null) {
@@ -662,6 +693,7 @@ class MessageProcessingDelegate(
     }
 
     private fun setUserMessageDraft(value: TextFieldValue) {
+        if (_userMessage.value != value) draftRevision++
         _userMessage.value = value
         val chatId = activeDraftChatId
         if (chatId != null) {
@@ -681,6 +713,7 @@ class MessageProcessingDelegate(
     private fun clearUserMessageDraft(chatId: String) {
         userMessageDraftsByChatId.remove(chatId)
         if (activeDraftChatId == chatId) {
+            draftRevision++
             _userMessage.value = TextFieldValue("")
         }
     }
@@ -798,6 +831,7 @@ class MessageProcessingDelegate(
             return false
         }
 
+        val composerPredictionGeneration = invalidateComposerPrediction(chatId)
         val originalMessageText = rawMessageText.trim()
         var messageText = originalMessageText
         
@@ -852,7 +886,7 @@ class MessageProcessingDelegate(
             val configId = overrideConfigId ?: chatConfigMapping.configId
             val modelIndex =
                 if (overrideConfigId != null) {
-                    (chatModelIndexOverride ?: 0).coerceAtLeast(0)
+                    chatModelIndexOverride ?: 0
                 } else {
                     chatConfigMapping.modelIndex
                 }
@@ -1290,7 +1324,7 @@ class MessageProcessingDelegate(
                     (!turnOptions.isSubTask || turnOptions.isCollaborationAgent) && !isGroupOrchestrationTurn
                 if (chatRuntime.canSteer) {
                     com.ai.assistance.operit.core.agent.collaboration.CollaborationCoordinator
-                        .getInstance(context).deliverPending()
+                        .getInstance(context).deliverPending(chatId)
                 }
                 toolBoundaryMessageReady.complete(
                     aiMessage.takeIf {
@@ -1797,6 +1831,31 @@ class MessageProcessingDelegate(
                             calculateNextWindowSize,
                             turnOptions
                         )
+                        try {
+                            // Persistence and all tool rounds have settled. Group orchestration and
+                            // internal/delivered turns do not represent a completed owner conversation.
+                            val prediction = assistantMessageTimestampForTurn?.toString()?.let(service::takeComposerPredictionSnapshot)
+                                ?.let { snapshot ->
+                                    getRuntimeChatHistory(chatId).lastOrNull()?.takeIf {
+                                        it.sender == "ai" && it.contentStream == null && it.completedAt > 0L &&
+                                            it.timestamp >= (assistantMessageTimestampForTurn ?: Long.MAX_VALUE)
+                                    }?.let { snapshot.copy(sourceMessageId = it.timestamp.toString()) }
+                                }
+                            if (prediction != null && composerPredictionGenerations[chatId] == composerPredictionGeneration &&
+                                com.ai.assistance.operit.api.chat.prediction.isComposerPredictionCompletion(
+                                    finalInputStateAfterSend, turnOptions, isGroupOrchestrationTurn,
+                                )
+                            ) {
+                                _composerPredictionSnapshots.update {
+                                    if (composerPredictionGenerations[chatId] == composerPredictionGeneration)
+                                        it + (chatId to prediction) else it
+                                }
+                            }
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            AppLogger.w(TAG, "Unable to prepare auxiliary composer prediction", error)
+                        }
                     }
                 }
 
@@ -1878,6 +1937,7 @@ class MessageProcessingDelegate(
         if (chatRuntime.isLoading.value) {
             throw IllegalStateException(context.getString(R.string.chat_regenerate_busy))
         }
+        val composerPredictionGeneration = invalidateComposerPrediction(chatId)
         ToolExecutionTimingRepository.clearScope(targetMessageTimestamp.toString())
         // A regenerated message keeps its turn scope, so the automatic-review circuit breaker has to
         // start over with it; otherwise the new attempt is stopped by the previous one's verdicts.
@@ -2103,6 +2163,20 @@ class MessageProcessingDelegate(
             updateGlobalLoadingState()
             terminalState?.let { state ->
                 setChatInputProcessingState(chatId, state)
+            }
+            val prediction = serviceForTerminalCleanup?.takeComposerPredictionSnapshot(targetMessageTimestamp.toString())
+            if (prediction != null && exceptionToPropagate == null &&
+                terminalState is EnhancedInputProcessingState.Completed && !groupOrchestrationMode
+            ) {
+                _composerPredictionSnapshots.update {
+                    if (composerPredictionGenerations[chatId] == composerPredictionGeneration)
+                        it + (chatId to prediction.copy(
+                            sourceTurnId = com.ai.assistance.operit.api.chat.prediction.regeneratedPredictionTurnId(
+                                targetMessageTimestamp, composerPredictionGeneration,
+                            ),
+                            sourceMessageId = targetMessageTimestamp.toString(),
+                        )) else it
+                }
             }
             if (shouldResetInputStateToIdle) {
                 serviceForTerminalCleanup?.setInputProcessingState(EnhancedInputProcessingState.Idle)

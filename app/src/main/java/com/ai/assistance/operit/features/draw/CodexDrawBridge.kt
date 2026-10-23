@@ -5,7 +5,9 @@ import android.net.Uri
 import android.os.Environment
 import android.util.Base64
 import com.ai.assistance.operit.data.api.CodexAuthManager
+import com.ai.assistance.operit.data.api.CodexHttpException
 import com.ai.assistance.operit.data.api.CodexOAuthProtocol
+import com.ai.assistance.operit.data.api.isCodexExpiredToken
 import com.ai.assistance.operit.util.ImageSourcePathPolicy
 import com.ai.assistance.operit.util.OperitPaths
 import java.io.File
@@ -71,8 +73,6 @@ object CodexDrawBridge {
 
         val auth = CodexAuthManager.getInstance(context)
         require(auth.authState.value != null) { "请先在模型设置中登录 Codex" }
-        val accessToken = auth.getValidAccessToken()
-        val account = auth.accountForAccessToken(accessToken)
         val inputPaths = (if (isEdit) listOf(editPath) else emptyList()) + referencePaths
         val permittedRoots = inputImageRoots(context)
         val imageData = inputPaths.map { loadInputImage(it, permittedRoots) }
@@ -92,36 +92,39 @@ object CodexDrawBridge {
             direct.put("images", images)
         }
         val directPath = if (hasImageInput) "/images/edits" else "/images/generations"
-        val directResult = request(context, accessToken, account.accountId, account.residency, directPath, direct, false)
-        val imageBase64 = if (directResult.status in setOf(404, 405, 501)) {
-            val content = JSONArray().put(JSONObject().put("type", "input_text").put("text", prompt))
-            imageData.forEach { content.put(JSONObject().put("type", "input_image").put("image_url", it)) }
-            val imageTool = JSONObject()
-                .put("type", "image_generation")
-                .put("action", if (hasImageInput) "edit" else "generate")
-                .put("model", imageModel)
-                .put("size", size)
-                .put("quality", quality)
-                .put("background", background)
-                .put("output_format", "png")
-            val responses = JSONObject()
-                .put("model", chatModel)
-                .put(
-                    "instructions",
-                    if (isEdit) "Edit the supplied image as requested by the user."
-                    else "Create a new image as requested by the user. Treat supplied images as references, not edit targets."
-                )
-                .put("input", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
-                .put("tools", JSONArray().put(imageTool))
-                .put("tool_choice", JSONObject().put("type", "image_generation"))
-                .put("stream", true)
-                .put("store", false)
-            val fallback = request(context, accessToken, account.accountId, account.residency, "/responses", responses, true)
-            if (fallback.status !in 200..299) throw upstreamError(fallback)
-            fallback.imageBase64 ?: throw IOException(fallback.error ?: "Codex 未返回图片")
-        } else {
-            if (directResult.status !in 200..299) throw upstreamError(directResult)
-            directResult.imageBase64 ?: throw IOException("Codex 未返回图片")
+        val imageBase64 = auth.withAuthRecovery { account ->
+            val accessToken = account.accessToken
+            val directResult = request(context, accessToken, account.accountId, account.residency, directPath, direct, false)
+            if (directResult.status in setOf(404, 405, 501)) {
+                val content = JSONArray().put(JSONObject().put("type", "input_text").put("text", prompt))
+                imageData.forEach { content.put(JSONObject().put("type", "input_image").put("image_url", it)) }
+                val imageTool = JSONObject()
+                    .put("type", "image_generation")
+                    .put("action", if (hasImageInput) "edit" else "generate")
+                    .put("model", imageModel)
+                    .put("size", size)
+                    .put("quality", quality)
+                    .put("background", background)
+                    .put("output_format", "png")
+                val responses = JSONObject()
+                    .put("model", chatModel)
+                    .put(
+                        "instructions",
+                        if (isEdit) "Edit the supplied image as requested by the user."
+                        else "Create a new image as requested by the user. Treat supplied images as references, not edit targets."
+                    )
+                    .put("input", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
+                    .put("tools", JSONArray().put(imageTool))
+                    .put("tool_choice", JSONObject().put("type", "image_generation"))
+                    .put("stream", true)
+                    .put("store", false)
+                val fallback = request(context, accessToken, account.accountId, account.residency, "/responses", responses, true)
+                if (fallback.status !in 200..299) throw upstreamError(fallback)
+                fallback.imageBase64 ?: throw IOException(fallback.error ?: "Codex 未返回图片")
+            } else {
+                if (directResult.status !in 200..299) throw upstreamError(directResult)
+                directResult.imageBase64 ?: throw IOException("Codex 未返回图片")
+            }
         }
         currentCoroutineContext().ensureActive()
         val bytes = decodeImage(imageBase64)
@@ -255,6 +258,9 @@ object CodexDrawBridge {
             call.execute().use { response ->
                 val body = response.body ?: throw IOException("Codex 返回空响应")
                 if (!response.isSuccessful) {
+                    if (response.code == 401) {
+                        throw CodexHttpException(401, isCodexExpiredToken(401, response.peekBody(16_384).string()))
+                    }
                     val errorBody = body.source().readUtf8Line().orEmpty().take(1000)
                     return ImageResponse(response.code, null, extractError(errorBody))
                 }

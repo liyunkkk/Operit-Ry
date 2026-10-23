@@ -309,6 +309,18 @@ open class OpenAIProvider(
     protected open val requiresStreamingResponse: Boolean = false
     protected open fun applyRequestIdentityHeaders(builder: Request.Builder, logicalRequestId: String) {}
 
+    protected open suspend fun recoverUnauthorizedAuthentication(
+        request: Request, status: Int, body: String, recoveryAllowed: Boolean,
+    ): Boolean = false
+
+    protected open fun checkAuthenticationContinuity(previous: Request?, current: Request) {}
+
+    private class AuthenticationRecoveredException : IOException()
+
+    protected open suspend fun authenticateRequest(builder: Request.Builder) {
+        applyAuthenticationHeaders(builder, apiKeyProvider.getApiKey().trim())
+    }
+
     protected open suspend fun applyAuthenticationHeaders(
         builder: Request.Builder,
         currentApiKey: String
@@ -685,12 +697,12 @@ open class OpenAIProvider(
                 preserveThinkInHistory,
             )
         if (
-            automaticReasoningRequestParameters.suppressAutomaticReasoning ||
-                !supportsOpenAiChatReasoningEffort()
+            !automaticReasoningRequestParameters.suppressAutomaticReasoning &&
+                supportsOpenAiChatReasoningEffort()
         ) {
-            return createJsonRequestBody(requestJson.toString())
+            applyOpenAiChatReasoning(context, requestJson, enableThinking)
         }
-        applyOpenAiChatReasoning(context, requestJson, enableThinking)
+        logRequestBodyForDebugging("AIService", "Request body: ") { requestJson }
         return createJsonRequestBody(requestJson.toString())
     }
 
@@ -862,10 +874,7 @@ open class OpenAIProvider(
             OpenCodeZenFree.ensureAnonymousRequestShape(finalRequestObject)
         }
 
-        // 使用分块日志函数记录请求体（省略过长的 tools 字段），可用 AppLogger.logRequestBodies 关闭
-        logRequestBodyForDebugging("AIService", "Request body: ") {
-            finalRequestObject
-        }
+        // The concrete provider logs once after applying its final reasoning parameters.
         return finalRequestObject
     }
 
@@ -1829,7 +1838,8 @@ open class OpenAIProvider(
         }
         checkCancellation(context, exception)
 
-        if (exception is CommandCodeProtocolException || exception is RepetitionTruncationException) throw exception
+        if (exception is CommandCodeProtocolException || exception is RepetitionTruncationException ||
+            exception is com.ai.assistance.operit.data.api.CodexAuthenticationException) throw exception
 
         val errorText = resolveRetryErrorText(context, exception)
 
@@ -1997,7 +2007,6 @@ open class OpenAIProvider(
         attemptNumber: Int,
         logicalRequestId: String,
     ): Request {
-        val currentApiKey = apiKeyProvider.getApiKey().trim()
         val endpointUrl = EndpointCompleter.completeEndpoint(apiEndpoint, providerType)
         val traceContext =
             LlmRequestTraceContext(
@@ -2013,7 +2022,7 @@ open class OpenAIProvider(
             .tag(LlmRequestTraceContext::class.java, traceContext)
             .addHeader("Content-Type", "application/json")
 
-        applyAuthenticationHeaders(builder, currentApiKey)
+        authenticateRequest(builder)
 
         // 添加自定义请求头
         customHeaders.forEach { (key, value) ->
@@ -2229,7 +2238,10 @@ open class OpenAIProvider(
         emitter: StreamEmitter
     ) {
         // Structured tool markup must never be emitted inside provider-controlled reasoning.
-        closeReasoningBlockIfOpen(state, emitter)
+        val reasoningEnded = closeReasoningBlockIfOpen(state, emitter)
+        if (reasoningEnded && !useResponsesApi && !hasOpenToolCalls(state)) {
+            kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.checkpoint()
+        }
 
         for (i in 0 until toolCallsDeltas.length()) {
             val deltaCall = toolCallsDeltas.getJSONObject(i)
@@ -2459,6 +2471,7 @@ open class OpenAIProvider(
                             OpenAIResponsesPayloadAdapter.createReasoningMetadataTag(item)?.let { metadataTag ->
                                 emitter.emitTag(metadataTag)
                             }
+                            kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.checkpoint()
                         } else {
                             AppLogger.d(
                                 "AIService",
@@ -2679,7 +2692,10 @@ open class OpenAIProvider(
         // 处理常规内容
         if (hasRegular) {
             // 如果之前在思考模式，现在切换到了常规内容，需要关闭思考标签
-            closeReasoningBlockIfOpen(state, emitter)
+            val reasoningEnded = closeReasoningBlockIfOpen(state, emitter)
+            if (reasoningEnded && !useResponsesApi) {
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.checkpoint()
+            }
 
             // 硬切策略：正文一旦开始输出，后续到达的推理内容全部忽略
             state.hasEmittedRegularContent = true
@@ -2831,9 +2847,15 @@ open class OpenAIProvider(
         onTokensUpdated: suspend (input: Int, cachedInput: Int, output: Int) -> Unit,
         context: Context,
         onUsageReported: (suspend (com.ai.assistance.operit.data.stats.ProviderUsageSnapshot, attempt: Int) -> Unit)? = null,
-        attemptNumber: Int = 1
+        attemptNumber: Int = 1,
+        requestTraceId: String = "unknown",
+        requestStartedAtMs: Long = streamNowMs(),
     ) {
         val state = StreamingState()
+        val responseStartedAtMs = streamNowMs()
+        var lastProgressLogAtMs = responseStartedAtMs
+        var maxChunkGapSinceLogMs = 0L
+        var firstPayloadLogged = false
         // 只认 data: 有效载荷的进度时间戳：OkHttp 的 readTimeout 会被任意字节（空行、注释心跳）
         // 重置，覆盖不了“连接活着但不再产生数据”的死连接。
         val progress = StreamProgress()
@@ -2855,6 +2877,13 @@ open class OpenAIProvider(
                     state.streamedReasoningContentLength > 0 ||
                     state.accumulatedToolCalls.isNotEmpty() ||
                     state.imageBuffers.isNotEmpty()
+            if (hasPayload && !firstPayloadLogged) {
+                firstPayloadLogged = true
+                val now = streamNowMs()
+                AppLogger.d("AIService",
+                    "[req=$requestTraceId] First stream payload (text/reasoning/tool/image): " +
+                        "sinceRequestMs=${now - requestStartedAtMs}, sinceResponseHeadersMs=${now - responseStartedAtMs}")
+            }
             if (hasPayload && progress.stallTimeoutMs.get() != STREAM_STALL_TIMEOUT_MS) {
                 progress.stallTimeoutMs.set(STREAM_STALL_TIMEOUT_MS)
             }
@@ -2871,6 +2900,7 @@ open class OpenAIProvider(
                 }
                 val nowMs = streamNowMs()
                 val idleMs = nowMs - progress.lastProgressAt.get()
+                maxChunkGapSinceLogMs = maxOf(maxChunkGapSinceLogMs, idleMs)
                 progress.lastProgressAt.set(nowMs)
                 // 记录此刻的非数据行累计值，停滞告警只报这一段窗口内的心跳行数
                 progress.nonDataLineCountAtLastData.set(progress.nonDataLineCount.get())
@@ -2885,12 +2915,15 @@ open class OpenAIProvider(
                 }
 
                 state.chunkCount++
-                // 每 10 个数据块记一次心跳；卡住时最后一条心跳里的块间隔就是现场
-                if (state.chunkCount % 10 == 0) {
+                // Limit diagnostic work by time, not model throughput. Keep the largest gap
+                // in this window so batching logs does not hide intermittent stalls.
+                if (nowMs - lastProgressLogAtMs >= 5_000L) {
                     AppLogger.d(
                         "AIService",
-                        "【发送消息】已接收 ${state.chunkCount} 个数据块，距上一块 ${idleMs}ms"
+                        "【发送消息】已接收 ${state.chunkCount} 个数据块，距上一块 ${idleMs}ms，窗口最大间隔 ${maxChunkGapSinceLogMs}ms"
                     )
+                    lastProgressLogAtMs = nowMs
+                    maxChunkGapSinceLogMs = 0L
                 }
 
                 try {
@@ -2999,6 +3032,8 @@ open class OpenAIProvider(
             var retryCount = 0
             var repetitionRetryCount = 0
             var lastException: Exception? = null
+            var authenticationRecoveryAllowed = true
+            var firstAuthenticatedRequest: Request? = null
 
             // 用于保存当前 attempt 已接收到的内容；一旦需要重试，会整体回滚到请求起点
             val receivedContent = StringBuilder()
@@ -3052,9 +3087,13 @@ open class OpenAIProvider(
 
                 AppLogger.d("AIService", "[req=$requestTraceId] 【发送消息】准备连接到AI服务...")
 
+                checkAuthenticationContinuity(firstAuthenticatedRequest, request)
+                if (firstAuthenticatedRequest == null) firstAuthenticatedRequest = request
                 // 创建Call对象并保存到activeCall中，以便可以取消
                 val call = client.newCall(request)
                 activeCall = call
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]
+                    ?.bindAbort { call.cancel() }
 
                 AppLogger.d("AIService", "[req=$requestTraceId] 【发送消息】正在建立连接到服务器...")
 
@@ -3075,6 +3114,13 @@ open class OpenAIProvider(
                             val errorBody =
                                 response.body?.string()
                                     ?: context.getString(R.string.openai_error_no_error_details)
+                            if (response.code == 401) {
+                                response.close()
+                                if (recoverUnauthorizedAuthentication(request, response.code, errorBody, authenticationRecoveryAllowed)) {
+                                    authenticationRecoveryAllowed = false
+                                    throw AuthenticationRecoveredException()
+                                }
+                            }
                             AppLogger.e(
                                 "AIService",
                                 "【发送消息】API请求失败，状态码: ${response.code}，错误信息: $errorBody"
@@ -3114,7 +3160,9 @@ open class OpenAIProvider(
                                 onTokensUpdated,
                                 context,
                                 onUsageReported,
-                                attemptNumber
+                                attemptNumber,
+                                requestTraceId,
+                                executeStartNs / 1_000_000L,
                             )
                         } else {
                             AppLogger.d("AIService", "[req=$requestTraceId] 【发送消息】开始读取非流式响应")
@@ -3229,7 +3277,13 @@ open class OpenAIProvider(
                 return@stream
             } catch (e: Exception) {
                 lastException = e
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.throwIfInterrupted()
                 emitter.emitRollback(requestSavepointId)
+                if (e is AuthenticationRecoveredException) {
+                    // Authentication recovery does not consume the ordinary network retry budget.
+                    // The operation-wide flag prevents a later network retry refreshing again.
+                    continue
+                }
                 if (e is RepetitionTruncationException) {
                     if (!enableRetry || repetitionRetryCount >= 1 || retryCount >= maxRetries) throw e
                     repetitionRetryCount++

@@ -55,15 +55,18 @@ fun TextToSpeechScreen(navController: NavController) {
         val activeTtsProfile = checkNotNull(currentTtsProfile)
         val ttsServiceType = activeTtsProfile.serviceType
         val httpConfig = activeTtsProfile.httpConfig
-        var voiceServiceVersion by remember { mutableStateOf(0) }
-        var voiceService by remember(voiceServiceVersion) {
-                mutableStateOf(VoiceServiceFactory.getInstance(context))
+        var voiceService by remember(activeTtsProfile) {
+                mutableStateOf(VoiceServiceFactory.createVoiceService(context, activeTtsProfile))
+        }
+        DisposableEffect(voiceService) {
+            val testedService = voiceService
+            onDispose { testedService.shutdown() }
         }
         
         // 状态变量
         var inputText by remember { mutableStateOf("") }
-        var speechRate by remember { mutableStateOf(1.0f) }
-        var speechPitch by remember { mutableStateOf(1.0f) }
+        var speechRate by remember(activeTtsProfile) { mutableStateOf(activeTtsProfile.speechRate) }
+        var speechPitch by remember(activeTtsProfile) { mutableStateOf(activeTtsProfile.pitch) }
         var isInitialized by remember { mutableStateOf(false) }
         var isSpeaking by remember { mutableStateOf(false) }
         var error by remember { mutableStateOf<String?>(null) }
@@ -93,10 +96,6 @@ fun TextToSpeechScreen(navController: NavController) {
         }
 
         fun refreshVoiceService(): VoiceService {
-                val latestVoiceService = VoiceServiceFactory.getInstance(context)
-                if (voiceService !== latestVoiceService) {
-                        voiceService = latestVoiceService
-                }
                 return voiceService
         }
 
@@ -141,14 +140,9 @@ fun TextToSpeechScreen(navController: NavController) {
         fun saveSimpleTtsSelection(localeTag: String, voiceId: String) {
                 coroutineScope.launch {
                         try {
-                                profilePrefs.updateTtsProfile(
-                                        activeTtsProfile.copy(
-                                                httpConfig = httpConfig.copy(localeTag = localeTag, voiceId = voiceId)
-                                        )
-                                )
-                                VoiceServiceFactory.resetInstance()
-                                voiceService = VoiceServiceFactory.getInstance(context)
-                                voiceServiceVersion++
+                                voiceService = VoiceServiceFactory.createVoiceService(context,
+                                    activeTtsProfile.copy(httpConfig = httpConfig.copy(
+                                        localeTag = localeTag, voiceId = voiceId)))
                         } catch (error: Exception) {
                                 AppLogger.e("TextToSpeechScreen", "Failed to save TTS profile voice", error)
                         }
@@ -289,13 +283,16 @@ fun TextToSpeechScreen(navController: NavController) {
 
                                 // 音调调节
                                 Text(
-                                        text = stringResource(R.string.tts_speech_pitch, speechPitch),
+                                        text = if (ttsServiceType == VoiceServiceFactory.VoiceServiceType.SHERPA_ONNX)
+                                            stringResource(R.string.voice_pitch_unavailable)
+                                        else stringResource(R.string.tts_speech_pitch, speechPitch),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface
                                 )
 
                                 Slider(
                                         value = speechPitch,
+                                        enabled = ttsServiceType != VoiceServiceFactory.VoiceServiceType.SHERPA_ONNX,
                                         onValueChange = { speechPitch = it },
                                         valueRange = 0.5f..2.0f,
                                         steps = 5,
@@ -341,7 +338,7 @@ fun TextToSpeechScreen(navController: NavController) {
                                                                         contentDescription = stringResource(R.string.speech_services_dropdown_expand)
                                                                 )
                                                         },
-                                                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                                                        modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                                                 )
                                                 ExposedDropdownMenu(
                                                         expanded = simpleTtsLocaleExpanded,

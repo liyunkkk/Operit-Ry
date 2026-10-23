@@ -1,4 +1,5 @@
 import java.io.File
+import java.security.MessageDigest
 import java.io.FileInputStream
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -184,7 +185,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 100205
-        versionName = "1.12.2-ry.6"
+        versionName = "1.12.2-ry.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -271,6 +272,7 @@ android {
         compose = true
         aidl = true
         buildConfig = true
+        resValues = true
     }
     lint {
         baseline = file("lint-baseline.xml")
@@ -282,6 +284,10 @@ android {
         
         jniLibs {
             useLegacyPackaging = true
+            // This app packages arm64 only. Sherpa's static ORT AAR still contains a
+            // shared x86 fallback; AGP merges it before applying abiFilters, where
+            // it conflicts with Silero's ORT. Never pick an arbitrary ORT version.
+            excludes += "lib/x86/libonnxruntime.so"
         }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -325,6 +331,11 @@ kotlin {
 }
 
 dependencies {
+    // Keep this alpha set in sync with compose-bom-alpha 2026.09.00.
+    implementation("androidx.a2ui.compose:compose-runtime:1.0.0-alpha01")
+    implementation("androidx.a2ui.compose:compose-ui:1.0.0-alpha01")
+    implementation("androidx.a2ui:a2ui-engine:1.0.0-alpha01")
+    implementation("androidx.compose.material3:material3-a2ui:1.0.0-alpha01")
     implementation(project(":chat-parser"))
     implementation(project(":chat-storage"))
     implementation(project(":memory-storage"))
@@ -338,17 +349,10 @@ dependencies {
         testRuntimeOnly("io.objectbox:objectbox-$platform:${libs.versions.objectbox.get()}")
     }
     implementation("com.github.jelmerk:hnswlib-core:1.2.1")
-    implementation(project(":dragonbones"))
     implementation(project(":terminal"))
-    implementation(project(":mmd"))
-    implementation(project(":fbx"))
     implementation(project(":showerclient"))
     implementation(project(":quickjs"))
 
-    // glTF runtime rendering (Filament)
-    implementation("com.google.android.filament:filament-android:1.69.2")
-    implementation("com.google.android.filament:gltfio-android:1.69.2")
-    implementation("com.google.android.filament:filament-utils-android:1.69.2")
     implementation(libs.androidx.ui.graphics.android)
     // Vendored binary dependencies live in app/libs, including ffmpeg-kit and its Java-side deps.
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
@@ -456,6 +460,8 @@ dependencies {
     
     // ONNX Runtime is required by VITS speech synthesis and Silero VAD.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
+    // Static ORT build avoids colliding with the Silero VAD runtime's libonnxruntime.so.
+    implementation("org.k2fsa:sherpa-onnx-static-link-onnxruntime:1.13.8@aar")
 
     // Room 数据库
     implementation(libs.room.runtime)
@@ -604,6 +610,31 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
 }
+
+// The upstream release is an artifact-only Ivy dependency; pin its bytes as well as its version.
+val sherpaRuntimeVerification = configurations.detachedConfiguration(
+    dependencies.create("org.k2fsa:sherpa-onnx-static-link-onnxruntime:1.13.8@aar")
+)
+val verifySherpaRuntime by tasks.registering {
+    inputs.files(sherpaRuntimeVerification)
+    doLast {
+        val artifact = sherpaRuntimeVerification.singleFile
+        val digest = MessageDigest.getInstance("SHA-256")
+        artifact.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        }
+        check(digest.digest().joinToString("") { "%02x".format(it) } ==
+            "b22c3fc1b6a45666d28892bb2f7694beeb77a8362d7ebd77c1a5431ec9435471") {
+            "Sherpa ONNX runtime checksum mismatch"
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifySherpaRuntime) }
 
 // The workflow receiver security test validates dependency-contributed Tasker components in the
 // actual merged manifest, so keep that artifact fresh whenever the debug JVM suite runs.

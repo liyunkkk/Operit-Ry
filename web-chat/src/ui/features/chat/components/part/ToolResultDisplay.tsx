@@ -82,6 +82,9 @@ function normalizeToolResult(block: WebMessageContentBlock) {
  */
 function permissionDenialLabel(resultContent: string): string | null {
   const trimmed = stripTurnFailureWrapper(unwrapTaskError(resultContent)).trim();
+  if (trimmed.startsWith('Automatic permission review failed')) {
+    return '自动审核未完成，该操作未执行';
+  }
   // 取消前缀必须先判：它描述的是「本轮被中止、该操作没跑」，说成「已拒绝」会误导用户。
   if (trimmed.startsWith('Tool execution cancelled because automatic permission review')) {
     return '自动审核中止了本轮，该操作未执行';

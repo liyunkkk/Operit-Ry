@@ -1,5 +1,7 @@
 package com.ai.assistance.operit.ui.features.settings.sections
 
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSwitchRow
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCardShape
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
@@ -64,41 +67,27 @@ internal fun ThemeSettingsFontSection(
         icon = Icons.Default.TextFields,
     )
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = context.getString(R.string.enable_custom_font),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = context.getString(R.string.use_system_or_custom_font),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = useCustomFontInput,
-                    onCheckedChange = {
-                        onUseCustomFontInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(useCustomFont = it)
-                        }
-                    },
-                )
-            }
+            SettingsSwitchRow(
+                title = context.getString(R.string.enable_custom_font),
+                subtitle = context.getString(R.string.use_system_or_custom_font),
+                checked = useCustomFontInput,
+                onCheckedChange = {
+                    onUseCustomFontInputChange(it)
+                    saveThemeSettingsWithCharacterCard {
+                        preferencesManager.saveThemeSettings(useCustomFont = it)
+                    }
+                },
+                horizontalPadding = 0.dp,
+            )
 
             if (useCustomFontInput) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = context.getString(R.string.font_type_label),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
 
@@ -139,7 +128,7 @@ internal fun ThemeSettingsFontSection(
                     UserPreferencesManager.FONT_TYPE_SYSTEM -> {
                         Text(
                             text = context.getString(R.string.select_system_font),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
 
@@ -190,7 +179,7 @@ internal fun ThemeSettingsFontSection(
                     UserPreferencesManager.FONT_TYPE_FILE -> {
                         Text(
                             text = context.getString(R.string.custom_font_file_title),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
 
@@ -257,14 +246,14 @@ internal fun ThemeSettingsFontSection(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Text(
                     text =
                         context.getString(
                             R.string.font_size_scale_label,
                             String.format("%.1f", fontScaleInput),
                         ),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
                 Slider(
@@ -308,7 +297,7 @@ internal fun ThemeSettingsAvatarSection(
         icon = Icons.Default.Person,
     )
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -352,11 +341,11 @@ internal fun ThemeSettingsAvatarSection(
                 modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
             )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
             Text(
                 text = stringResource(id = R.string.global_user_name_title),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
 
@@ -409,12 +398,12 @@ internal fun ThemeSettingsAvatarSection(
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
             Text(
                 text = stringResource(id = R.string.avatar_shape_title),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.settingsSearchTarget(stringResource(id = R.string.avatar_shape_title)).padding(bottom = 8.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -450,10 +439,10 @@ internal fun ThemeSettingsAvatarSection(
                 visible = avatarShapeInput == UserPreferencesManager.AVATAR_SHAPE_SQUARE,
             ) {
                 Column {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Text(
                         text = stringResource(id = R.string.avatar_corner_radius),
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
 

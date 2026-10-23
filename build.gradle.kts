@@ -20,6 +20,21 @@ plugins {
     alias(libs.plugins.kotlin.parcelize) apply false
 }
 
+// Keep the public terminal submodule unchanged; every Android module compiles
+// against the same SDK, including the minor API level required by A2UI.
+subprojects {
+    plugins.withId("com.android.base") {
+        val components = extensions.getByName("androidComponents") as
+            com.android.build.api.variant.AndroidComponentsExtension<*, *, *>
+        components.finalizeDsl {
+            extensions.configure<com.android.build.gradle.BaseExtension> {
+                compileSdkVersion("android-37.1")
+                ndkVersion = "27.0.12077973"
+            }
+        }
+    }
+}
+
 tasks.register("clean", Delete::class) {
     delete(rootProject.buildDir)
 }

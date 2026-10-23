@@ -65,7 +65,7 @@ internal val ToolPermissionStop.labelRes: Int
             ToolPermissionStop.ASK -> R.string.permission_level_ask
             ToolPermissionStop.AUTO_REVIEW_STRICT -> R.string.permission_stop_auto_review_strict
             ToolPermissionStop.AUTO_REVIEW_FAST -> R.string.permission_stop_auto_review_fast
-            ToolPermissionStop.ALLOW -> R.string.permission_level_allow
+            ToolPermissionStop.ALLOW -> R.string.permission_stop_full_access
         }
 
 internal val ToolPermissionStop.descriptionRes: Int

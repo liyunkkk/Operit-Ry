@@ -1,5 +1,24 @@
 <resources>
-    <string name="logcat_flush_incomplete">Available logs saved to %1$s. Some logs are pending or failed to write; this export may be incomplete.</string>
+    <string name="memory_editor_process_records">Process · Reasoning and tools</string>
+    <string name="memory_editor_expand_process">Expand process records</string>
+    <string name="memory_editor_collapse_process">Collapse process records</string>
+    <string name="memory_editor_dynamic_ui">Dynamic UI card</string>
+    <string name="memory_editor_dynamic_ui_hint">Source collapsed. Editing the surrounding text keeps the card unchanged.</string>
+    <string name="memory_editor_edit_source">Edit card source</string>
+    <string name="codex_auth_sign_in_required">Sign in to Codex in model settings.</string>
+    <string name="codex_auth_login_changed">Codex login changed. The old request was stopped; please resend it.</string>
+    <string name="codex_auth_login_required">Codex credentials expired or were revoked. Sign in again in model settings.</string>
+    <string name="codex_auth_refresh_temporary">Codex authentication refresh failed temporarily. Your login was kept; check the network and retry.</string>
+    <string name="codex_auth_recovery_rejected">Codex still returned 401 after refresh. Retries stopped; sign in again.</string>
+    <string name="dynamic_ui_clear">Clear</string>
+    <string name="dynamic_ui_date_outside_range">The current date is invalid or outside the allowed range. Choose another date.</string>
+    <string name="dynamic_ui_close_details">Close details</string>
+    <string name="dynamic_ui_bad_table">Invalid table data. Check your input.</string>
+    <string name="logcat_flush_incomplete">Available logs saved to %1$s. Logs may be incomplete; details are also saved in export-status.txt inside the archive.</string>
+    <string name="logcat_export_pending">%1$d records present when export started were still waiting to finish writing.</string>
+    <string name="logcat_export_dropped">%1$d records were dropped due to queue overload or thread interruption and cannot be recovered.</string>
+    <string name="logcat_export_write_failed">A file write failed during this logging session.</string>
+    <string name="logcat_export_interrupted">Waiting for log writes was interrupted.</string>
     <string name="local_llm_removed">On-device LLM inference has been removed. Select a cloud or remote provider. Existing files remain in Download/Operit/models and can be removed using a file manager.</string>
     <string name="openai_error_repetition_truncation">The server stopped repetitive model output. The response was discarded and its tools will not run.</string>
     <string name="openai_retry_repetition_truncation">Repetitive output was discarded. Retrying the request once.</string>
@@ -24,7 +43,7 @@
     <string name="phone_control_title">Opeirt is controlling your phone</string>
     <string name="phone_control_stop">Stop control</string>
     <string name="phone_control_overlay_required">Allow Operit to display overlays so you can always stop phone control.</string>
-    <string name="subagent_v2_limits">v2 runtime limits</string>
+    <string name="subagent_v2_limits">Subagent runtime limits</string>
     <string name="subagent_v2_max_active">Concurrent child agents</string>
     <string name="subagent_v2_max_depth">Maximum child depth</string>
     <string name="subagent_v2_min_wait">Minimum wait (ms)</string>
@@ -38,10 +57,6 @@
     <string name="subagent_message_note">Has an update</string>
     <string name="subagent_message_midway">Interim message</string>
     <string name="subagent_message_open_detail">View message details</string>
-    <string name="subagent_version_title">Subagent version</string>
-    <string name="subagent_version_description">Choose collaboration tools for new conversations. Existing agents retain their version; Reading Companion continues to use v1.</string>
-    <string name="subagent_version_v2">v2 · Multi-agent collaboration (default)</string>
-    <string name="subagent_version_v1">v1 · Synchronous task</string>
     <string name="chat_live_elapsed">Elapsed %1$s</string>
     <string name="chat_estimated_cost">Estimated conversation cost: ¥%1$s</string>
     <string name="chat_estimated_cost_partial">Estimated conversation cost: ¥%1$s (partly unknown)</string>
@@ -72,7 +87,7 @@
     <string name="nav_settings">Settings</string>
     <string name="nav_tool_permissions">Tool Permissions</string>
     <string name="nav_about">About</string>
-    <string name="nav_packages">Packages</string>
+    <string name="nav_packages">Extensions</string>
     <string name="nav_assistant_config">Assistant Config</string>
     <string name="nav_terminal">Terminal</string>
     <string name="nav_toolbox">Toolbox</string>
@@ -156,7 +171,7 @@
     <string name="floating_hello">Hello</string>
 
 
-    <string name="nav_help">User Manual</string>
+    <string name="nav_help">Help</string>
 
     <!-- Color Picker -->
     <string name="colorpicker_select_primary">Select primary color</string>
@@ -420,8 +435,6 @@
     
     <!-- Assistant Config Screen -->
     <string name="assistant_config_title">Assistant Config</string>
-    <string name="import_model">Import Model</string>
-    <string name="scan_user_models">Scan User Models</string>
     <string name="operation_success">Operation Successful</string>
     <string name="error_occurred_simple">Error Occurred</string>
     <string name="function_config_title">Function Configuration</string>
@@ -430,116 +443,13 @@
     <string name="not_configured">Not Configured</string>
     <string name="function_prompt">Function Prompt</string>
     <string name="function_model">Function Model</string>
-    <string name="importing_model">Importing model...</string>
     <string name="processing">Processing...</string>
-    <string name="error_occurred">Error occurred: %1$s</string>
-    <string name="avatar_config">Avatar Configuration</string>
-    <string name="avatar_voice_call_enable_title">Enable virtual avatar</string>
-    <string name="avatar_voice_call_enable_summary">When enabled, the voice call UI uses the virtual avatar and plays emotion actions from returned &lt;mood&gt; tags.</string>
-    <string name="dragon_bones_config">DragonBones Config</string>
     <string name="collapse">Collapse</string>
     <string name="expand">Expand</string>
     <string name="collapsed">Collapsed</string>
     <string name="expanded">Expanded</string>
-    <string name="select_model">Select Model</string>
-    <string name="current_model">Current Model</string>
-    <string name="scale">Scale: %1$s</string>
-    <string name="x_translation">X Translation: %1$s</string>
-    <string name="y_translation">Y Translation: %1$s</string>
-    <string name="confirm_delete_model_title">Confirm Delete Model?</string>
-    <string name="confirm_delete_model_message">This action cannot be undone. Are you sure you want to delete this model?</string>
-    <string name="rename_avatar_model_title">Rename Model</string>
-    <string name="rename_avatar_model_message">Enter a new display name for this model</string>
-    <string name="avatar_model_name_label">Model Name</string>
     <string name="no_models_available">No models available</string>
-    <string name="please_select_model">Please select a model</string>
-    <string name="unsupported_model_type">Unsupported model type: %1$s</string>
-    <string name="avatar_preview_error_log">Avatar preview error: %1$s</string>
-    <string name="how_to_import">How to create and import models?</string>
-    <string name="how_to_import_tap_to_expand">How to create and import models? (tap to expand)</string>
-    <string name="how_to_import_tap_to_collapse">How to create and import models? (tap to collapse)</string>
-    <string name="avatar_config_supported_formats">Supported: DragonBones (.json + _tex.json + _tex.png), WebP (.webp), MP4 (.mp4), MMD (.pmx/.pmd + optional .vmd), glTF (.glb/.gltf), FBX (.fbx).</string>
-    <string name="avatar_config_import_methods">Direct file import supports .glb/.gltf/.mp4/.fbx; use .zip for DragonBones, WebP, MP4, MMD, multi-file glTF, or FBX packages with external textures/resources.</string>
-    <string name="avatar_mood_trigger_mapping_title">Mood Trigger Mapping</string>
-    <string name="avatar_mood_trigger_mapping_desc">Returned &lt;mood&gt; values from the desktop pet and voice avatar will match these triggers first. Only custom types that already have an animation binding will be appended to the prompt.</string>
-    <string name="avatar_no_model_actions">No model actions found for this avatar</string>
-    <string name="avatar_custom_types_title">Custom Types</string>
-    <string name="avatar_custom_type_add">Add Custom Type</string>
-    <string name="avatar_custom_type_none">No custom types yet</string>
-    <string name="avatar_trigger_key_label">Trigger Key: %1$s</string>
-    <string name="avatar_fallback_emotion_label">Fallback Emotion: %1$s</string>
-    <string name="avatar_edit_custom_mood_type">Edit custom type</string>
-    <string name="avatar_delete_custom_mood_type">Delete custom type</string>
-    <string name="avatar_mapped_action">Mapped Action</string>
-    <string name="avatar_preview_action">Preview</string>
-    <string name="avatar_unmapped">Unmapped</string>
-    <string name="avatar_custom_type_add_title">Add Custom Type</string>
-    <string name="avatar_custom_type_edit_title">Edit Custom Type</string>
-    <string name="avatar_custom_type_key">Type Key</string>
-    <string name="avatar_custom_type_key_hint">Only lowercase letters, digits, _ and - are allowed. Normalized key: %1$s</string>
-    <string name="avatar_empty_value_placeholder">&lt;empty&gt;</string>
-    <string name="avatar_custom_type_prompt_hint_label">Prompt Hint</string>
-    <string name="avatar_custom_type_prompt_hint_help">This hint will be appended to the desktop pet and voice avatar mood rules so the model knows when to use this type.</string>
-    <string name="avatar_emotion_mapping_title">Emotion Mapping</string>
-    <string name="avatar_emotion_mapping_chip">%1$s: %2$s</string>
-    <string name="avatar_emotion_label">Emotion</string>
-    <string name="avatar_clear_selected_mapping">Clear Selected Mapping</string>
-    <string name="avatar_emotion_idle">Idle</string>
-    <string name="avatar_emotion_listening">Listening</string>
-    <string name="avatar_emotion_thinking">Thinking</string>
-    <string name="avatar_emotion_happy">Happy</string>
-    <string name="avatar_emotion_sad">Sad</string>
-    <string name="avatar_emotion_confused">Confused</string>
-    <string name="avatar_emotion_surprised">Surprised</string>
-    <string name="avatar_mood_angry_name">Angry</string>
-    <string name="avatar_mood_happy_name">Happy</string>
-    <string name="avatar_mood_shy_name">Shy</string>
-    <string name="avatar_mood_aojiao_name">Tsundere</string>
-    <string name="avatar_mood_cry_name">Cry</string>
-    <string name="avatar_mood_angry_hint">Use when the user sounds insulting, unfair, accusatory, angry, or strongly dissatisfied.</string>
-    <string name="avatar_mood_happy_hint">Use when the user is clearly praising, achieving a goal, receiving a gift, or obviously happy.</string>
-    <string name="avatar_mood_shy_hint">Use when the user compliments the character, gets flirtatious, or hits a cute and embarrassing point.</string>
-    <string name="avatar_mood_aojiao_hint">Use when the user is teasing lightly or in a playful argument where the character acts tough but softens.</string>
-    <string name="avatar_mood_cry_hint">Use when the user feels upset, disappointed, frustrated, venting sadness, or becomes low after apologizing.</string>
-    <string name="avatar_custom_type_prompt_hint_required">Prompt hint cannot be empty</string>
-    <string name="avatar_custom_type_invalid_key">Custom type keys may only use lowercase letters, digits, _ or -, and cannot conflict with built-in keys</string>
-    <string name="avatar_custom_type_duplicate_key">Custom type key already exists</string>
-    <string name="avatar_mmd_camera_pitch">MMD Camera Pitch (%1$s)</string>
-    <string name="avatar_mmd_camera_yaw">MMD Camera Yaw (%1$s)</string>
-    <string name="avatar_mmd_camera_distance">MMD Camera Distance (%1$s)</string>
-    <string name="avatar_mmd_orbit_pivot_height">MMD Orbit Pivot Height (%1$s)</string>
-    <string name="avatar_gltf_camera_pitch">glTF Camera Pitch (%1$s)</string>
-    <string name="avatar_gltf_camera_yaw">glTF Camera Yaw (%1$s)</string>
-    <string name="avatar_gltf_camera_distance">glTF Camera Distance (%1$s)</string>
-    <string name="avatar_gltf_orbit_pivot_height">glTF Orbit Pivot Height (%1$s)</string>
-    <string name="avatar_fbx_camera_pitch">FBX Camera Pitch (%1$s)</string>
-    <string name="avatar_fbx_camera_yaw">FBX Camera Yaw (%1$s)</string>
-    <string name="avatar_fbx_camera_distance">FBX Camera Distance (%1$s)</string>
-    <string name="avatar_fbx_orbit_pivot_height">FBX Orbit Pivot Height (%1$s)</string>
-    <string name="avatar_supported_formats_title">Supported formats</string>
-    <string name="avatar_supported_formats_desc">- DragonBones: skeleton .json + *_tex.json + *_tex.png\n- WebP: one or more .webp files\n- MP4: one or more .mp4 files\n- MMD: .pmx or .pmd model, optional .vmd motions\n- glTF: .glb or .gltf (plus referenced .bin/textures when needed)\n- FBX: .fbx (direct upload supports self-contained assets only)</string>
-    <string name="avatar_import_methods_title">Import methods</string>
-    <string name="avatar_import_methods_desc">- Direct file picker: .glb / .gltf / .mp4 / .fbx\n- ZIP import: DragonBones, WebP, MP4, MMD, multi-file glTF, or FBX packages with external textures/resources</string>
-    <string name="import_structure_guide_tap_to_expand">Import structure guide (tap to expand)</string>
-    <string name="import_structure_guide_tap_to_collapse">Import structure guide (tap to collapse)</string>
-    <string name="import_structure_guide_content">This is the IMPORT PACKAGE layout (files inside your ZIP / picked file), not app internal storage.\n\nDragonBones (.zip)\n  my_dragonbones.zip\n    any_folder_name/\n      hero_ske.json\n      hero_tex.json\n      hero_tex.png\n  Requirement: ske/tex json/png files must share the same filename prefix.\n\nWebP (.zip)\n  my_webp.zip\n    any_folder_name/\n      idle.webp\n      talking.webp\n      happy.webp\n  Requirement: include at least one .webp file.\n\nMP4\n  Method A (direct file):\n    avatar.mp4\n  Method B (.zip):\n    my_mp4.zip\n      any_folder_name/\n        idle.mp4\n        talking.mp4\n        happy.mp4\n  Requirement: include at least one .mp4 file.\n\nMMD (.zip)\n  my_mmd.zip\n    any_folder_name/\n      character.pmx (or .pmd)\n      motions/idle.vmd (optional)\n      textures/...\n  Requirement: keep relative paths referenced by PMX/PMD unchanged.\n\nglTF\n  Method A (direct file):\n    avatar.glb\n  Method B (.zip for multi-file glTF):\n    my_gltf.zip\n      any_folder_name/\n        avatar.gltf\n        avatar.bin\n        textures/...\n  Requirement: keep relative paths referenced by .gltf unchanged.\n\nFBX\n  Method A (direct file, self-contained assets only):\n    avatar.fbx\n  Method B (use .zip for external textures/resources):\n    my_fbx.zip\n      any_folder_name/\n        avatar.fbx\n        textures/...\n  Requirement: direct .fbx upload only supports embedded resources; if the model references external textures or other assets, keep the relative paths and package everything in ZIP.</string>
     <string name="enter">Enter</string>
-    <string name="about_avatar_formats">This app supports multiple avatar formats, including DragonBones. Here are instructions for creating and importing models.</string>
-    <string name="dragon_bones_renamed">DragonBones has been renamed to LoongBones, and a new online editor has been launched.\nLoongBones supports professional animation features like IK, mesh deformation, and bone binding.</string>
-    <string name="making_models">1. Creating Models:</string>
-    <string name="making_models_desc">    · Recommended: Use the new online editor.\n    · Alternative: Download the old v5.6.3 offline editor from third-party archive sites.</string>
-    <string name="making_models_desc_general">    · You can use various tools to create your avatar models.\n    · For DragonBones, we recommend using the new online editor, or you can use the old v5.6.3 offline editor.</string>
-    <string name="exporting_files">2. Exporting Files:</string>
-    <string name="exporting_files_desc">    · Regardless of which version you use, when exporting data, select JSON for type and version 5.5 (current version doesn\'t support 6.0 runtime).\n    · The core export files are: *_ske.json, *_tex.json, *_tex.png.</string>
-    <string name="exporting_files_desc_general">    · Please follow the export guidelines for your chosen format.\n    · For DragonBones, when exporting data, select JSON for type and version 5.5 (current version doesn\'t support 6.0 runtime).\n    · The core export files are: *_ske.json, *_tex.json, *_tex.png.</string>
-    <string name="configuring_interaction">3. Configuring Interaction:</string>
-    <string name="configuring_interaction_desc">    · For head tracking, add an IK constraint and name the target bone \"ik_target\".\n    · idle animation: Make sure you have an animation named \"idle\" as the base idle animation, which will automatically loop.\n    · Random animations: You can add animations like blink, shake_head, wag_tail, etc.,\n      the system will randomly trigger these animations to enrich the pet\'s expression.</string>
-    <string name="packaging_and_importing">4. Packaging and Importing:</string>
-    <string name="packaging_and_importing_desc">    · Package the three exported files into one .zip file for import.</string>
-    <string name="important_tip">Important Note: In the old editor download page, the Windows and Mac download links are reversed. Please make sure to select the correct link.</string>
-    <string name="dragonbones_important_tip">Important Note: In the old editor download page, the Windows and Mac download links are reversed. Please make sure to select the correct link.</string>
-    <string name="download_old_editor">Download Old Editor</string>
-    <string name="visit_online_editor">Visit Online Editor</string>
 
     <string name="voice_wakeup_section_title">Voice Wake-up</string>
     <string name="voice_wakeup_always_listen_title">Always Listening</string>
@@ -616,6 +526,7 @@
     <string name="import_chat_history">Import Chat History</string>
     <string name="clear_chat_history">Clear All Chat History</string>
     <string name="confirm_delete">Confirm Delete</string>
+    <string name="chat_delete_selected_messages_confirm">Delete the selected messages (%1$d)? This cannot be undone.</string>
     <string name="delete_warning">Deleting all chat history is irreversible. Consider exporting a backup before proceeding.</string>
     <string name="export_success">Export Successful</string>
     <string name="import_success">Import Successful</string>
@@ -874,13 +785,15 @@
     <string name="theme_custom_color">Custom Colors</string>
     <string name="theme_use_custom_color">Use Custom Colors</string>
     <string name="theme_custom_color_desc">When enabled, you can customize the app\'s main colors</string>
+    <string name="theme_enforce_contrast">Enhanced contrast</string>
+    <string name="theme_enforce_contrast_desc">Turn on if colors are hard to read; deepens accent colors</string>
     <string name="theme_select_color">Select Colors</string>
     <string name="theme_primary_color">Primary</string>
     <string name="theme_secondary_color">Secondary</string>
     <string name="theme_preview">Color Preview</string>
     <string name="theme_primary_button">Main Button</string>
     <string name="theme_secondary_button">Secondary Button</string>
-    <string name="theme_contrast_tip">Tip: High contrast color combinations work best. A color that is too pale is deepened automatically so its text stays readable.</string>
+    <string name="theme_contrast_tip">Tip: High contrast color combinations work best. If a color is too pale to read, turn on Enhanced contrast to deepen it.</string>
     <string name="theme_save_colors">Save Color Settings</string>
     <string name="theme_title_background">Background Customization</string>
     <string name="theme_bg_media">Background Media Settings</string>
@@ -895,6 +808,10 @@
     <string name="theme_bg_opacity">Background opacity: %1$d%%</string>
     <string name="theme_reset">Reset to Default Theme</string>
     <string name="theme_saved">Settings saved</string>
+    <string name="theme_reset_done">Default theme restored</string>
+    <string name="chat_style_bubble_fine_tuning">Crop and scale</string>
+    <string name="theme_reset_confirm_title">Reset theme?</string>
+    <string name="theme_reset_confirm_message">All theme settings return to default, and the theme saved for the current character is deleted. This cannot be undone.</string>
     <string name="theme_video_too_large">Video file is too large and may cause lag or crashes. Please select videos less than 30MB.</string>
     <string name="theme_video_saved">Background video saved</string>
     <string name="theme_image_saved">Background image saved</string>
@@ -928,7 +845,7 @@
     
     <!-- AI Tools -->
     <string name="max_mode_title">Max Mode</string>
-    <string name="max_mode_info">When Max Mode (extra-large context) is on, the context window is %2$sk. Turn it off to return to %1$sk. You can customize these values in Settings.</string>
+    <string name="max_mode_info">When on, use the current model capacity of %2$sK. When off, restore this conversation budget of %1$sK. Required headroom is reserved.</string>
     <string name="ai_tools_enabled">AI Tools Enabled</string>
     <string name="tools_extracting">Detecting tool calls...</string>
     <string name="tools_executing">Executing tool: %1$s</string>
@@ -969,7 +886,7 @@
     <string name="settings_customize_theme">Customize Theme</string>
     <string name="settings_global_display">Display &amp; Behavior</string>
     <string name="settings_global_display_subtitle">Manage global options for display style, automation behavior, and screenshots</string>
-    <string name="settings_data_backup">Data Backup and Recovery</string>
+    <string name="settings_data_backup">Backup and Restore</string>
     <string name="settings_data_backup_desc">Import, export, or delete chat history and memory library data for easy backup and recovery of important information</string>
     <string name="settings_chat_history_management">Chat History Management</string>
     <string name="settings_chat_history_management_subtitle">View stats and batch organize your conversations</string>
@@ -994,7 +911,7 @@
     <string name="settings_enable_summary_desc">Automatically generate conversation summaries when context is too long to save Token consumption</string>
     <string name="settings_enable_summary_by_message_count">Trigger summary by message count</string>
     <string name="settings_enable_summary_by_message_count_desc">Trigger summary when new message count reaches threshold</string>
-    <string name="settings_summary_message_count_threshold">Message Count Threshold</string>
+    <string name="settings_summary_message_count_threshold">Messages Before Summary</string>
     <string name="settings_summary_message_count_threshold_subtitle">Number of new messages to trigger summary (1-20)</string>
     <string name="settings_summary_custom_rules">Custom Summary Rules</string>
     <string name="settings_summary_custom_rules_desc">Extra rules sent when summarizing the conversation. Leave blank for none</string>
@@ -1118,7 +1035,7 @@
     <string name="tag_count_locked_status">Selected %1$d / Limit %2$d</string>
     
     <!-- Package Manager Screen -->
-    <string name="packages">Packages</string>
+    <string name="packages">Extensions</string>
     <string name="skills">Skills</string>
     <string name="show_to_ai_short">AI</string>
     <string name="package_manager">Package Manager</string>
@@ -1182,7 +1099,7 @@
     <string name="back_to_list">Back to List</string>
     
     <!-- Language Settings -->
-    <string name="language_settings">Language Settings</string>
+    <string name="language_settings">Interface Language</string>
     <string name="language_settings_desc">Change the display language of the application</string>
     <string name="change_language">Change Language</string>
     <string name="select_language">Select Language</string>
@@ -1781,8 +1698,6 @@
     <string name="ai_assistant">AI Assistant</string>
     <string name="send_message">Send Message</string>
     <string name="chat_with_pet">Chat with Pet</string>
-    <string name="dragonbones_mode">DragonBones Mode</string>
-    <string name="avatar_mode">Avatar Mode</string>
     <string name="loading_failed">Loading failed: %1$s</string>
     <string name="loading">Loading...</string>
     <string name="chat_scroll_older">Scroll up for earlier messages</string>
@@ -2034,7 +1949,7 @@
     <string name="tool_test_center_desc">Test the availability and functionality of AI tools</string>
     <string name="tool_file_manager">File Manager</string>
     <string name="tool_file_manager_desc">Browse and manage device files with various operations support</string>
-    <string name="tool_tts">Text-to-Speech</string>
+    <string name="tool_tts">Read Aloud</string>
     <string name="tool_tts_desc">Convert text to speech with adjustable speed and pitch</string>
     <string name="tts_title">Text-to-Speech Demo</string>
     <string name="tts_input_text">Input Text</string>
@@ -2123,7 +2038,7 @@
     <string name="shell_executor_execute_failed">Command execution failed: %s</string>
     <string name="tool_log_viewer">Log Viewer</string>
     <string name="tool_log_viewer_desc">Real-time capture and view system and application logs with filtering and search support</string>
-    <string name="tool_sql_viewer">SQL Viewer</string>
+    <string name="tool_sql_viewer">SQL Tool</string>
     <string name="tool_sql_viewer_desc">Browse built-in tables and run SQL commands</string>
     <string name="tool_token_config_desc">Open the API key acquisition and configuration page for quick model setup</string>
     <string name="screen_title_sql_viewer">SQL Viewer</string>
@@ -2603,7 +2518,7 @@
     <string name="logcat_no_logs">No log data</string>
     <string name="logcat_permission_required">Log read permission required</string>
     <string name="logcat_logs_saved">Logs saved to %s</string>
-    <string name="logcat_export_title">App Log Export</string>
+    <string name="logcat_export_title">App Logs</string>
     <string name="logcat_management">App Log Management</string>
     <string name="logcat_description">You can export all internal logs during app runtime to a file for debugging and issue analysis.</string>
     <string name="logcat_save_to_file">Save logs to file</string>
@@ -2903,7 +2818,6 @@
     <string name="functional_model_config_title">Functional Model Configuration Settings</string>
     <string name="functional_model_config_desc">Set separate model configurations for different functions, allowing each function to use the most suitable API settings.</string>
     <string name="manage_all_model_configs">Manage All Model Configurations</string>
-    <string name="manage_model_configs_desc">Manage Model Configurations</string>
     <string name="reset_all_functions_to_default">Reset All Functions to Default Configuration</string>
     <string name="current_config_label">Current Configuration: %1$s</string>
     <string name="default_config">Default Configuration</string>
@@ -2933,7 +2847,6 @@
     <string name="function_type_memory">Memory Management</string>
     <string name="function_type_file_binding">File Binding Processing</string>
     <string name="function_type_ui_controller">UI Controller</string>
-    <string name="function_type_grep">Grep Retrieval</string>
     <string name="function_type_role_response_planner">Group Planner</string>
     <string name="function_type_permission_reviewer">Permission Approval</string>
     <string name="function_type_permission_risk_scorer">Review Risk Scoring</string>
@@ -2945,9 +2858,8 @@
     <string name="function_desc_memory">Process memories and store them in the memory library</string>
     <string name="function_desc_file_binding">Process intelligent binding and mixing of file content, providing more precise code processing capabilities. Recommend using fast, inexpensive models like Gemini Flash, not recommended to use DeepSeek R1</string>
     <string name="function_desc_ui_controller">Used for automatic traversal and operation of UI interfaces. The corresponding UI controller model is only activated when the user explicitly requests to use an "agent" for control, for example by choosing dedicated models such as autoglm-phone-9b.</string>
-    <string name="function_desc_grep">Used for grep_context planning and result filtering (multi-round grep_code)</string>
     <string name="function_desc_role_response_planner">Dynamically plans speaking order and skip decisions in groups, supports multi-turn discussions</string>
-    <string name="function_desc_permission_reviewer">Used by the “auto review” level to review tool calls independently. The reviewer can only use an internal result-submission tool and cannot execute the reviewed action; failures, timeouts, and invalid responses are handed back to you.</string>
+    <string name="function_desc_permission_reviewer">Reviews tool calls independently in auto review mode and cannot execute the reviewed action. If review fails, times out, or returns no valid decision, the action is not executed and the failure is returned to AI without a manual approval dialog.</string>
     <string name="function_desc_permission_risk_scorer">Used by the “auto review” fast level to score the risk of the tool calls being dispatched. A cheap, fast model is enough. Left on the default configuration, it follows the Permission Approval model.</string>
 
     <!-- Functional Prompt Config Screen -->
@@ -3166,9 +3078,6 @@
     <string name="theme_avatar_description">Note: The user avatar on the left is a character card exclusive setting. When empty, it will use the global user avatar on the right. The global user avatar is shared across all character cards.</string>
     <string name="functional_config_model_count">%1$d models</string>
     <string name="functional_config_test_title_generation_user_text">I want to plan a three-day trip to Tokyo, including transport, hotels, and food recommendations.</string>
-    <string name="functional_config_test_grep_intent">Find the greeting in the snippet.</string>
-    <string name="functional_config_test_grep_display_path">&lt;test&gt;</string>
-    <string name="functional_config_test_grep_candidates_digest">#1 [file: example.txt]\nHello world\n#2 [file: main.kt]\nfun main() {}</string>
     <string name="functional_config_test_ui_controller_prompt">Current UI State: [Button(label="OK", bounds="[0,0][100,50]")]\nTask Goal: Tap OK.\nExecution History: []</string>
     <string name="functional_config_test_memory_prompt">Conversation:\nUser: Connection test question.\nAssistant: Connection test answer.</string>
     <string name="tool_permission_instruction_title">Instructions</string>
@@ -3274,6 +3183,7 @@
     <string name="thinking_type_mode">mode</string>
     <string name="thinking_budget_tokens">%1$d tokens</string>
     <string name="thinking_strength_auto">Auto</string>
+    <string name="thinking_strength_turns_on_hint">Thinking is off - changing the level turns it on.</string>
     <string name="thinking_quality">Thinking intensity</string>
     <string name="thinking_quality_desc">Only effective in thinking mode. GPT-5.6 models use five levels; other models retain the original four levels. Higher values use deeper reasoning.</string>
     <string name="thinking_quality_level_low">Low</string>
@@ -3352,7 +3262,7 @@
 
     <!-- Workspace Attachment Processor (AI tool responses) -->
     <string name="workspace_unknown_error">Unknown error</string>
-    <string name="workspace_suggestion_search_first">For user intent, it is recommended to first use grep_context (search for relevant files based on intent) and grep_code (search for specific code patterns) tools to understand the current project situation before making changes.</string>
+    <string name="workspace_suggestion_search_first">Before making changes, use grep_code to locate relevant code and read_file_part to read its context and understand the project.</string>
     <string name="workspace_suggestion_separate_files">Please store HTML, CSS, and JavaScript code in separate files.</string>
     <string name="workspace_suggestion_create_folders">If the project is complex, consider creating js and css folders and creating multiple files.</string>
     <string name="workspace_no_suggestions">No suggestions</string>
@@ -3542,6 +3452,8 @@
     <string name="manage_group">Manage Group</string>
     <string name="create_subfolder">Create subfolder</string>
     <string name="move_to_folder">Move to folder…</string>
+    <string name="move_to_folder_title">Move to folder</string>
+    <string name="moved_to_folder">Moved to \"%1$s\"</string>
     <string name="folder_root">Root</string>
     <string name="rename_group">Rename Group</string>
     <string name="delete_group">Delete Group</string>
@@ -3577,7 +3489,7 @@
     <string name="settings_user_preferences_subtitle">Edit and preview user.md</string>
     <string name="settings_language_subtitle">Interface language switching</string>
     <string name="settings_theme_subtitle">Theme and appearance customization</string>
-    <string name="layout_adjustment">Layout Adjustment</string>
+    <string name="layout_adjustment">Interface Layout</string>
     <string name="layout_adjustment_subtitle">Adjust UI element positions and margins</string>
     <string name="settings_model_params_subtitle">Model parameters and API configuration</string>
     <string name="settings_functional_model_subtitle">Functional model specific configuration</string>
@@ -3588,9 +3500,9 @@
     <string name="headers_configured_count">%1$d configured</string>
     <string name="settings_system_prompts_subtitle">System and model prompts</string>
     <string name="settings_functional_prompts_subtitle">Functional prompt templates</string>
-    <string name="settings_context_length">Context Length</string>
+    <string name="settings_context_length">Conversation context budget</string>
     <string name="settings_context_length_subtitle">Model memory conversation length (k tokens)</string>
-    <string name="settings_max_context_length">Maximum Context Length</string>
+    <string name="settings_max_context_length">Model context capacity</string>
     <string name="settings_max_context_length_subtitle">Maximum context length supported by the model API (k tokens)</string>
     <string name="settings_summary_threshold">Summary Token Threshold</string>
     <string name="settings_summary_threshold_subtitle">Threshold for triggering chat summary (0.1-0.95)</string>
@@ -3618,10 +3530,15 @@
     <string name="global_text_letter_spacing_desc">Adjust the letter spacing for AI reply Markdown content</string>
     <string name="global_text_paragraph_spacing">AI Markdown Paragraph Spacing</string>
     <string name="global_text_paragraph_spacing_desc">Adjust the extra spacing added between AI reply Markdown paragraphs</string>
+    <string name="toned_icon_style">Colored inline icons</string>
+    <string name="toned_icon_style_desc">How colored icons in AI replies are drawn. A disc or outline stays readable on image, glass or mid-tone bubbles</string>
+    <string name="toned_icon_style_plain">Plain</string>
+    <string name="toned_icon_style_dot">Disc</string>
+    <string name="toned_icon_style_halo">Outline</string>
     <string name="layout_adjustment_preview_title">AI Markdown Preview</string>
     <string name="layout_adjustment_preview_desc">The example below reflects the currently saved AI Markdown line spacing, letter spacing, and paragraph spacing. The gaps between the first three paragraphs directly show paragraph spacing changes.</string>
     <string name="layout_adjustment_preview_plain_text">This is a plain text preview. You can observe the spacing between letters and the density between lines.</string>
-    <string name="layout_adjustment_preview_markdown">Paragraph one: use this to observe body line spacing and letter spacing.\n\nParagraph two: this paragraph is here specifically so you can judge paragraph spacing.\n\nParagraph three: when you adjust paragraph spacing, the gap above this line should change immediately.\n\n- AI Markdown list item one\n- AI Markdown list item two</string>
+    <string name="layout_adjustment_preview_markdown">Paragraph one: use this to observe body line spacing and letter spacing.\n\nParagraph two: this paragraph is here specifically so you can judge paragraph spacing.\n\nParagraph three: when you adjust paragraph spacing, the gap above this line should change immediately.\n\n- AI Markdown list item one\n- AI Markdown list item two\n\nBuild :icon[check]{tone=success} passed, :icon[warning]{tone=warning} 3 warnings, :icon[time] took 2 min</string>
     <string name="current_value">Current Value</string>
     <string name="closer_to_edge">Closer to Edge</string>
     <string name="farther_from_edge">Farther from Edge</string>
@@ -3641,7 +3558,7 @@
     <string name="clear_cookies_success">Cookies cleared</string>
     <string name="clear_cookies_failed">Failed to clear cookies</string>
     <string name="settings_data_backup_subtitle">Chat history backup management</string>
-    <string name="settings_token_usage_stats">Token Usage Statistics</string>
+    <string name="settings_token_usage_stats">Usage and Costs</string>
     <string name="settings_function_label">Function</string>
     <string name="settings_model_label">Model</string>
     <string name="settings_no_token_records">No token usage records for functional modules yet.</string>
@@ -3651,7 +3568,8 @@
     <string name="settings_total_chats">Chats</string>
     <string name="settings_total_messages">Messages</string>
     <string name="settings_total_tokens">Total Tokens</string>
-    <string name="settings_total_cost">Total Cost</string>
+    <string name="settings_total_cost">Estimated Cost</string>
+    <string name="token_stats_cost_estimate_hint">Estimated using model pricing, not your actual bill</string>
     <string name="settings_total_requests">Total Requests</string>
     <string name="settings_model_usage_distribution">Model Usage Distribution</string>
     <string name="settings_request_count">Request Count</string>
@@ -4206,7 +4124,7 @@
     <string name="enable_google_search_desc">When enabled, Gemini will use Google Search to enhance responses (may incur additional charges)</string>
     <string name="enable_claude_1h_prompt_cache">Enable Claude 1-hour prompt cache</string>
     <string name="enable_claude_1h_prompt_cache_desc">When enabled, Claude and Claude-compatible providers use a 1-hour prompt cache TTL</string>
-    <string name="enable_tool_call">Model supports ToolCall</string>
+    <string name="enable_tool_call">Native ToolCall</string>
     <string name="enable_tool_call_desc">When disabled, uses the built-in tool invocation mechanism which also supports tool calls. When enabled, uses the API\'s dedicated native interface (requires model support)</string>
     <string name="enable_deepseek_reasoning">Enable DeepSeek Reasoning Mode</string>
     <string name="enable_deepseek_reasoning_desc">When enabled, content within &lt;think&gt; tags will be sent as reasoning_content to DeepSeek models, supporting tool invocation for reasoning models like DeepSeek-R1</string>
@@ -4508,6 +4426,7 @@
     <string name="waifu_custom_prompt_desc">Customize extra prompts for Waifu mode.</string>
     <string name="waifu_custom_prompt_placeholder">For example: Keep replies short and natural, no cutesy tone, no filler words, no action descriptions.</string>
     <string name="waifu_custom_prompt_tip">This content is appended to the system prompt as an extra Waifu-mode rule.</string>
+    <string name="waifu_section_expression">Emoticons &amp; selfie</string>
     <string name="enable_emoticons">Enable Emoticons</string>
     <string name="emoticons_desc">Insert emotional state tags in conversations to enhance expression</string>
     <string name="available_emoticons">Available emoticons: crying, like_you, happy, surprised, miss_you, speechless, angry, confused, sad</string>
@@ -5125,7 +5044,7 @@
     <string name="permission_level_allow_description">These tools will run automatically.</string>
     <string name="permission_level_allow_default_hint">Subagent collaboration tools (spawn_agent and friends) are allowed by default, with no switch of their own. To give one a different level, add it in another group below.</string>
     <string name="permission_level_auto_review">Auto review</string>
-    <string name="permission_level_auto_review_description">Provably in-workspace operations run directly; every other call that would ask is reviewed by an isolated independent agent, and failures, timeouts, or invalid responses fall back to you. Permanent per-tool allow or deny rules always take precedence. This mode is not an OS sandbox.</string>
+    <string name="permission_level_auto_review_description">Provably in-workspace operations run directly; other calls needing review go to an independent agent for approval or denial. Failed, timed-out, or invalid reviews leave the action unexecuted and return the reason to AI to retry or explain configuration issues to you. Per-tool rules take precedence. This is not an OS sandbox.</string>
     <string name="permission_level_forbid">Forbidden</string>
     <string name="permission_level_forbid_description">These tools will never run.</string>
     <string name="permission_level_ask">Ask</string>
@@ -5134,11 +5053,18 @@
     <string name="permission_stop_forbid_description">No tool will run.</string>
     <string name="permission_stop_ask_description">Ask you before every tool call.</string>
     <string name="permission_stop_auto_review_strict_description">Operations proven to stay in the workspace run directly; everything else goes to the approval agent, which judges every call on its own. Safest, and slowest.</string>
-    <string name="permission_stop_auto_review_fast_description">Like strict, plus a lightweight model scores the current course of action asynchronously; a recent low-risk verdict lets the next calls run without the approval agent. It only ever removes reviews, never refuses an action on its own, and is not a system sandbox.</string>
-    <string name="permission_stop_allow_description">Every tool runs directly, without asking.</string>
+    <string name="permission_stop_auto_review_fast_description">Uses strict review with recent low-risk assessments reused to reduce repeated reviews. The reviewer can still approve or reject. Failed reviews leave the action unexecuted and return the reason to AI to retry or explain configuration issues to you.</string>
+    <string name="permission_stop_full_access">Full access</string>
+    <string name="permission_stop_allow_description">Warning: tool approval is skipped by default. AI can modify or delete files, run commands, and access the network, risking data loss or exposure. System permissions and individual tool rules still apply.</string>
     <string name="permission_level_ask_description">These tools ask you before every call.</string>
     <string name="add_tool">Add Tool</string>
     <string name="no_tools_in_group">No tools added to this group.</string>
+    <string name="tool_permission_count">%1$d</string>
+    <string name="tool_permission_show_all">Show all %1$d</string>
+    <string name="tool_permission_total">Total: %1$d</string>
+    <string name="tool_permission_default_count">Allowed by default: %1$d</string>
+    <string name="tool_permission_builtin_group">Built-in tools</string>
+    <string name="tool_permission_no_match">No matching tools</string>
     <string name="remove_tool">Remove</string>
     <string name="select_tools">Select Tools</string>
     <string name="search_tools">Search</string>
@@ -5157,7 +5083,7 @@
     <!-- Chat component hardcoded strings -->
     <string name="reply">Reply</string>
     <string name="image">Image</string>
-    <string name="image_expired">Image (Expired)</string>
+    <string name="image_expired">Image unavailable</string>
     <string name="chat_viewed_images">Viewed %1$d image(s)</string>
     <string name="copy_content">Copy Content</string>
     <string name="user_reply_instruction">User is replying to your previous message:</string>
@@ -5254,14 +5180,14 @@
     <string name="agent_profile_builtin_permission_reviewer_description">Independently reviews tool calls and returns a one-shot allow or deny decision.</string>
     <string name="permission_review_task_title">Permission review: %1$s</string>
     <string name="permission_review_submitted">Permission review decision submitted.</string>
-    <string name="permission_review_fallback_invalid">Automatic review repeatedly returned an invalid result. Your confirmation is required.</string>
-    <string name="permission_review_fallback_timeout">Automatic review timed out. Your confirmation is required.</string>
-    <string name="permission_review_fallback_error">Automatic review failed. Your confirmation is required.</string>
+    <string name="permission_review_fallback_invalid">Automatic review returned an invalid decision. The action was not executed; the failure was returned to AI.</string>
+    <string name="permission_review_fallback_timeout">Automatic review timed out. The action was not executed; the failure was returned to AI.</string>
+    <string name="permission_review_fallback_error">Automatic review failed. The action was not executed; the failure was returned to AI.</string>
     <string name="permission_review_status_allowed">Allowed</string>
     <string name="permission_review_status_denied">Denied</string>
-    <string name="permission_review_status_invalid">Invalid output, handed to user</string>
+    <string name="permission_review_status_invalid">Invalid output; action not executed</string>
     <string name="permission_review_status_timeout_or_cancelled">Review timed out or was cancelled</string>
-    <string name="permission_review_status_error">Review failed, handed to user</string>
+    <string name="permission_review_status_error">Review failed; action not executed</string>
     <string name="functional_config_permission_reviewer_test_invalid">The model connected, but did not call the result tool using the approval protocol.</string>
     <string name="functional_config_permission_reviewer_test_success">Approval protocol test passed: outcome=%1$s, risk=%2$s, authorization=%3$s</string>
     <string name="functional_config_risk_scorer_test_invalid">The model connected, but did not answer with only high or low.</string>
@@ -5471,6 +5397,11 @@
     <string name="attachment_camera">Camera</string>
     <string name="attachment_memory">Memory</string>
     <string name="attachment_file">File</string>
+    <string name="functional_model_reselect">Select a model again</string>
+    <string name="functional_model_notice_title">Some features need a model</string>
+    <string name="functional_model_notice_more">%1$s and others (%2$d features)</string>
+    <string name="functional_model_notice_configure">Configure</string>
+    <string name="functional_model_selection_unavailable">The selected model was removed or is unavailable. Choose a model in Function Model Settings; no automatic substitution will be made.</string>
     <string name="attachment_screen_content">Screen Content</string>
     <string name="attachment_notifications">Notifications</string>
     <string name="attachment_location">Location</string>
@@ -5530,11 +5461,11 @@
     <string name="enable_navigation_animation_description">Turns on the enhanced animation set for both the phone sidebar and page transitions. Turn it off to use simpler navigation motion.</string>
     <string name="start_with_new_chat">Start with New Blank Chat</string>
     <string name="start_with_new_chat_description">When enabled, each app launch opens a new blank chat instead of reopening the previous conversation.</string>
-    <string name="software_identity_title">Software Identity</string>
-    <string name="software_identity_description">Change the software identity shown at the top of the sidebar.</string>
     <string name="software_identity_option_operit">Operit Ry</string>
-    <string name="software_identity_option_lingshu">Lingshu AI</string>
     <string name="reset_all_display_settings">Reset All Display Settings</string>
+    <string name="reset_display_settings_confirm">The display and execution settings on this page go back to their defaults, including the global user name, avatar, root execution mode and custom su command.</string>
+    <string name="reset_display_settings_action">Reset</string>
+    <string name="reset_display_settings_done">Settings restored to defaults</string>
     
     <!-- Chat History Management -->
     <string name="default_profile_name">Default Profile</string>
@@ -6054,7 +5985,6 @@
     <string name="toolreg_share_file_desc">Share file: %1$s%2$s</string>
     <string name="toolreg_grep_code_with_file_pattern_desc">Search code in %1$s: [%2$s]%3$s (file type: %4$s)</string>
     <string name="toolreg_grep_code_desc">Search code in %1$s: [%2$s]%3$s</string>
-    <string name="toolreg_grep_context_desc">Find related files in %1$s by intent: [%2$s]%3$s</string>
     <string name="toolreg_download_file_desc">Download: %1$s -&gt; %2$s%3$s</string>
     <string name="toolreg_index_suffix">, index: %1$s</string>
     <string name="toolreg_click_element_resourceid_desc">Click element [resourceId: %1$s%2$s]</string>
@@ -7084,9 +7014,9 @@
     <string name="skill_error_import_failed">Import failed: %1$s</string>
 
     <!-- Context Summary Settings -->
-    <string name="context_summary_note">File read limits and text result truncation are now fixed system constants. This page directly adjusts the context and summary settings of the bound model config, along with image and audio/video history retention turns.</string>
+    <string name="context_summary_note">Set defaults for new conversations here; existing chats are unchanged. Use the context indicator in chat to adjust that conversation. Set model capacity in model configuration.</string>
     <string name="context_summary_current_model_config">Current bound model config: %1$s</string>
-    <string name="context_summary_bound_config_description">The context and summary settings on this page are written directly back to the model config bound to the current chat.</string>
+    <string name="context_summary_bound_config_description">The section below edits shared summary formatting and rules, not model capacity or conversation budgets.</string>
     <string name="context_validation_error_positive_number">%1$s must be a valid number greater than 0</string>
     <string name="context_validation_error_positive_integer">%1$s must be a valid integer greater than 0</string>
     <string name="context_validation_error_non_negative_integer">%1$s must be a valid integer greater than or equal to 0</string>
@@ -7131,7 +7061,7 @@
     <string name="visit_web_wait_time_title">Visit Web Wait Time</string>
     <string name="visit_web_wait_time_description">Controls how long visit_web waits before returning after page content is extracted. Set to 0 seconds to return immediately.</string>
     <string name="visit_web_wait_time_value">%1$d s</string>
-    <string name="tool_collapse_mode_title">Collapse Tools</string>
+    <string name="tool_collapse_mode_title">Collapse Tool Records</string>
     <string name="tool_collapse_mode_desc">Set the default collapse scope for tool-call groups in messages</string>
     <string name="tool_collapse_mode_read_only">Collapse Multiple Read-only Tools</string>
     <string name="tool_collapse_mode_all">Collapse Multiple Tool Calls</string>
@@ -7499,7 +7429,7 @@
     <!-- OpenAIVoiceProvider -->
     <string name="openai_tts_error_url_not_set">OpenAI TTS URL not set, please enter the complete interface address (e.g., https://xxx/v1/audio/speech).</string>
     <string name="openai_tts_error_url_invalid_scheme">OpenAI TTS URL must start with http:// or https://.</string>
-    <string name="openai_tts_error_url_invalid_path">OpenAI TTS URL must contain /v1/audio/speech (please fill in complete to audio/speech).</string>
+    <string name="openai_tts_error_url_invalid_path">The speech URL must end with /audio/speech. A service root URL or /v1 is completed automatically; enter the full URL for custom paths.</string>
     <string name="openai_tts_error_api_key_not_set">API Key not set, please fill in settings.</string>
     <string name="openai_tts_error_model_not_set">OpenAI TTS model not set, please fill in settings (e.g., tts-1).</string>
     <string name="openai_tts_error_voice_not_set">OpenAI TTS voice not set, please fill in settings (e.g., alloy).</string>
@@ -8475,7 +8405,7 @@
     <string name="artifact_detail_continue_develop_hint">Development will continue based on this version, with strong reminders about directory restrictions, types synchronization, and compilation methods.</string>
     <string name="artifact_detail_ai_requirement_label">What do you want the AI to do this time?</string>
 
-    <string name="workspace_attachment_attached">Current conversation has attached workspace.</string>
+    <string name="workspace_attachment_attached">This conversation has an attached workspace. The following is the latest workspace information and replaces previously recorded workspace paths and environments; this alone does not require a new conversation. The workspace is the default working directory, not an access boundary. Outside operations remain subject to user authorization, tool review, and actual filesystem permissions.</string>
     <string name="workspace_attachment_path">Workspace path: %1$s</string>
     <string name="workspace_attachment_environment">Workspace environment: %1$s</string>
     <string name="artifact_publish_node_updated">Node「%1$s」updated</string>
@@ -8834,13 +8764,14 @@
     <string name="tool_errors_week">Last 7 days</string>
     <string name="tool_errors_fortnight">Last 14 days</string>
     <string name="tool_errors_month">Last 30 days</string>
-    <string name="tool_repairs_title">Tool call repairs</string>
+    <string name="tool_repairs_title">Tool Call Repair History</string>
     <string name="tool_repairs_scope">Automatic routing repairs before execution; these do not indicate successful execution.</string>
     <string name="tool_repairs_total">%1$d repair records</string>
     <string name="tool_repairs_empty">No tool call repairs yet</string>
     <string name="tool_repairs_line_range">Line range redirected to the partial file reader</string>
     <string name="tool_repairs_separator">Corrected repeated colons in the terminal tool name</string>
     <string name="tool_repairs_timeout">Normalized terminal timeout to timeoutMs</string>
+    <string name="tool_repairs_proxy_yield">Moved terminal yieldMs into tool parameters</string>
     <string name="tool_repairs_package">Removed redundant package_name matching the target package</string>
     <string name="tool_repairs_flattened_proxy">Recovered the tool_name that was folded into the params text</string>
     <string name="tool_repairs_memory_argument">Renamed the memory tool\'s new_text argument to content</string>
@@ -8874,7 +8805,7 @@
     <string name="floating_voice_answering">Responding…</string>
     <string name="floating_voice_starting">Starting voice chat…</string>
     <string name="screen_ocr_capturing">Capturing screen…</string>
-    <string name="model_protocol_title">Protocol handling</string>
+    <string name="model_protocol_title">API Protocol</string>
     <string name="model_protocol_desc">Applies only to this model. Inherits the provider by default.</string>
     <string name="model_protocol_inherit">Inherit provider</string>
     <string name="model_protocol_chat">Chat Completions (standard)</string>
@@ -8885,7 +8816,7 @@
     <string name="model_protocol_deepseek">DeepSeek (thinking controls and replay)</string>
     <string name="model_protocol_kimi">Kimi (thinking controls and replay)</string>
     <string name="model_protocol_mimo">MiMo (thinking controls and replay)</string>
-    <string name="model_protocol_endpoint">Model endpoint (optional)</string>
+    <string name="model_protocol_endpoint">API URL for This Model (Optional)</string>
     <string name="model_protocol_endpoint_desc">Leave blank to use the provider URL with the standard path adjusted for this protocol. Enter custom endpoints here.</string>
     <string name="model_protocol_auto_configure">Auto-configure protocols</string>
     <string name="model_protocol_auto_desc">Matches the provider and model in the local catalog without a network refresh. Updates matched protocols, keeps custom endpoints, and leaves unmatched settings unchanged.</string>
@@ -9065,6 +8996,74 @@
     <string name="resource_download_failed_generic">Download failed. Please retry.</string>
     <string name="plugin_terminal_resource_required">The Ubuntu terminal environment must be downloaded first (about 64 MB)</string>
     <string name="terminal_task_start_desc">Start terminal task: %1$s</string>
+    <string name="shell_task_poll_desc">Check Shell task: %1$s</string>
+    <string name="shell_status_running">Shell is still running</string>
+    <string name="shell_status_cancelling">Shell is stopping and cleaning up</string>
+    <string name="shell_status_completed">Shell completed</string>
+    <string name="shell_status_failed">Shell failed</string>
+    <string name="shell_status_timed_out">Shell timed out</string>
+    <string name="shell_status_cancelled">Shell cancelled</string>
+    <string name="shell_status_unknown">Shell ended; result unknown</string>
+    <string name="shell_task_cancel_desc">Cancel Shell task: %1$s</string>
     <string name="terminal_task_poll_desc">Check terminal task: %1$s</string>
     <string name="terminal_task_cancel_desc">Cancel terminal task: %1$s</string>
+    <string name="composer_predictions">Composer Predictions</string>
+    <string name="composer_predictions_description">After an AI reply, predict a possible next message. Double-tap the gray text to adopt it; typing or adding attachments hides it. Uses extra API calls through the current chat model and may incur charges or consume account quota. Supports text models including Codex sign-in and Zen Free; plugin providers are not currently supported.</string>
+    <string name="composer_prediction_adopt">Adopt predicted message</string>
+    <string name="token_stats_category_composer_prediction">Composer prediction</string>
+    <string name="voice_dictation_cannot_keep_up">Recognition cannot keep up with recording. Try shorter recordings.</string>
+    <string name="permission_review_failed_result">Automatic review did not complete; action not executed</string>
+    <string name="chat_context_budget">Conversation context budget</string>
+    <string name="chat_context_budget_hint">For example 300K, 400K or 500K. Actual usage is capped by model capacity.</string>
+    <string name="chat_context_max_hint">Follows the current model\'s full capacity. Turn it off to set your own budget.</string>
+    <string name="chat_context_compact_at">Auto-compaction threshold (optional)</string>
+    <string name="chat_context_compact_hint">Leave blank for automatic management, or enter 300K. Space is reserved for replies; compaction may occur earlier.</string>
+    <string name="chat_context_current">Current conversation context</string>
+    <string name="chat_context_capacity">Current model capacity: %1$sK</string>
+    <string name="chat_context_model_hint">Enter the API context capacity. Models in this configuration share it; conversation budgets are adjusted separately in chat.</string>
+    <string name="chat_context_defaults">Defaults for new conversations</string>
+    <string name="chat_context_advanced">Summary format</string>
+    <string name="chat_context_auto_compact">Automatically compact context</string>
+    <string name="chat_context_auto_compact_hint">On by default. Summarizes earlier content near the budget. When off, long chats may exceed model capacity.</string>
+    <string name="chat_context_saved">Saved. Applies to the next request.</string>
+    <string name="chat_context_save_failed">Could not save context settings. Please retry.</string>
+    <string name="chat_shortcuts">Chat shortcuts · Click to run; Send sends ordinary text</string>
+    <string name="chat_shortcut_compact">Compact conversation context</string>
+    <string name="chat_shortcut_autocompact">Auto-compaction threshold · /autocompact 300K; auto restores automatic management</string>
+    <string name="chat_shortcut_context">Adjust this conversation budget · /context 400K</string>
+    <string name="chat_shortcut_max">Use model capacity · /max on; off restores your budget</string>
+    <string name="chat_shortcut_invalid">Invalid argument. Follow the example, or send it as ordinary text.</string>
+    <string name="chat_shortcut_busy">Wait for the current reply to finish before compacting.</string>
+    <string name="chat_context_legacy_turns">Keep legacy rule: compact every %1$d turns</string>
+    <string name="storage_title">Storage management</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_empty">No matching settings</string>
+    <string name="settings_search_results">%1$d results</string>
+    <string name="storage_subtitle">View usage, clear previews, and manage downloaded components</string>
+    <string name="storage_data_total">App data usage</string>
+    <string name="storage_calculating">Calculating…</string>
+    <string name="storage_refresh">Refresh usage</string>
+    <string name="storage_last_measured">Last measured: %1$s · Reused for 10 minutes; refresh anytime</string>
+    <string name="storage_scan_progress">%1$d files scanned · %2$s measured</string>
+    <string name="storage_scanning_category">Scanning: %1$s</string>
+    <string name="storage_stop_scan">Stop scan</string>
+    <string name="storage_scan_stopped">Scan stopped. The last complete result was kept. You can refresh manually.</string>
+    <string name="storage_scan_timeout">Scan took too long and was stopped. The last complete result was kept. Try again later.</string>
+    <string name="storage_scope">File sizes in app-private directories. Excludes the installed app, public Downloads, and user workspaces. System settings may report a different size.</string>
+    <string name="storage_failed">Operation incomplete. Try again. Displayed sizes may be out of date.</string>
+    <string name="storage_partial">Some directories could not be read. Only measured sizes are shown.</string>
+    <string name="storage_media">Chat media</string>
+    <string name="storage_media_hint">Images, audio, and video used by chat history. Restarting or reaching the memory limit no longer deletes them. Clearing preview cache preserves them.</string>
+    <string name="storage_components">Models and components</string>
+    <string name="storage_components_hint">Includes downloaded models, templates, and terminal environment. Component management removes downloaded resources. The installed terminal and its personal files are only measured, never deleted here.</string>
+    <string name="storage_databases">Databases</string>
+    <string name="storage_databases_hint">Structured data including chats and memory databases. Manage chats below and back up before deleting. Database size may not shrink immediately.</string>
+    <string name="chat_image_loading">Loading image…</string>
+    <string name="storage_preview_cache">Image preview cache</string>
+    <string name="storage_preview_hint">Speeds up image display and can be reloaded. Images may load more slowly after clearing.</string>
+    <string name="storage_other">Other files</string>
+    <string name="storage_other_hint">Settings, plugins, source attachments, logs, and temporary files. No bulk deletion is offered to protect chats and work files.</string>
+    <string name="storage_clear_preview">Clear preview cache</string>
+    <string name="storage_clear_preview_confirm">Only clear reloadable image previews. Keep chat media, conversations, models, and work files.</string>
+    <string name="storage_cache_cleared">Preview cache cleared. Visible images may recreate a small amount of cache.</string>
 </resources>

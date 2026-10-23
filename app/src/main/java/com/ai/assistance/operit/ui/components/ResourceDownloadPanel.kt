@@ -15,6 +15,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -25,9 +28,21 @@ import com.ai.assistance.operit.R
 import com.ai.assistance.operit.util.OnDemandResources
 import com.ai.assistance.operit.util.ResourceDownloadState
 
+private var inlineDownloadHosts by mutableIntStateOf(0)
+
+/** The management screen already displays progress; avoid covering it with duplicate cards. */
+@Composable
+internal fun InlineResourceDownloadHost() {
+    DisposableEffect(Unit) {
+        inlineDownloadHosts++
+        onDispose { inlineDownloadHosts-- }
+    }
+}
+
 /** Render only in the Activity, never in a floating-window Compose tree. */
 @Composable
 fun ResourceDownloadPanel(modifier: Modifier = Modifier) {
+    if (inlineDownloadHosts > 0) return
     val downloads by OnDemandResources.downloads.collectAsState()
     val context = LocalContext.current
     Column(modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {

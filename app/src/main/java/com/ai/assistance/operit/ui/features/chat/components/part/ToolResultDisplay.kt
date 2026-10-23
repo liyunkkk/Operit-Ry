@@ -156,6 +156,8 @@ internal fun ToolResultDetailDialog(
         stoppedNote: String? = null,
         primaryActionLabel: String? = null,
         onPrimaryAction: (() -> Unit)? = null,
+        statusIconOverride: androidx.compose.ui.graphics.vector.ImageVector? = null,
+        statusDescriptionOverride: String? = null,
 ) {
     val context = LocalContext.current
     val dialogMetrics = rememberCompactDialogMetrics()
@@ -182,13 +184,13 @@ internal fun ToolResultDetailDialog(
                     // 状态图标
                     Icon(
                             imageVector =
-                                    when {
+                                    statusIconOverride ?: when {
                                         stopped -> Icons.Default.Warning
                                         isSuccess -> Icons.Default.Check
                                         else -> Icons.Default.Close
                                     },
                             contentDescription =
-                                    when {
+                                    statusDescriptionOverride ?: when {
                                         stopped ->
                                             context.getString(
                                                 R.string.subagent_status_interrupted

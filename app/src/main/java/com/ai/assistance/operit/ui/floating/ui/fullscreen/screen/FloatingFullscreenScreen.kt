@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.Chat
@@ -40,12 +39,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.ai.assistance.operit.R
-import com.ai.assistance.operit.core.avatar.common.control.AvatarSettingKeys
-import com.ai.assistance.operit.core.avatar.common.state.AvatarEmotion
-import com.ai.assistance.operit.core.avatar.common.view.AvatarView
-import com.ai.assistance.operit.core.avatar.impl.factory.AvatarControllerFactoryImpl
-import com.ai.assistance.operit.core.avatar.impl.factory.AvatarModelFactoryImpl
-import com.ai.assistance.operit.core.avatar.impl.factory.AvatarRendererFactoryImpl
 import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.preferences.CharacterGroupCardManager
 import com.ai.assistance.operit.data.preferences.ActivePromptManager
@@ -53,11 +46,7 @@ import com.ai.assistance.operit.data.model.ActivePrompt
 import com.ai.assistance.operit.data.preferences.SpeechServiceProfilesPreferences
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.data.preferences.WakeWordPreferences
-import com.ai.assistance.operit.data.repository.AvatarRepository
-import com.ai.assistance.operit.data.repository.AvatarSettings
 import com.ai.assistance.operit.data.repository.ChatHistoryManager
-import com.ai.assistance.operit.data.repository.getEmotionAnimationMapping
-import com.ai.assistance.operit.data.repository.getMoodAnimationMapping
 import com.ai.assistance.operit.ui.floating.FloatContext
 import com.ai.assistance.operit.ui.floating.FloatingMode
 import com.ai.assistance.operit.ui.floating.ui.fullscreen.components.BottomControlBar
@@ -123,45 +112,6 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
         }
     val globalAiAvatarUri by preferencesManager.customAiAvatarUri.collectAsState(initial = null)
     val aiAvatarUri = activeCharacterAvatarUri ?: globalAiAvatarUri
-
-    val avatarModelFactory = remember { AvatarModelFactoryImpl() }
-    val avatarRepository = remember { AvatarRepository.getInstance(context, avatarModelFactory) }
-    val avatarControllerFactory = remember { AvatarControllerFactoryImpl() }
-    val avatarRendererFactory = remember { AvatarRendererFactoryImpl() }
-    val currentAvatarModel by avatarRepository.currentAvatar.collectAsState(initial = null)
-    val avatarSettings by avatarRepository.settings.collectAsState(initial = AvatarSettings())
-    val avatarConfigs by avatarRepository.configs.collectAsState(initial = emptyList())
-    val avatarInstanceSettings by avatarRepository.instanceSettings.collectAsState(initial = emptyMap())
-    val currentAvatarConfig = remember(avatarConfigs, currentAvatarModel?.id) {
-        currentAvatarModel?.let { avatar -> avatarConfigs.find { it.id == avatar.id } }
-    }
-    val currentAvatarEmotionMapping = remember(currentAvatarConfig) {
-        currentAvatarConfig?.getEmotionAnimationMapping().orEmpty()
-    }
-    val currentAvatarMoodAnimationMapping = remember(currentAvatarConfig) {
-        currentAvatarConfig?.getMoodAnimationMapping().orEmpty()
-    }
-    val currentAvatarSettings = remember(currentAvatarModel?.id, avatarInstanceSettings) {
-        currentAvatarModel?.id?.let { avatarId -> avatarInstanceSettings[avatarId] }
-    }
-    val currentAvatarRuntimeSettings = remember(currentAvatarSettings) {
-        currentAvatarSettings?.let { settings ->
-            mutableMapOf<String, Any>(
-                AvatarSettingKeys.SCALE to settings.scale,
-                AvatarSettingKeys.TRANSLATE_X to settings.translateX,
-                AvatarSettingKeys.TRANSLATE_Y to settings.translateY
-            ).apply {
-                settings.customSettings.forEach { (key, value) ->
-                    this[key] = value
-                }
-            }
-        }
-    }
-    val voiceAvatarController = currentAvatarModel?.let { avatarControllerFactory.createController(it) }
-    val isVoiceAvatarEnabled =
-        avatarSettings.isVoiceCallAvatarEnabled &&
-            currentAvatarModel != null &&
-            voiceAvatarController != null
 
     val speechServiceProfiles = remember { SpeechServiceProfilesPreferences(context) }
     val currentTtsProfile by speechServiceProfiles.currentTtsProfileOrNullFlow.collectAsState(initial = null)
@@ -242,66 +192,6 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
         )
     }
 
-    LaunchedEffect(latestMessage?.timestamp, latestMessage?.contentStream == null) {
-        viewModel.handleVoiceAvatarMessage(latestMessage)
-    }
-
-    LaunchedEffect(floatContext.inputProcessingState.value, latestMessage?.timestamp, latestMessage?.contentStream == null) {
-        viewModel.syncVoiceAvatarWithProcessingState(
-            state = floatContext.inputProcessingState.value,
-            latestMessage = latestMessage
-        )
-    }
-
-    LaunchedEffect(voiceAvatarController, currentAvatarEmotionMapping) {
-        voiceAvatarController?.updateEmotionAnimationMapping(currentAvatarEmotionMapping)
-    }
-
-    LaunchedEffect(voiceAvatarController, currentAvatarMoodAnimationMapping) {
-        voiceAvatarController?.updateTriggerAnimationMapping(currentAvatarMoodAnimationMapping)
-    }
-
-    LaunchedEffect(voiceAvatarController, currentAvatarRuntimeSettings) {
-        currentAvatarRuntimeSettings?.let { settings ->
-            voiceAvatarController?.updateSettings(settings)
-        }
-    }
-
-    LaunchedEffect(voiceAvatarController, isVoiceAvatarEnabled, viewModel.voiceAvatarMotionRequest.sequence) {
-        val controller = voiceAvatarController ?: return@LaunchedEffect
-        if (!isVoiceAvatarEnabled) {
-            return@LaunchedEffect
-        }
-
-        val request = viewModel.voiceAvatarMotionRequest
-        val triggerName = request.triggerName?.trim().orEmpty()
-        if (triggerName.isNotEmpty()) {
-            val handled = controller.playTrigger(triggerName, loop = if (request.playOnce) 1 else 0)
-            if (handled) {
-                if (request.playOnce) {
-                    val durationMillis =
-                        controller.estimateTriggerDurationMillis(triggerName)
-                            ?: controller.estimateEmotionDurationMillis(request.emotion)
-                    durationMillis?.let {
-                        delay(durationMillis)
-                        controller.setEmotion(AvatarEmotion.IDLE)
-                    }
-                }
-                return@LaunchedEffect
-            }
-        }
-
-        if (request.playOnce) {
-            controller.playEmotion(request.emotion, loop = 1)
-            controller.estimateEmotionDurationMillis(request.emotion)?.let { durationMillis ->
-                delay(durationMillis)
-                controller.setEmotion(AvatarEmotion.IDLE)
-            }
-        } else {
-            controller.setEmotion(request.emotion)
-        }
-    }
-    
     // 清理资源
     DisposableEffect(Unit) {
         onDispose {
@@ -420,8 +310,8 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
         Column(Modifier.fillMaxSize().padding(top = 76.dp, bottom = if (isBottomBarVisible) 120.dp else 72.dp)) {
             if (effectiveWaveActive) BoxWithConstraints(Modifier.fillMaxWidth().weight(0.8f)) {
                 val activeWaveSize = minOf(maxWidth, maxHeight, 300.dp)
-                val activeAvatarSize = minOf(activeWaveSize * 0.65f, if (isVoiceAvatarEnabled) 240.dp else 120.dp)
-                val centerTapTargetSize = if (isVoiceAvatarEnabled) 220.dp else 140.dp
+                val activeAvatarSize = minOf(activeWaveSize * 0.65f, 120.dp)
+                val centerTapTargetSize = 140.dp
                 WaveVisualizerSection(
                     isWaveActive = viewModel.isWaveActive,
                     isRecording = viewModel.isRecording,
@@ -429,21 +319,6 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
                     volumeLevelFlow = if (viewModel.isWaveActive && viewModel.isRecording)
                         viewModel.volumeLevelFlow else null,
                     aiAvatarUri = aiAvatarUri,
-                    avatarContent =
-                        if (isVoiceAvatarEnabled) {
-                            {
-                                AvatarView(
-                                    modifier = Modifier.fillMaxSize(),
-                                    model = currentAvatarModel!!,
-                                    controller = voiceAvatarController!!,
-                                    rendererFactory = avatarRendererFactory
-                                )
-                            }
-                        } else {
-                            null
-                        },
-                    clipAvatarContent = false,
-                    avatarShape = CircleShape,
                     activeWaveSize = activeWaveSize,
                     activeAvatarSize = activeAvatarSize,
                     onToggleActive = {
@@ -479,6 +354,7 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
                     state is com.ai.assistance.operit.data.model.InputProcessingState.Error -> state.message
                     viewModel.isRecording -> stringResource(R.string.floating_listening)
                     viewModel.isProcessingSpeech -> stringResource(R.string.floating_recognizing)
+                    viewModel.isPlaybackSuppressed -> viewModel.voiceStatus
                     viewModel.isVoiceCapturePausedForAi -> stringResource(R.string.floating_voice_answering)
                     viewModel.voiceStatus.isNotBlank() -> viewModel.voiceStatus
                     else -> stringResource(R.string.floating_voice_starting)
@@ -496,10 +372,20 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
             )
         }
         if (effectiveWaveActive && !viewModel.isEditMode) {
-            TextButton(
-                onClick = { viewModel.exitWaveMode(); floatContext.voiceMode = false },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).heightIn(min = 48.dp),
-            ) { Text(stringResource(R.string.floating_return_to_text)) }
+            Row(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
+                TextButton(onClick = { viewModel.toggleMicrophone() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(if (viewModel.microphoneMuted) R.string.voice_unmute else R.string.voice_mute))
+                }
+                if (viewModel.hasSpeechPlayback) {
+                    TextButton(onClick = { viewModel.stopSpeaking() }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.voice_stop_playback))
+                    }
+                }
+                TextButton(
+                    onClick = { viewModel.exitWaveMode(); floatContext.voiceMode = false },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text(stringResource(R.string.voice_end_conversation)) }
+            }
         }
 
         // 编辑面板
@@ -509,6 +395,7 @@ fun FloatingFullscreenMode(floatContext: FloatContext) {
             onTextChange = { viewModel.editableText = it },
             onCancel = { viewModel.exitEditMode() },
             onSend = { viewModel.sendEditedMessage() },
+            canSend = viewModel.canSendEditedMessage,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
         

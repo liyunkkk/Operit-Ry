@@ -440,7 +440,8 @@ bool StreamMarkdownLinkPlugin::processChar(char16_t c, bool /*atStartOfLine*/) {
         return true;
     }
 
-    // phase: 1=inside [text], 2=after ]( expecting url, 3=inside url
+    // phase: 1=inside [text], 2=after ] expecting '(', 3=inside url.
+    // Stay TRYING until '(' arrives: "[x] note" or "[label]{...}" are plain text, not links.
     if (state_ == PluginState::TRYING || state_ == PluginState::PROCESSING) {
         if (c == u'\n') {
             reset();
@@ -449,13 +450,13 @@ bool StreamMarkdownLinkPlugin::processChar(char16_t c, bool /*atStartOfLine*/) {
         if (phase_ == 1) {
             if (c == u']') {
                 phase_ = 2;
-                state_ = PluginState::PROCESSING;
             }
             return true;
         }
         if (phase_ == 2) {
             if (c == u'(') {
                 phase_ = 3;
+                state_ = PluginState::PROCESSING;
                 return true;
             }
             reset();

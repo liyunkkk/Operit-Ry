@@ -135,6 +135,7 @@ fun AIChatScreen(
         onNavigateToSettings: () -> Unit = {},
         onNavigateToUserPreferences: () -> Unit = {},
         onNavigateToModelConfig: () -> Unit = {},
+        onNavigateToFunctionalConfig: () -> Unit = onNavigateToSettings,
         onNavigateToOnboardingModelConfig: () -> Unit = {},
         onNavigateToModelPrompts: () -> Unit = {},
         onNavigateToPackageManager: () -> Unit = {},
@@ -840,12 +841,27 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
     var showCharacterSelector by remember { mutableStateOf(false) }
 
     var bottomBarHeightPx by remember { mutableStateOf(0) }
+    var bottomDockHeightPx by remember { mutableStateOf(0) }
+    var bottomDockRowCenterPx by remember { mutableStateOf(0) }
     val bottomBarHeightDp = with(density) { bottomBarHeightPx.toDp() }
+    val bottomDockHeightDp = with(density) { bottomDockHeightPx.toDp() }
+    val bottomDockRowCenterDp = with(density) { bottomDockRowCenterPx.toDp() }
+    // The settings bar is a 28dp icon button frame with 8dp of vertical padding on either side, so
+    // its centre sits 22dp above the bottom edge that `classicSettingsBarBottomPadding` positions.
+    val classicSettingsButtonHalfHeightDp = 22.dp
+    // The measured bottom bar also carries the todo / prefix-warning dock above the input card, and
+    // the dock grows upward when its todo panel opens. Only the dock's own row may position the
+    // settings button: the button centres on that row's content instead of floating one line above
+    // it, and keeps its 6dp gap above the input card while the dock is empty.
+    val inputBarHeightDp = (bottomBarHeightDp - bottomDockHeightDp).coerceAtLeast(0.dp)
     val classicSettingsBarBottomPadding =
-        if (bottomBarHeightDp > 36.dp) {
-            bottomBarHeightDp - 6.dp
-        } else {
-            18.dp
+        when {
+            inputBarHeightDp <= 36.dp -> 18.dp
+            bottomDockRowCenterDp > 0.dp ->
+                inputBarHeightDp + bottomDockRowCenterDp - classicSettingsButtonHalfHeightDp
+            // Unrelated to ChatTodoDock's 6dp row gap: this one is the settings button's own
+            // clearance above the input card when the dock contributes no row to align with.
+            else -> inputBarHeightDp - 6.dp
         }
     val inputBarTranslationYPx =
         if (shouldUseChatLocalImeHandling && imeBottomPx > 0) {
@@ -909,6 +925,11 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
                     ) {
                         ChatScreenContent(
                                 modifier = Modifier.fillMaxSize(),
+                                configurationNotice = {
+                                    if (!isFloatingMode && !isReadOnlyTranscript && !embedded) {
+                                        ModelConfigurationNotice(onNavigateToFunctionalConfig)
+                                    }
+                                },
                                 paddingValues =
                                         PaddingValues(), // Padding is already handled by the parent Box
                                 bottomInset = bottomBarHeightDp,
@@ -1111,6 +1132,8 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
                                     showMemoryFolderDialog = true
                                 },
                                 onRequestAutoScrollToBottom = requestAutoScrollToBottom,
+                                onDockHeightChange = { bottomDockHeightPx = it },
+                                onDockRowCenterChange = { bottomDockRowCenterPx = it },
                             )
                         }
                     } else {
@@ -1232,6 +1255,13 @@ val actualViewModel: ChatViewModel = viewModel ?: viewModel { ChatViewModel(cont
                     chatInputWaterGlass = chatInputWaterGlass,
                 ),
         )
+
+        val contextEditor by actualViewModel.contextEditor.collectAsState()
+        val contextEditorSaving by actualViewModel.contextEditorSaving.collectAsState()
+        contextEditor?.let { target ->
+            com.ai.assistance.operit.ui.features.chat.components.ChatContextEditorDialog(
+                target, actualViewModel::dismissContextEditor, actualViewModel::saveContextEditor, contextEditorSaving)
+        }
 
         val workspaceOverlayModifier =
             if (!embedded && showWebView) {
@@ -1536,6 +1566,8 @@ private fun ChatInputBottomBar(
     characterCardBoundMemoryProfileId: String?,
     onShowMemoryFolderDialog: () -> Unit,
     onRequestAutoScrollToBottom: () -> Unit,
+    onDockHeightChange: (Int) -> Unit,
+    onDockRowCenterChange: (Int) -> Unit,
 ) {
     val todos by actualViewModel.currentTodos.collectAsState()
     val context = LocalContext.current
@@ -1544,6 +1576,7 @@ private fun ChatInputBottomBar(
     val waifuPreferences = remember(context) { WaifuPreferences.getInstance(context) }
 
     val userMessage by actualViewModel.userMessage.collectAsState()
+    val composerPrediction by actualViewModel.composerPredictionText.collectAsState()
     val attachments by actualViewModel.attachments.collectAsState()
     val attachmentPanelState by actualViewModel.attachmentPanelState.collectAsState()
     val replyToMessage by actualViewModel.replyToMessage.collectAsState()
@@ -1921,8 +1954,13 @@ private fun ChatInputBottomBar(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        ChatTodoDock(chatId = currentChatId, todos = todos) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        ChatTodoDock(
+            chatId = currentChatId,
+            todos = todos,
+            modifier = Modifier.onGloballyPositioned { onDockHeightChange(it.size.height) },
+            onRowCenterOffsetPx = onDockRowCenterChange,
+        ) {
             SystemPromptRebuildNotice(chatId = currentChatId, busy = isQueueBlocked)
         }
 
@@ -1930,6 +1968,7 @@ private fun ChatInputBottomBar(
             AgentChatInputSection(
                 actualViewModel = actualViewModel,
                 userMessage = userMessage,
+                composerPrediction = composerPrediction,
                 onUserMessageChange = { value -> handleUserMessageChange(value) },
                 enableEnterToSend = enableEnterToSend,
                 onSendMessage = sendMessage,
@@ -1957,13 +1996,13 @@ private fun ChatInputBottomBar(
                 onAttachmentPanelStateChange = actualViewModel::updateAttachmentPanelState,
                 showInputProcessingStatus = showInputProcessingStatus,
                 enableTools = enableTools,
-                replyToMessage = replyToMessage,
-                onClearReply = actualViewModel::clearReplyToMessage,
-                isWorkspaceOpen = isWorkspaceOpen,
                 enableThinkingMode = enableThinkingMode,
                 onToggleThinkingMode = actualViewModel::toggleThinkingMode,
                 thinkingQualityLevel = thinkingQualityLevel,
                 onThinkingQualityLevelChange = actualViewModel::updateThinkingQualityLevel,
+                replyToMessage = replyToMessage,
+                onClearReply = actualViewModel::clearReplyToMessage,
+                isWorkspaceOpen = isWorkspaceOpen,
                 enableMaxContextMode = enableMaxContextMode,
                 onToggleEnableMaxContextMode = actualViewModel::toggleEnableMaxContextMode,
                 currentChatId = currentChatId,
@@ -2020,6 +2059,7 @@ private fun ChatInputBottomBar(
             ClassicChatInputSection(
                 actualViewModel = actualViewModel,
                 userMessage = userMessage,
+                composerPrediction = composerPrediction,
                 onUserMessageChange = { value -> handleUserMessageChange(value) },
                 enableEnterToSend = enableEnterToSend,
                 onSendMessage = sendMessage,
@@ -2047,7 +2087,14 @@ private fun ChatInputBottomBar(
                 onAttachmentPanelStateChange = actualViewModel::updateAttachmentPanelState,
                 showInputProcessingStatus = showInputProcessingStatus,
                 enableTools = enableTools,
+                permissionStop = permissionStop,
+                onSetPermissionStop = actualViewModel::setMasterPermissionStop,
+                onToggleTools = actualViewModel::toggleTools,
                 replyToMessage = replyToMessage,
+                enableThinkingMode = enableThinkingMode,
+                onSetThinkingMode = actualViewModel::setThinkingMode,
+                thinkingQualityLevel = thinkingQualityLevel,
+                onThinkingQualityLevelChange = actualViewModel::updateThinkingQualityLevel,
                 onClearReply = actualViewModel::clearReplyToMessage,
                 isWorkspaceOpen = isWorkspaceOpen,
                 pendingQueueMessages = pendingQueueMessages,

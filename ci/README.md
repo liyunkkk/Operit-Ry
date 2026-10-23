@@ -68,4 +68,6 @@ Android lint 使用 `app/lint-baseline.xml` 记录启用 PR 检查前已有的�
 
 删除工作区快照/回滚子系统后，按同一检查基准手工清理了指向已删字符串的过期条目（2 条 `PluralsCandidate`、4 条 `UnusedResources`），未重新生成整个 baseline。当前归一化路径后的 SHA-256 为 `47cc95ba2f072e74920a4d897c383f31e27b48c88dc5f3f9e7bb04439841fabb`，脚本中的 `EXPECTED_SHA256` 已同步。
 
+移除未使用的虚拟形象功能后，`dragonbones`、`mmd`、`fbx` 三个原生模块随之删除，指向它们的过期条目一并从 baseline 中移除。当前归一化路径后的 SHA-256 为 `a1bd7d7c902d58b77501784f86fb1ea2f7f36e0cd2a061388e2420dbbae20339`，脚本中的 `EXPECTED_SHA256` 已同步。
+
 baseline 只能通过 `:app:updateLintBaseline` 显式更新。生成后运行 `python3 ci/script/normalize_lint_baseline.py` 清理环境相关路径，再记录生成基准、依赖环境与新校验和，并同步脚本中的 `EXPECTED_SHA256`。

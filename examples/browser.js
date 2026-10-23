@@ -6,8 +6,8 @@
         "en": "Browser Automation"
     },
     "description": {
-        "zh": "严格对齐 Playwright MCP 默认 browser 工具面的浏览器自动化工具集。",
-        "en": "Browser automation tools aligned to the default Playwright MCP browser surface."
+        "zh": "基于应用内 WebView 的浏览器工具集，提供页面快照、截图和有限的 Playwright 风格操作。",
+        "en": "In-app WebView browser tools with page snapshots, screenshots and a limited Playwright-style API."
     },
     "enabledByDefault": true,
     "category": "Automatic",
@@ -123,7 +123,7 @@
         },
         {
             "name": "run_code",
-            "description": { "zh": "运行 Playwright 风格代码片段。", "en": "Run a Playwright-style code snippet." },
+            "description": { "zh": "运行有限的 Playwright 风格代码，并非完整 Playwright。截图请调用 take_screenshot，不支持 page.screenshot；注入样式请用 page.evaluate 创建 style 元素，不支持 page.addStyleTag。", "en": "Run a limited Playwright-style snippet, not full Playwright. Use take_screenshot for images; page.screenshot is unsupported. Inject styles by creating a style element with page.evaluate; page.addStyleTag is unsupported." },
             "parameters": [
                 { "name": "code", "description": { "zh": "代码片段。", "en": "Code snippet." }, "type": "string", "required": true }
             ]
@@ -135,6 +135,16 @@
                 { "name": "ref", "description": { "zh": "目标元素 ref。", "en": "Target element ref." }, "type": "string", "required": true },
                 { "name": "values", "description": { "zh": "要选择的值数组。", "en": "Values to select." }, "type": "array", "required": true },
                 { "name": "element", "description": { "zh": "可选，人类可读元素描述。", "en": "Optional human-readable element description." }, "type": "string", "required": false }
+            ]
+        },
+        {
+            "name": "take_screenshot",
+            "description": { "zh": "截取当前浏览器页面或元素，返回图片保存路径；需要查看图片时，用 read_file 读取返回的路径。", "en": "Capture the current browser page or element and return its saved image path. Use read_file on that path to view the image." },
+            "parameters": [
+                { "name": "type", "description": { "zh": "图片格式：png（默认）或 jpeg。", "en": "Image format: png (default) or jpeg." }, "type": "string", "required": false },
+                { "name": "fullPage", "description": { "zh": "截取完整页面，不能与 ref 同时使用。", "en": "Capture the full page; cannot be combined with ref." }, "type": "boolean", "required": false },
+                { "name": "ref", "description": { "zh": "可选，最新快照中的元素引用，仅截取该元素；提供 ref 时必须同时提供 element。", "en": "Optional element reference from the latest snapshot to capture only that element; requires element." }, "type": "string", "required": false },
+                { "name": "element", "description": { "zh": "目标元素描述；提供 ref 时必填，截取页面时省略。", "en": "Target description, required with ref; omit for page screenshots." }, "type": "string", "required": false }
             ]
         },
         {
@@ -196,6 +206,7 @@ const TOOL_NAMES = [
     "run_code",
     "select_option",
     "snapshot",
+    "take_screenshot",
     "type",
     "wait_for",
     "tabs"
@@ -326,6 +337,9 @@ async function snapshot(params = {}) {
     const result = await Tools.Net.browserSnapshot(params);
     return maybePersistLargeBrowserResponse(result, "snapshot");
 }
+async function take_screenshot(params = {}) {
+    return Tools.Net.browserTakeScreenshot(params);
+}
 async function type(params) {
     const result = await Tools.Net.browserType(params);
     return maybePersistLargeBrowserResponse(result, "type");
@@ -359,6 +373,7 @@ exports.resize = resize;
 exports.run_code = run_code;
 exports.select_option = select_option;
 exports.snapshot = snapshot;
+exports.take_screenshot = take_screenshot;
 exports.type = type;
 exports.wait_for = wait_for;
 exports.tabs = tabs;

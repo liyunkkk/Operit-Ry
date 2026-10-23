@@ -548,9 +548,6 @@ internal fun ThemeSettingsChatTab(
     val chatStyle by preferencesManager.chatStyle.collectAsState(
         initial = UserPreferencesManager.CHAT_STYLE_BUBBLE,
     )
-    val inputStyle by preferencesManager.inputStyle.collectAsState(
-        initial = UserPreferencesManager.INPUT_STYLE_CLASSIC,
-    )
     val bubbleShowAvatar by preferencesManager.bubbleShowAvatar.collectAsState(initial = true)
     val bubbleWideLayoutEnabled by preferencesManager.bubbleWideLayoutEnabled.collectAsState(initial = true)
     val cursorUserBubbleFollowTheme by preferencesManager.cursorUserBubbleFollowTheme.collectAsState(initial = true)
@@ -642,7 +639,6 @@ internal fun ThemeSettingsChatTab(
     var currentColorPickerMode by remember { mutableStateOf("bubbleUserBubble") }
 
     var chatStyleInput by remember { mutableStateOf(chatStyle) }
-    var inputStyleInput by remember { mutableStateOf(inputStyle) }
     var bubbleShowAvatarInput by remember { mutableStateOf(bubbleShowAvatar) }
     var bubbleWideLayoutEnabledInput by remember { mutableStateOf(bubbleWideLayoutEnabled) }
     var cursorUserBubbleFollowThemeInput by remember { mutableStateOf(cursorUserBubbleFollowTheme) }
@@ -714,7 +710,6 @@ internal fun ThemeSettingsChatTab(
 
     LaunchedEffect(
         chatStyle,
-        inputStyle,
         bubbleShowAvatar,
         bubbleWideLayoutEnabled,
         cursorUserBubbleFollowTheme,
@@ -785,7 +780,6 @@ internal fun ThemeSettingsChatTab(
         showChatFloatingDotsAnimation,
     ) {
         chatStyleInput = chatStyle
-        inputStyleInput = inputStyle
         bubbleShowAvatarInput = bubbleShowAvatar
         bubbleWideLayoutEnabledInput = bubbleWideLayoutEnabled
         cursorUserBubbleFollowThemeInput = cursorUserBubbleFollowTheme
@@ -901,8 +895,6 @@ internal fun ThemeSettingsChatTab(
         cardColors = cardColors,
         chatStyleInput = chatStyleInput,
         onChatStyleInputChange = { chatStyleInput = it },
-        inputStyleInput = inputStyleInput,
-        onInputStyleInputChange = { inputStyleInput = it },
         bubbleShowAvatarInput = bubbleShowAvatarInput,
         onBubbleShowAvatarInputChange = { bubbleShowAvatarInput = it },
         bubbleWideLayoutEnabledInput = bubbleWideLayoutEnabledInput,
@@ -1012,7 +1004,6 @@ internal fun ThemeSettingsChatTab(
         onBubbleAiContentPaddingRightInputChange = { bubbleAiContentPaddingRightInput = it },
         saveThemeSettingsWithCharacterCard = shared.saveThemeSettingsWithCharacterCard,
         preferencesManager = preferencesManager,
-        showInputStyleControls = false,
     )
 
     ThemeSettingsAvatarSection(

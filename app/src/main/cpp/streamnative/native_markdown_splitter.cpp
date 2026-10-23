@@ -76,3 +76,16 @@ Java_com_ai_assistance_operit_util_streamnative_NativeMarkdownSplitter_nativePus
 
     return segmentsToJIntArray(env, segments);
 }
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_ai_assistance_operit_util_streamnative_NativeMarkdownSplitter_nativeFinish(
+        JNIEnv* env,
+        jobject /*thiz*/,
+        jlong handle
+) {
+    if (handle == 0) {
+        return env->NewIntArray(0);
+    }
+    auto* s = reinterpret_cast<streamnative::MarkdownSession*>(handle);
+    return segmentsToJIntArray(env, streamnative::markdownSessionFinish(s));
+}

@@ -2239,7 +2239,6 @@ class WebChatHttpBridge(
         return normalized in setOf(
             "list_files",
             "grep_code",
-            "grep_context",
             "read_file",
             "read_file_part",
             "read_file_full",

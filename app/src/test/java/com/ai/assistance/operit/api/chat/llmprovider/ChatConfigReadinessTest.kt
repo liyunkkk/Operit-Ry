@@ -9,6 +9,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatConfigReadinessTest {
+    @Test fun invalidSelectionNeverFallsBackEvenForPluginProviders() {
+        val config = remoteConfig(ApiProviderType.OPENAI_GENERIC, apiKey = "")
+            .copy(modelName = "first, second")
+        for (index in listOf(-1, 2, 10)) {
+            for (plugins in listOf(emptySet(), setOf(config.apiProviderTypeId))) {
+                assertEquals(
+                    ChatConfigReadinessIssue.MODEL_MISSING,
+                    ChatConfigReadiness.evaluate(config, index, plugins).issue,
+                )
+            }
+        }
+    }
+
     @Test
     fun zenFreeAllowsAnonymousRequestsEvenWithAnOldEmptyKeyPool() {
         val config = remoteConfig(

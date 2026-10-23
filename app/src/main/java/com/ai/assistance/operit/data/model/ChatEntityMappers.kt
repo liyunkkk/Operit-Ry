@@ -43,6 +43,7 @@ fun ChatEntity.toChatHistory(messages: List<ChatMessage>): ChatHistory {
             lastMessageAt = lastMessageAt,
             isHidden = isHidden,
             hiddenReason = hiddenReason,
+            contextPolicyJson = contextPolicyJson,
             createdAtEpochMillis = this.createdAt,
             lastMessageAtEpochMillis = this.lastMessageAt,
     )
@@ -85,6 +86,7 @@ fun ChatEntity.Companion.fromChatHistory(chatHistory: ChatHistory): ChatEntity {
             isFavorite = chatHistory.isFavorite,
             isHidden = chatHistory.isHidden,
             hiddenReason = chatHistory.hiddenReason,
+            contextPolicyJson = chatHistory.contextPolicyJson,
             lastMessageAt =
                     chatHistory.lastMessageAt?.let {
                         chatHistory.lastMessageAtEpochMillis

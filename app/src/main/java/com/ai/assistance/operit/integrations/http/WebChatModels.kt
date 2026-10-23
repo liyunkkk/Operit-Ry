@@ -697,6 +697,8 @@ data class WebInputSettingsState(
 
 @Serializable
 data class WebUpdateInputSettingsRequest(
+    @SerialName("chat_id")
+    val chatId: String? = null,
     @SerialName("enable_thinking_mode")
     val enableThinkingMode: Boolean? = null,
     @SerialName("thinking_quality_level")

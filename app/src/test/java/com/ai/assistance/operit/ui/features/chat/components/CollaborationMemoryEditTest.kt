@@ -14,6 +14,8 @@ class CollaborationMemoryEditTest {
         val intermediateFragments = collaborationMemoryFragments(transcript, 2, includeAssistant = true)
         assertEquals(listOf(2L, 3L, 4L, 5L), finalFragments.map { it.timestamp })
         assertEquals(finalFragments, intermediateFragments)
+        assertTrue(finalFragments.first { it.timestamp == 3L }.isProcess)
+        assertFalse(finalFragments.first { it.timestamp == 5L }.isProcess)
         assertEquals(
             listOf(PartType.COLLABORATION, PartType.TEXT, PartType.COLLABORATION, PartType.TEXT),
             memoryEditorParts(finalFragments).map { it.type },

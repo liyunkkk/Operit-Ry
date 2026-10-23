@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "streamnative/StreamOperators.h"
 #include "streamnative/plugins/StreamXmlPlugin.h"
@@ -201,8 +202,92 @@ bool expectCrossFamilyNestingKeepsToolInOuterBlock() {
 
 } // namespace
 
-int main() {
+bool expectBracketWithoutParenIsNotLink(bool charByChar) {
+    constexpr int mdLink = 12;
+    const std::u16string input = u"A :badge[构建成功]{tone=success} B [x] C [链接](http://a) D";
+    auto* session = streamnative::createMarkdownInlineSession();
+    std::vector<streamnative::Segment> segments;
+    if (charByChar) {
+        for (const char16_t character : input) {
+            const auto part = streamnative::markdownSessionPush(
+                    session, reinterpret_cast<const jchar*>(&character), 1);
+            segments.insert(segments.end(), part.begin(), part.end());
+        }
+    } else {
+        segments = streamnative::markdownSessionPush(
+                session, reinterpret_cast<const jchar*>(input.data()), static_cast<int>(input.size()));
+    }
+    streamnative::destroyMarkdownSession(session);
+
+    auto isLinkAt = [&](const std::u16string& needle) {
+        const int index = static_cast<int>(input.find(needle));
+        for (const auto& segment : segments) {
+            if (segment.type == mdLink && segment.start <= index && index < segment.end) return true;
+        }
+        return false;
+    };
     bool ok = true;
+    if (isLinkAt(u"构建成功")) {
+        std::cerr << "bracket followed by brace was claimed as a link (charByChar=" << charByChar << ")\n";
+        ok = false;
+    }
+    if (isLinkAt(u"[x]")) {
+        std::cerr << "bracket followed by space was claimed as a link (charByChar=" << charByChar << ")\n";
+        ok = false;
+    }
+    if (!isLinkAt(u"链接")) {
+        std::cerr << "real link was not recognized (charByChar=" << charByChar << ")\n";
+        ok = false;
+    }
+    return ok;
+}
+
+int runAll() {
+    bool ok = true;
+    {
+        // A message ending in '!' (image opener) or '$' must keep that last character.
+        for (const std::u16string input : {std::u16string(u"done!"), std::u16string(u"cost $")}) {
+            auto* session = streamnative::createMarkdownBlockSession();
+            auto segments = streamnative::markdownSessionPush(
+                    session, reinterpret_cast<const jchar*>(input.data()), static_cast<int>(input.size()));
+            const auto tail = streamnative::markdownSessionFinish(session);
+            segments.insert(segments.end(), tail.begin(), tail.end());
+            streamnative::destroyMarkdownSession(session);
+            int covered = 0;
+            for (const auto& segment : segments) {
+                if (segment.type >= 0 && segment.end > covered) covered = segment.end;
+            }
+            if (covered != static_cast<int>(input.size())) {
+                std::cerr << "block session dropped trailing characters: covered " << covered << '\n';
+                ok = false;
+            }
+        }
+    }
+    {
+        // A trailing "[x]" waits for '(' that never comes; finishing must emit it as plain text.
+        constexpr int mdPlainText = 17;
+        const std::u16string input = u"see [x]";
+        auto* session = streamnative::createMarkdownInlineSession();
+        auto segments = streamnative::markdownSessionPush(
+                session, reinterpret_cast<const jchar*>(input.data()), static_cast<int>(input.size()));
+        const auto tail = streamnative::markdownSessionFinish(session);
+        segments.insert(segments.end(), tail.begin(), tail.end());
+        streamnative::destroyMarkdownSession(session);
+        std::vector<bool> plain(input.size(), false);
+        for (const auto& segment : segments) {
+            if (segment.type != mdPlainText) continue;
+            for (int index = segment.start; index < segment.end; ++index) plain[index] = true;
+        }
+        for (size_t index = 0; index < input.size(); ++index) {
+            if (!plain[index]) {
+                std::cerr << "trailing bracket text was not finished as plain text at " << index << '\n';
+                ok = false;
+                break;
+            }
+        }
+    }
+    ok &= expectBracketWithoutParenIsNotLink(false);
+    ok &= expectBracketWithoutParenIsNotLink(true);
     ok &= expectState(
             u"<thinking>draft</think><tool name=\"visit_web\"></tool>",
             PluginState::IDLE,
@@ -239,4 +324,8 @@ int main() {
     ok &= expectMalformedSlashQuoteOpenersKeepToolInOuterBlock();
     ok &= expectCrossFamilyNestingKeepsToolInOuterBlock();
     return ok ? 0 : 1;
+}
+
+int main() {
+    return runAll();
 }

@@ -75,8 +75,10 @@ data class OperitArchivedChat(
     val isFavorite: Boolean? = null,
     val isHidden: Boolean = false,
     val hiddenReason: String? = null,
+    val contextPolicyJson: String? = null,
 ) {
     fun toChatHistory(resolvedFavorite: Boolean, folderId: String? = this.folderId): ChatHistory {
+        contextPolicyJson?.let(ChatContextPolicy::decode)
         return ChatHistory(
             id = id,
             title = title,
@@ -105,6 +107,7 @@ data class OperitArchivedChat(
             isFavorite = resolvedFavorite,
             isHidden = isHidden,
             hiddenReason = hiddenReason,
+            contextPolicyJson = contextPolicyJson,
         )
     }
 
@@ -138,6 +141,7 @@ data class OperitArchivedChat(
                 isFavorite = history.isFavorite,
                 isHidden = history.isHidden,
                 hiddenReason = history.hiddenReason,
+                contextPolicyJson = history.contextPolicyJson,
             )
         }
     }

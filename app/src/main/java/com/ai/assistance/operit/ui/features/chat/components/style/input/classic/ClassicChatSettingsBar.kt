@@ -256,9 +256,8 @@ fun ClassicChatSettingsBar(
     val currentConfig = configSummaries.find { it.id == effectiveCurrentConfigMapping.configId }
     val currentModelName =
         currentConfig?.let { config ->
-            val validIndex = getValidModelIndex(config.modelName, effectiveCurrentConfigMapping.modelIndex)
-            getModelByIndex(config.modelName, validIndex).ifEmpty { stringResource(R.string.not_selected) }
-        } ?: stringResource(R.string.not_selected)
+            getModelList(config.modelName).getOrNull(effectiveCurrentConfigMapping.modelIndex)
+        } ?: stringResource(R.string.functional_model_reselect)
     var currentModelParameters by remember {
         mutableStateOf<List<ModelParameter<*>>>(emptyList())
     }
@@ -1672,9 +1671,8 @@ private fun ModelSelectorItem(
     var expandedConfigId by remember { mutableStateOf<String?>(null) } // 用于记录当前展开的配置的模型列表
 
     val currentModelName = currentConfig?.let { config ->
-        val validIndex = getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
-        getModelByIndex(config.modelName, validIndex)
-    } ?: stringResource(R.string.not_selected)
+        getModelList(config.modelName).getOrNull(currentConfigMapping.modelIndex)
+    } ?: stringResource(R.string.functional_model_reselect)
     val effectiveExpanded = expanded
     val expandStateDesc =
             if (effectiveExpanded) stringResource(R.string.expanded) else stringResource(R.string.collapsed)
@@ -1725,10 +1723,10 @@ private fun ModelSelectorItem(
                 Spacer(modifier = Modifier.width(8.dp))
                 // 只显示选中的模型名称
                 currentConfig?.let { config ->
-                    val validIndex = getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
-                    val selectedModel = getModelByIndex(config.modelName, validIndex)
+                    val selectedModel = getModelList(config.modelName)
+                        .getOrNull(currentConfigMapping.modelIndex).orEmpty()
                     Text(
-                        text = selectedModel.ifEmpty { stringResource(R.string.not_selected) },
+                        text = selectedModel.ifEmpty { stringResource(R.string.functional_model_reselect) },
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 2,
@@ -1915,7 +1913,7 @@ private fun ModelSelectorItem(
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                     .padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 8.dp),
                             ) {
-                                val validIndex = getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
+                                val validIndex = currentConfigMapping.modelIndex
                                 modelList.forEachIndexed { index, modelName ->
                                     val isModelSelected = isSelected && validIndex == index
                                     val isModelFav = validFavorites.any {

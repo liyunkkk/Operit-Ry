@@ -510,7 +510,6 @@ class ToolPermissionPoliciesTest {
                 "read_file_binary",
                 "list_files",
                 "grep_code",
-                "grep_context",
                 "write_file",
                 "write_file_binary",
                 "file_exists",
@@ -527,7 +526,7 @@ class ToolPermissionPoliciesTest {
                 )
             }
 
-        listOf("list_files", "grep_code", "grep_context", "edit_file", "apply_file")
+        listOf("list_files", "grep_code", "edit_file", "apply_file")
             .forEach { toolName ->
                 assertFalse(
                     toolName,

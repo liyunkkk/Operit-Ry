@@ -5,16 +5,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The status bar icons. The theme keeps the tone it has always drawn for its own bar; a custom bar
- * colour is the user's own, and the long-standing flip puts the icons on the unreadable side there.
- */
+/** System icons remain legible on default and custom chrome. */
 class StatusBarIconsTest {
     @Test
-    fun `the theme bar keeps the tone it always drew`() {
-        // The shipped light bar is 0xFFFF6B8E and has always been drawn with light icons (2.69:1).
-        assertFalse(resolveStatusBarDarkIcons(Color(0xFFFF6B8E.toInt()), customBarColor = false))
-        assertTrue(contrastRatio(Color.White, Color(0xFFFF6B8E.toInt())) < 3.0)
+    fun `default chrome gets dark icons in light mode and light icons in dark mode`() {
+        assertTrue(resolveStatusBarDarkIcons(rainyBaseColorScheme(false).surfaceContainerHigh))
+        assertFalse(resolveStatusBarDarkIcons(rainyBaseColorScheme(true).surfaceContainerHigh))
+        // The bar actually paints rainyAppBarFill.
+        assertTrue(resolveStatusBarDarkIcons(rainyBaseColorScheme(false).rainyAppBarFill))
+        assertFalse(resolveStatusBarDarkIcons(rainyBaseColorScheme(true).rainyAppBarFill))
     }
 
     @Test
@@ -24,13 +23,13 @@ class StatusBarIconsTest {
 
         // The flip used to draw dark icons here, at 1.27:1; light ones measure 16.52:1.
         assertTrue(contrastRatio(Color.Black, nearBlack) < 1.5)
-        assertFalse(resolveStatusBarDarkIcons(nearBlack, customBarColor = true))
+        assertFalse(resolveStatusBarDarkIcons(nearBlack))
         assertTrue(contrastRatio(Color.White, nearBlack) >= 4.5)
 
         // And white icons on a white bar measured 1:1.
-        assertTrue(resolveStatusBarDarkIcons(white, customBarColor = true))
+        assertTrue(resolveStatusBarDarkIcons(white))
         assertTrue(contrastRatio(Color.Black, white) >= 4.5)
-        assertTrue(resolveStatusBarDarkIcons(Color(0xFFFFF0F5.toInt()), customBarColor = true))
+        assertTrue(resolveStatusBarDarkIcons(Color(0xFFFFF0F5.toInt())))
     }
 
     /** Independent WCAG contrast check, so the assertion does not reuse the production maths. */

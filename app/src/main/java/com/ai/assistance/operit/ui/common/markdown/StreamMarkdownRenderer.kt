@@ -1260,11 +1260,13 @@ internal class BatchNodeUpdater(
         private val scope: CoroutineScope
 ) {
     private val dirtyIndices = linkedSetOf<Int>()
+    private val structuralIndices = linkedSetOf<Int>()
+    private val pendingPasses = mutableMapOf<Int, Int>()
     private val coordinator =
         RenderBatchCoordinator(
             scope = scope,
             intervalMs = RENDER_INTERVAL_MS,
-            onFlush = ::performBatchUpdate,
+            onFlush = { performBatchUpdate(force = false) },
         )
 
     fun requestUpdate(nodeIndex: Int = nodes.lastIndex) {
@@ -1278,13 +1280,19 @@ internal class BatchNodeUpdater(
     fun cancelPending() {
         coordinator.cancelPending()
         dirtyIndices.clear()
+        structuralIndices.clear()
+        pendingPasses.clear()
     }
 
-    fun flushNow() = coordinator.flushNow()
+    fun flushNow() {
+        coordinator.cancelPending()
+        performBatchUpdate(force = true)
+    }
 
     fun requestStructuralUpdate(nodeIndex: Int) {
         // Type and child-list mutations can preserve content length, so the length-keyed stable
         // node cache must be invalidated explicitly.
+        structuralIndices.add(nodeIndex)
         requestUpdate(nodeIndex)
     }
 
@@ -1293,9 +1301,25 @@ internal class BatchNodeUpdater(
         requestUpdate()
     }
 
-    private fun performBatchUpdate() {
+    private fun performBatchUpdate(force: Boolean) {
         val changed = (dirtyIndices + (renderNodes.size until nodes.size)).sorted()
         dirtyIndices.clear()
+        val ready = changed.filter { index ->
+            val node = nodes.getOrNull(index)
+            val passes = (pendingPasses[index] ?: 0) + 1
+            // Only throttle copying an already visible, large, growing block. New blocks,
+            // tool XML and structural transitions keep the normal 200ms cadence.
+            val publish = force || node == null || index >= renderNodes.size ||
+                index in structuralIndices || passes >= snapshotRefreshPasses(node)
+            if (publish) {
+                pendingPasses.remove(index)
+                structuralIndices.remove(index)
+            } else {
+                pendingPasses[index] = passes
+                dirtyIndices.add(index)
+            }
+            publish
+        }
         synchronizeRenderNodes(
             nodes,
             renderNodes,
@@ -1304,9 +1328,19 @@ internal class BatchNodeUpdater(
             xmlNodeStreams,
             rendererId,
             scope,
-            changed,
+            ready,
         )
+        if (dirtyIndices.isNotEmpty()) coordinator.requestUpdate()
     }
+}
+
+/** Number of 200ms passes between full snapshots; stable earlier blocks do not contribute. */
+internal fun snapshotRefreshPasses(node: MarkdownNode): Int {
+    if (node.type == MarkdownProcessorType.XML_BLOCK) return 1
+    fun snapshotChars(current: MarkdownNode): Long =
+        current.content.length.toLong() + current.children.sumOf { snapshotChars(it) }
+    return ((snapshotChars(node).coerceAtLeast(1L) - 1L) / (64 * 1024) + 1L)
+        .coerceAtMost(5L).toInt()
 }
 
 /** 同步渲染节点 - 确保所有节点都被渲染 在流处理完成或出现异常时调用，确保最终状态一致 */

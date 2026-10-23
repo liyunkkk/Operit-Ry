@@ -147,6 +147,7 @@ fun ChatScreenContent(
         bubbleAiContentPaddingLeft: Float = 12f,
         bubbleAiContentPaddingRight: Float = 12f,
         showChatFloatingDotsAnimation: Boolean = true,
+        configurationNotice: @Composable () -> Unit = {},
 ) {
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
@@ -241,6 +242,10 @@ fun ChatScreenContent(
     }
 
     val activeRunStartedAt by actualViewModel.activeRunStartedAt.collectAsState()
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.ai.assistance.operit.ui.common.dynamicui.LocalDynamicUiSubmit provides
+            if (readOnlyTranscript) null else actualViewModel::submitDynamicUi,
+    ) {
     Box(modifier = modifier.fillMaxSize().padding(paddingValues)) {
         if (chatHeaderOverlayMode && chatHeaderTransparent) {
             // 覆盖模式：Header浮动在ChatArea之上
@@ -353,11 +358,12 @@ fun ChatScreenContent(
                         bubbleAiContentPaddingRight = bubbleAiContentPaddingRight,
                         showChatFloatingDotsAnimation = showChatFloatingDotsAnimation,
                 )
-                ChatScreenHeader(
-                        modifier =
-                                Modifier.onGloballyPositioned { coordinates ->
-                                    headerHeight = with(density) { coordinates.size.height.toDp() }
-                                },
+                Column(
+                    Modifier.onGloballyPositioned { coordinates ->
+                        headerHeight = with(density) { coordinates.size.height.toDp() }
+                    }
+                ) {
+                    ChatScreenHeader(
                         actualViewModel = actualViewModel,
                         showChatHistorySelector = showChatHistorySelector,
                         chatHeaderTransparent = chatHeaderTransparent,
@@ -365,7 +371,9 @@ fun ChatScreenContent(
                         chatHeaderPipIconColor = chatHeaderPipIconColor,
                         onExitHiddenReadingAuditRun = onExitHiddenReadingAuditRun,
                         onCharacterSwitcherClick = { onShowCharacterSelectorChange(true) }
-                )
+                    )
+                    configurationNotice()
+                }
             }
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -378,6 +386,7 @@ fun ChatScreenContent(
                         onExitHiddenReadingAuditRun = onExitHiddenReadingAuditRun,
                         onCharacterSwitcherClick = { onShowCharacterSelectorChange(true) }
                 )
+                configurationNotice()
                 ChatArea(
                         chatHistory = chatHistory,
                         currentChatId = currentChatId,
@@ -781,7 +790,7 @@ fun ChatScreenContent(
             AlertDialog(
                 onDismissRequest = { showDeleteSelectedConfirmDialog = false },
                 title = { Text(stringResource(R.string.confirm_delete)) },
-                text = { Text("Delete ${selectedMessageIndices.size} selected messages? This cannot be undone.") },
+                text = { Text(stringResource(R.string.chat_delete_selected_messages_confirm, selectedMessageIndices.size)) },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -1122,6 +1131,7 @@ fun ChatScreenContent(
         }
     }
 }
+}
 
 @Composable
 fun ChatHistorySelectorPanel(
@@ -1151,9 +1161,13 @@ fun ChatHistorySelectorPanel(
         onCollapsedHistoryCharactersChange: (Set<String>) -> Unit,
 ) {
     // 历史选择器面板（不再包含遮罩层，遮罩层已在外部处理）
+    // Wider on normal phones so titles and folder names fit; a strip stays visible to tap and close.
+    // Sized from the real container so embedded chat screens keep that strip too.
+    BoxWithConstraints {
+    val panelWidth = (maxWidth * 0.86f).coerceAtMost(340.dp)
     Box(
             modifier =
-                    Modifier.width(280.dp)
+                    Modifier.width(panelWidth)
                             .fillMaxHeight()
                             .background(
                                     color =
@@ -1242,5 +1256,6 @@ fun ChatHistorySelectorPanel(
                 collapsedCharacters = collapsedHistoryCharacters,
                 onCollapsedCharactersChange = onCollapsedHistoryCharactersChange,
         )
+    }
     }
 }

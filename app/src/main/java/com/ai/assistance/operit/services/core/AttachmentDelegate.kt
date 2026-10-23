@@ -355,6 +355,11 @@ class AttachmentDelegate(private val context: Context, private val toolHandler: 
         removeAttachment(packageAttachmentPath(normalizedPackageName))
     }
 
+    fun isAttachedMention(token: String): Boolean = attachments.value.any {
+        it.filePath == packageAttachmentPath(token) ||
+            it.filePath == workspaceMentionAttachmentPath(normalizeWorkspaceRelativePath(token))
+    }
+
     suspend fun attachWorkspaceMention(
         workspacePath: String,
         relativePath: String,

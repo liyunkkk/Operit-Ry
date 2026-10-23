@@ -26,8 +26,7 @@ data class MediaLinkTag(
 )
 
 /**
- * 图片链接标签。图片池是会话级缓存，[sourcePath] 记录原始文件路径，
- * 池里图片被回收后可以凭它重新入池。
+ * 图片链接标签。图片池持久保存附件，[sourcePath] 可用于恢复旧版本丢失的图片。
  */
 data class ImageLinkTag(
     val id: String,
@@ -73,41 +72,16 @@ object MediaLinkParser {
     )
 
     fun extractImageLinks(message: String): List<ImageLink> {
-        val imageLinks = mutableListOf<ImageLink>()
-        val seenIds = mutableSetOf<String>()
-
-        fun collectFromPattern(pattern: Regex) {
-            pattern.findAll(message).forEach { match ->
-                val id = match.groupValues[1]
-                if (id == "error") {
-                    return@forEach
-                }
-                if (!seenIds.add(id)) {
-                    return@forEach
-                }
-                val imageData = ImagePoolManager.getImage(id) ?: return@forEach
-                imageLinks.add(
-                    ImageLink(
-                        type = "image",
-                        id = id,
-                        base64Data = imageData.base64,
-                        mimeType = imageData.mimeType
-                    )
-                )
-            }
+        return extractImageLinkTags(message).mapNotNull { tag ->
+            val data = ImagePoolManager.resolveImage(tag.id, tag.sourcePath) ?: return@mapNotNull null
+            ImageLink(type = "image", id = tag.id, base64Data = data.base64, mimeType = data.mimeType)
         }
-
-        collectFromPattern(IMAGE_LINK_PATTERN_PLAIN)
-        collectFromPattern(IMAGE_LINK_PATTERN_ESCAPED)
-
-        return imageLinks
     }
 
     /**
      * 构造图片链接标签。
      *
-     * 传入 [sourcePath] 后，标签会带上 `src` 属性；图片池把这张图回收掉时（进程重启、LRU
-     * 淘汰），可以凭它重新入池，历史消息不必一直显示“图片已过期”。
+     * 传入 [sourcePath] 后，标签会带上 `src` 属性，用于恢复旧版本丢失的图片。
      */
     fun buildImageLink(id: String, sourcePath: String? = null): String {
         val escapedSourcePath =

@@ -347,6 +347,17 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
         )
     }
 
+    for (action in listOf("poll", "cancel")) {
+        handler.registerTool(
+            name = "${action}_shell_task",
+            descriptionGenerator = { tool ->
+                s(if (action == "poll") R.string.shell_task_poll_desc else R.string.shell_task_cancel_desc,
+                    tool.parameters.find { it.name == "run_id" }?.value ?: "")
+            },
+            executor = { tool -> ToolGetter.getShellToolExecutor(context).task(tool, action) }
+        )
+    }
+
     // 不在提示词加入的工具
     handler.registerTool(
             name = "execute_shell",
@@ -2318,22 +2329,6 @@ fun registerAllTools(handler: AIToolHandler, context: Context) {
             },
             executor = { tool ->
                 runBlocking(Dispatchers.IO) { fileSystemTools.grepCode(tool) }
-            }
-    )
-
-    // Grep上下文搜索
-    handler.registerTool(
-            name = "grep_context",
-            descriptionGenerator = { tool ->
-                val path = tool.parameters.find { it.name == "path" }?.value ?: ""
-                val intent = tool.parameters.find { it.name == "intent" }?.value ?: ""
-                val environment = tool.parameters.find { it.name == "environment" }?.value
-                val envInfo = formatEnvInfo(environment)
-                val preview = if (intent.length > 40) "${intent.take(40)}..." else intent
-                s(R.string.toolreg_grep_context_desc, path, preview, envInfo)
-            },
-            executor = { tool ->
-                runBlocking(Dispatchers.IO) { fileSystemTools.grepContext(tool) }
             }
     )
 

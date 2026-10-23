@@ -16,6 +16,7 @@ import com.ai.assistance.operit.core.agent.collaboration.CollaborationTools
 import com.ai.assistance.operit.core.tools.PermissionReviewInternalTools
 import com.ai.assistance.operit.data.model.AITool
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,6 +81,7 @@ internal enum class ToolPermissionDenialSource {
     USER,
     AUTOMATIC_REVIEW,
     AUTOMATIC_REVIEW_CANCELLED,
+    AUTOMATIC_REVIEW_FAILED,
 }
 
 internal sealed interface ToolPermissionDecision {
@@ -464,13 +466,39 @@ class ToolPermissionSystem private constructor(private val context: Context) {
         // Only the fast level reads a stored score, so the strict level keeps the previous behavior
         // exactly and runs the blocking reviewer for every call.
         val fastPathDecision = claimFastPathApproval(tool, reviewContext)
-        val decision =
-            fastPathDecision
-                ?: AgentToolPermissionReviewer.getInstance(context).review(
+        val decision = fastPathDecision ?: try {
+                AgentToolPermissionReviewer.getInstance(context).review(
                     tool = tool,
                     operationDescription = getOperationDescription(tool),
                     reviewContext = reviewContext,
                 )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                // Include setup/configuration failures as well as errors during the model request.
+                // Raw exception messages may contain provider credentials.
+                AppLogger.e(TAG, "Permission review could not complete", error)
+                val failed = PermissionReviewResponsePolicy.failed(
+                    reason = "The approval reviewer could not complete (${error.javaClass.simpleName}).",
+                    failureKind = PermissionReviewFailureKind.REVIEWER_ERROR,
+                )
+                reviewContext.callerChatId?.let { chatId ->
+                    PermissionReviewContinuationStore.forget(chatId)
+                    PermissionReviewEventRepository.findForInvocation(
+                        chatId, reviewContext.timingScopeId, reviewContext.invocationIndex,
+                    )?.takeIf { it.status == PermissionReviewStatus.IN_PROGRESS }?.let { event ->
+                        PermissionReviewEventRepository.update(event.id) {
+                            it.copy(
+                                status = PermissionReviewStatus.FAILED,
+                                completedAt = System.currentTimeMillis(),
+                                failureKind = failed.failureKind,
+                                rationale = failed.rationale,
+                            )
+                        }
+                    }
+                }
+                failed
+            }
         if (fastPathDecision == null) {
             AppLogger.i(
                 TAG,
@@ -480,12 +508,10 @@ class ToolPermissionSystem private constructor(private val context: Context) {
             )
         }
         if (decision.failureKind != null) {
-            return requestManualPermission(
-                tool = tool,
-                reviewContext = reviewContext,
-                reviewFailureKind = decision.failureKind,
-                pendingRequestAlreadyCounted = pendingRequestAlreadyCounted,
-            )
+            // No verdict was reached: leave the action unexecuted and let the caller decide
+            // whether to retry. A service failure is neither a user refusal nor a review denial.
+            invalidateStoredRiskScores(reviewContext)
+            return permissionBlockedByReviewFailure(decision.failureKind, decision.rationale)
         }
         val refreshedDecision =
             resolveReviewDecisionAfterSettingsRefresh(
@@ -558,7 +584,6 @@ class ToolPermissionSystem private constructor(private val context: Context) {
             ?: requestManualPermission(
                 tool = tool,
                 reviewContext = reviewContext,
-                reviewFailureKind = null,
                 pendingRequestAlreadyCounted = pendingRequestAlreadyCounted,
             )
     }
@@ -658,7 +683,6 @@ class ToolPermissionSystem private constructor(private val context: Context) {
     private suspend fun requestManualPermission(
         tool: AITool,
         reviewContext: ToolPermissionReviewContext,
-        reviewFailureKind: PermissionReviewFailureKind?,
         pendingRequestAlreadyCounted: Boolean,
     ): ToolPermissionDecision {
         if (!pendingRequestAlreadyCounted) {
@@ -674,7 +698,6 @@ class ToolPermissionSystem private constructor(private val context: Context) {
                             requestPermissionInternal(
                                 tool = tool,
                                 conversationLabel = reviewContext.conversationLabel,
-                                reviewFailureKind = reviewFailureKind,
                             )
                         ) {
                             ToolPermissionDecision.Allowed
@@ -691,8 +714,8 @@ class ToolPermissionSystem private constructor(private val context: Context) {
                     reviewContext.invocationIndex,
                 )?.let { event ->
                     PermissionReviewEventRepository.update(event.id) { current ->
-                        // The reviewer may have concluded before settings changed to ASK (or the
-                        // review failed/timed out); the manual or setting decision below is what
+                        // The reviewer may have concluded before settings changed to ASK; the
+                        // manual or setting decision below is what
                         // was actually enforced, so the event must not keep the opposite status.
                         current.copy(
                             status = reviewEventStatusForEnforcedDecision(manualDecision),
@@ -1101,11 +1124,14 @@ internal const val USER_DENIAL_PREFIX = "Tool execution denied by user."
 internal const val AUTOMATIC_REVIEW_DENIAL_PREFIX = "Automatic permission review denied"
 internal const val AUTOMATIC_REVIEW_CANCEL_PREFIX =
     "Tool execution cancelled because automatic permission review"
+internal const val AUTOMATIC_REVIEW_FAILURE_PREFIX = "Automatic permission review failed"
 
 /** Null when [message] is an ordinary tool error rather than a permission denial. */
 internal fun permissionDenialSourceForMessage(message: String): ToolPermissionDenialSource? {
     val trimmed = message.trim()
     return when {
+        trimmed.startsWith(AUTOMATIC_REVIEW_FAILURE_PREFIX) ->
+            ToolPermissionDenialSource.AUTOMATIC_REVIEW_FAILED
         // The turn was stopped before this action ran, so reporting it as a denial would be wrong.
         trimmed.startsWith(AUTOMATIC_REVIEW_CANCEL_PREFIX) ->
             ToolPermissionDenialSource.AUTOMATIC_REVIEW_CANCELLED
@@ -1127,6 +1153,8 @@ internal fun permissionDenialSummaryResId(message: String): Int? =
             R.string.permission_denied_result_auto_review
         ToolPermissionDenialSource.AUTOMATIC_REVIEW_CANCELLED ->
             R.string.permission_denied_result_auto_review_cancelled
+        ToolPermissionDenialSource.AUTOMATIC_REVIEW_FAILED ->
+            R.string.permission_review_failed_result
         null -> null
     }
 
@@ -1147,6 +1175,27 @@ internal fun permissionDeniedByUser(): ToolPermissionDecision.Denied =
         source = ToolPermissionDenialSource.USER,
         rejection = USER_DENIAL_PREFIX,
     )
+
+internal fun permissionBlockedByReviewFailure(
+    kind: PermissionReviewFailureKind,
+    rationale: String,
+): ToolPermissionDecision.Denied {
+    val cause = when (kind) {
+        PermissionReviewFailureKind.TIMED_OUT -> "the AI approval review timed out"
+        PermissionReviewFailureKind.INVALID_OUTPUT -> "the AI reviewer returned no valid decision"
+        PermissionReviewFailureKind.REVIEWER_ERROR -> "the AI approval reviewer could not complete"
+    }
+    return ToolPermissionDecision.Denied(
+        source = ToolPermissionDenialSource.AUTOMATIC_REVIEW_FAILED,
+        rejection =
+            "$AUTOMATIC_REVIEW_FAILURE_PREFIX [$kind]: $cause. " +
+                "${rationale.trim().take(1_000)} " +
+                "The requested action was NOT executed. No approval or denial verdict was reached. " +
+                "You may retry the same action to request a fresh review. If the problem persists, " +
+                "stop and tell the user the failure reason and ask them to check the permission " +
+                "reviewer model configuration. Do not bypass approval or claim the action succeeded.",
+    )
+}
 
 internal fun permissionDeniedByAutomaticReview(
     rationale: String,

@@ -117,8 +117,6 @@ class AgentProfileRepository private constructor() {
     private val profileListSerializer = ListSerializer(AgentProfile.serializer())
     private val _profiles = MutableStateFlow<List<AgentProfile>>(emptyList())
     val profiles: StateFlow<List<AgentProfile>> = _profiles.asStateFlow()
-    private val _subagentVersion = MutableStateFlow(2)
-    val subagentVersion: StateFlow<Int> = _subagentVersion.asStateFlow()
     private val _collaborationLimits = MutableStateFlow(com.ai.assistance.operit.core.agent.collaboration.CollaborationLimits())
     val collaborationLimits = _collaborationLimits.asStateFlow()
 
@@ -129,21 +127,6 @@ class AgentProfileRepository private constructor() {
             com.ai.assistance.operit.core.agent.collaboration.CollaborationLimits.serializer(), value,
         )).apply()
         _collaborationLimits.value = value
-    }
-
-    @Synchronized
-    fun setSubagentVersion(version: Int) {
-        require(version == 1 || version == 2) { "Unknown subagent version" }
-        checkNotNull(preferences).edit().putInt("subagent_version", version).apply()
-        _subagentVersion.value = version
-    }
-
-    @Synchronized
-    fun versionForChat(chatId: String): Int {
-        val prefs = checkNotNull(preferences)
-        val key = "subagent_chat_version:$chatId"
-        if (!prefs.contains(key)) prefs.edit().putInt(key, _subagentVersion.value).apply()
-        return prefs.getInt(key, 2)
     }
 
     @Volatile private var profilesById: Map<String, AgentProfile> = emptyMap()
@@ -178,9 +161,6 @@ class AgentProfileRepository private constructor() {
         _collaborationLimits.value = loadedPreferences.getString("subagent_v2_limits", null)?.let {
             json.decodeFromString(com.ai.assistance.operit.core.agent.collaboration.CollaborationLimits.serializer(), it).validate()
         } ?: com.ai.assistance.operit.core.agent.collaboration.CollaborationLimits()
-        _subagentVersion.value = loadedPreferences.getInt("subagent_version", 2).let {
-            if (it == 1) 1 else 2
-        }
         publish()
     }
 

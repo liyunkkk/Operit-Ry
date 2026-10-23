@@ -165,6 +165,36 @@ internal class GeminiReplayContentAccumulator {
         }
     }
 
+    /** Interrupted drafts must not replay function calls that have never been dispatched. */
+    fun buildInterruptedContentOrNull(): JSONObject? {
+        if (!requiresReplay) return null
+        val retained = JSONArray()
+        for (index in 0 until parts.length()) {
+            val part = parts.getJSONObject(index)
+            if (part.has("functionCall") || part.has("function_call")) break
+            retained.put(JSONObject(part.toString()))
+        }
+        if (retained.length() == 0) return null
+        return JSONObject().put("role", role).put("parts", retained)
+    }
+
+    fun isReasoningBoundaryBefore(nextContent: JSONObject?): Boolean {
+        if (parts.length() == 0 || nextContent == null) return false
+        var hasThought = false
+        for (index in 0 until parts.length()) {
+            val part = parts.getJSONObject(index)
+            if (part.has("functionCall") || part.has("function_call")) return false
+            if (part.optBoolean("thought", false)) hasThought = true
+            else if (part.has("text")) return false
+        }
+        val next = nextContent.optJSONArray("parts") ?: return false
+        return hasThought && (0 until next.length()).any {
+            val part = next.optJSONObject(it)
+            part != null && !part.optBoolean("thought", false) &&
+                (part.has("text") || part.has("functionCall") || part.has("function_call"))
+        }
+    }
+
     private fun appendPart(
         sourcePart: JSONObject,
         inlineDataFile: GeminiReplayInlineDataFile?,
@@ -1442,6 +1472,8 @@ open class GeminiProvider(
 
                 val call = client.newCall(request)
                 activeCall = call
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]
+                    ?.bindAbort { call.cancel() }
 
                 emitConnectionStatus(context.getString(R.string.gemini_connecting))
 
@@ -1490,6 +1522,8 @@ open class GeminiProvider(
                 return@stream
             } catch (e: Exception) {
                 lastException = e
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.throwIfInterrupted()
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.replayMetadata = null
                 emitRollback(requestSavepointId)
                 retryCount = handleRetryableError(
                     context,
@@ -1758,6 +1792,12 @@ open class GeminiProvider(
         var jsonCount = 0
         var contentCount = 0
         val replayContentAccumulator = GeminiReplayContentAccumulator()
+        val sampling = kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]
+        sampling?.replayMetadata = {
+            replayContentAccumulator.buildInterruptedContentOrNull()?.let {
+                "\n" + ChatMarkupRegex.geminiContentMetaTag(encodeGeminiContent(it))
+            }
+        }
 
         // 恢复JSON累积逻辑，用于处理分段JSON
         val completeJsonBuilder = StringBuilder()
@@ -1766,9 +1806,13 @@ open class GeminiProvider(
         var jsonStartSymbol = ' ' // 记录JSON是以 { 还是 [ 开始的
 
         suspend fun extractStreamingContent(json: JSONObject): String {
+            val unwrapped = antigravity?.unwrap(json) ?: json
+            if (replayContentAccumulator.isReasoningBoundaryBefore(
+                    unwrapped.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")
+                )) sampling?.checkpoint()
             return extractContentFromJson(
                 context = context,
-                json = antigravity?.unwrap(json) ?: json,
+                json = unwrapped,
                 requestId = requestId,
                 onTokensUpdated = onTokensUpdated,
                 onUsageReported = onUsageReported,
@@ -1815,6 +1859,7 @@ open class GeminiProvider(
                         } catch (e: IOException) {
                             throw e
                         } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
                             logError("解析SSE响应数据失败: ${e.message}", e)
                         }
                     } else if (line.trim().isNotEmpty()) {
@@ -1886,6 +1931,7 @@ open class GeminiProvider(
                             } catch (e: IOException) {
                                 throw e
                             } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 // JSON尚未完整，继续收集
                                 if (jsonDepth > 0) {
                                     // 仍在收集，这是预期的
@@ -1945,6 +1991,7 @@ open class GeminiProvider(
                 } catch (e: IOException) {
                     throw e
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     logError("解析最终收集的JSON失败: ${e.message}", e)
                 }
             }

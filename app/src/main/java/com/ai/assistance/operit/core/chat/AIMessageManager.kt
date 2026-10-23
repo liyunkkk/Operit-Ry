@@ -399,34 +399,9 @@ object AIMessageManager {
         }
 
         return withContext(Dispatchers.IO) {
-            val limitHistoryStartTime = messageTimingNow()
-            val maxImageHistoryUserTurns = apiPreferences.maxImageHistoryUserTurnsFlow.first()
-            val maxMediaHistoryUserTurns = apiPreferences.maxMediaHistoryUserTurnsFlow.first()
-
-            val memoryAfterImageLimit = limitImageLinksInChatHistory(memory, maxImageHistoryUserTurns)
-            val memoryForRequest = limitMediaLinksInChatHistory(memoryAfterImageLimit, maxMediaHistoryUserTurns)
-            val beforeImageLinkCount = memory.count { MediaLinkParser.hasImageLinks(it.content) }
-            val afterImageLinkCount = memoryForRequest.count { MediaLinkParser.hasImageLinks(it.content) }
-            if (beforeImageLinkCount != afterImageLinkCount) {
-                AppLogger.d(
-                    TAG,
-                    "历史图片裁剪生效: limit=$maxImageHistoryUserTurns, before=$beforeImageLinkCount, after=$afterImageLinkCount"
-                )
-            }
-
-            val beforeMediaLinkCount = memory.count { MediaLinkParser.hasMediaLinks(it.content) }
-            val afterMediaLinkCount = memoryForRequest.count { MediaLinkParser.hasMediaLinks(it.content) }
-            if (beforeMediaLinkCount != afterMediaLinkCount) {
-                AppLogger.d(
-                    TAG,
-                    "历史音视频裁剪生效: limit=$maxMediaHistoryUserTurns, before=$beforeMediaLinkCount, after=$afterMediaLinkCount"
-                )
-            }
-            logMessageTiming(
-                stage = "sendMessage.limitHistory",
-                startTimeMs = limitHistoryStartTime,
-                details = "chatKey=$chatKey, before=${memory.size}, after=${memoryForRequest.size}, imageLimit=$maxImageHistoryUserTurns, mediaLimit=$maxMediaHistoryUserTurns"
-            )
+            // Keep previously read media stable until context compaction replaces its history.
+            // Removing media as turns age would rewrite the reusable request prefix.
+            val memoryForRequest = memory
 
             val matchPluginStartTime = messageTimingNow()
             val pluginExecution =
@@ -584,11 +559,7 @@ object AIMessageManager {
                 targetRoleName = currentRoleName,
                 groupOrchestrationMode = groupOrchestrationMode
             )
-        val maxImageHistoryUserTurns = apiPreferences.maxImageHistoryUserTurnsFlow.first()
-        val maxMediaHistoryUserTurns = apiPreferences.maxMediaHistoryUserTurnsFlow.first()
-        val memoryAfterImageLimit = limitImageLinksInChatHistory(memory, maxImageHistoryUserTurns)
-        val memoryForRequest =
-            limitMediaLinksInChatHistory(memoryAfterImageLimit, maxMediaHistoryUserTurns)
+        val memoryForRequest = memory
 
         val windowSize =
             enhancedAiService.estimateRequestWindowFromMemory(
@@ -610,54 +581,6 @@ object AIMessageManager {
                 publishEstimate = publishEstimate
             )
         return windowSize
-    }
-
-    private fun limitMediaLinksInChatHistory(
-        history: List<PromptTurn>,
-        keepLastUserMediaTurns: Int
-    ): List<PromptTurn> {
-        val limit = keepLastUserMediaTurns.coerceAtLeast(0)
-        val totalUserTurns = history.count { it.kind == PromptTurnKind.USER }
-        val keepFromTurn = (totalUserTurns - limit).coerceAtLeast(0)
-
-        var currentUserTurnIndex = -1
-        return history.map { turn ->
-            if (turn.kind == PromptTurnKind.USER) {
-                currentUserTurnIndex += 1
-            }
-
-            val shouldKeepMedia = limit > 0 && currentUserTurnIndex >= keepFromTurn
-            if (!shouldKeepMedia && MediaLinkParser.hasMediaLinks(turn.content)) {
-                val removed = MediaLinkParser.removeMediaLinks(turn.content).trim()
-                turn.copy(content = removed.ifBlank { context.getString(R.string.ai_message_media_omitted) })
-            } else {
-                turn
-            }
-        }
-    }
-
-    private fun limitImageLinksInChatHistory(
-        history: List<PromptTurn>,
-        keepLastUserImageTurns: Int
-    ): List<PromptTurn> {
-        val limit = keepLastUserImageTurns.coerceAtLeast(0)
-        val totalUserTurns = history.count { it.kind == PromptTurnKind.USER }
-        val keepFromTurn = (totalUserTurns - limit).coerceAtLeast(0)
-
-        var currentUserTurnIndex = -1
-        return history.map { turn ->
-            if (turn.kind == PromptTurnKind.USER) {
-                currentUserTurnIndex += 1
-            }
-
-            val shouldKeepImages = limit > 0 && currentUserTurnIndex >= keepFromTurn
-            if (!shouldKeepImages && MediaLinkParser.hasImageLinks(turn.content)) {
-                val removed = MediaLinkParser.removeImageLinks(turn.content).trim()
-                turn.copy(content = removed.ifBlank { context.getString(R.string.ai_message_image_omitted) })
-            } else {
-                turn
-            }
-        }
     }
 
     /**
@@ -1040,7 +963,7 @@ object AIMessageManager {
                         )
                     } else {
                         // AI 消息需要先移除 thinking 内容，再移除媒体链接
-                        val withoutThinking = ChatUtils.removeThinkingContent(message.content)
+                        val withoutThinking = com.ai.assistance.operit.ui.common.dynamicui.CardTranscript.forModel(ChatUtils.removeThinkingContent(message.content))
                         stripMediaLinksForAssistant(withoutThinking)
                     }
 
@@ -1074,7 +997,7 @@ object AIMessageManager {
                         message.content.replace(memoryTagRegex, "").trim()
                     )
                 } else {
-                    stripMediaLinksForAssistant(message.content)
+                    stripMediaLinksForAssistant(com.ai.assistance.operit.ui.common.dynamicui.CardTranscript.forModel(message.content))
                 }
                 if (cleanedContent.isNotBlank()) {
                     val displayContent =
@@ -1476,7 +1399,7 @@ object AIMessageManager {
         } else {
             // 其他角色的消息：转换为 user 消息，添加角色标签
             val roleLabel = if (messageRoleName.isNotBlank()) messageRoleName else "unknown"
-            val bridgedContent = removeStatusTags(cleanedContent)
+            val bridgedContent = removeStatusTags(com.ai.assistance.operit.ui.common.dynamicui.CardTranscript.forModel(cleanedContent))
             if (bridgedContent.isBlank()) {
                 null
             } else {

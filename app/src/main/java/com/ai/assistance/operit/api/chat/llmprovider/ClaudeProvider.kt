@@ -1530,6 +1530,8 @@ class ClaudeProvider(
             }
 
             activeCall = call
+            kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]
+                ?.bindAbort { call.cancel() }
             try {
                 AppLogger.d("AIService", "正在建立连接...")
                 withContext(Dispatchers.IO) {
@@ -1840,6 +1842,7 @@ class ClaudeProvider(
                                         emit(thinkingEndTag)
                                         receivedContent.append(thinkingEndTag)
                                         isInThinkingBlock = false
+                                        kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.checkpoint()
                                     }
                                 }
                                 "message_delta" -> {
@@ -1973,6 +1976,7 @@ class ClaudeProvider(
                 return@stream
             } catch (e: Exception) {
                 lastException = e
+                kotlin.coroutines.coroutineContext[com.ai.assistance.operit.core.chat.SamplingInterrupt]?.throwIfInterrupted()
                 emitRollback(requestSavepointId)
 
                 // 检测 thinking type 不兼容错误，自动翻转格式并立即重试

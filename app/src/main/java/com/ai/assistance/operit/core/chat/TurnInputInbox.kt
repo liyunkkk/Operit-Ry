@@ -1,10 +1,15 @@
 package com.ai.assistance.operit.core.chat
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+
 /** Serializes input acceptance with the model loop's decision to finish the turn. */
 class TurnInputInbox {
     val turnId: String = java.util.UUID.randomUUID().toString()
     private val lock = Any()
     private var open = true
+    private val revision = MutableStateFlow(0L)
+    internal val changes: kotlinx.coroutines.flow.StateFlow<Long> = revision
     data class Input(
         val text: String,
         val consumed: () -> Unit = {},
@@ -25,9 +30,15 @@ class TurnInputInbox {
     fun hasPending(): Boolean = synchronized(lock) { pending.isNotEmpty() }
     fun hasPendingUserInput(): Boolean = synchronized(lock) { pending.any { it.agentPath == null } }
 
+    /** StateFlow replays the current version, including input offered before subscription. */
+    suspend fun awaitInput(userOnly: Boolean = false) {
+        revision.first { if (userOnly) hasPendingUserInput() else hasPending() }
+    }
+
     fun offer(input: Input): Boolean = synchronized(lock) {
         if (!open || input.text.isBlank()) return@synchronized false
         pending.addLast(input)
+        revision.value += 1
         true
     }
 

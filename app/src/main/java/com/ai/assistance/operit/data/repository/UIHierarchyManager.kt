@@ -280,7 +280,8 @@ object UIHierarchyManager {
                 return@withLock false
             }
 
-            AppLogger.d(TAG, "bindToService 成功完成")
+            if (result) AppLogger.d(TAG, "bindToService 已连接")
+            else AppLogger.w(TAG, "bindToService 未连接；请检查无障碍组件安装及启用状态")
             result
         }
     }

@@ -5,6 +5,9 @@ import com.ai.assistance.operit.BuildConfig
 import com.ai.assistance.operit.data.api.CodexAuthManager
 import com.ai.assistance.operit.data.api.CodexOAuthProtocol
 import com.ai.assistance.operit.data.api.CodexModelsClient
+import com.ai.assistance.operit.data.api.CodexAuthLease
+import com.ai.assistance.operit.data.api.CodexAuthenticationException
+import com.ai.assistance.operit.data.api.isCodexExpiredToken
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelOption
 import com.ai.assistance.operit.data.model.ModelProtocolCatalogRepository
@@ -51,9 +54,37 @@ class CodexProvider(
 ) {
     override val requiresStreamingResponse: Boolean = true
 
-    override suspend fun applyAuthenticationHeaders(builder: Request.Builder, currentApiKey: String) {
-        super.applyAuthenticationHeaders(builder, currentApiKey)
-        val account = authManager.accountForAccessToken(currentApiKey)
+    override suspend fun recoverUnauthorizedAuthentication(
+        request: Request, status: Int, body: String, recoveryAllowed: Boolean,
+    ): Boolean {
+        if (!isCodexExpiredToken(status, body)) {
+            throw CodexAuthenticationException(authManager.authMessages.loginRequired)
+        }
+        if (!recoveryAllowed) {
+            com.ai.assistance.operit.util.AppLogger.w("CodexAuthManager", "401 recovery rejected; stopping retries")
+            throw CodexAuthenticationException(authManager.authMessages.recoveryRejected)
+        }
+        val lease = request.tag(CodexAuthLease::class.java)
+            ?: throw CodexAuthenticationException(authManager.authMessages.loginChanged)
+        authManager.refreshAfterUnauthorized(lease)
+        com.ai.assistance.operit.util.AppLogger.i("CodexAuthManager", "401 recovery ready; rebuilding request")
+        return true
+    }
+
+    override fun checkAuthenticationContinuity(previous: Request?, current: Request) {
+        val first = previous?.tag(CodexAuthLease::class.java) ?: return
+        val latest = current.tag(CodexAuthLease::class.java)
+        if (latest == null || first.generation != latest.generation ||
+            first.state.accountId != latest.state.accountId) {
+            throw CodexAuthenticationException(authManager.authMessages.loginChanged)
+        }
+    }
+
+    override suspend fun authenticateRequest(builder: Request.Builder) {
+        val lease = authManager.credentials()
+        super.applyAuthenticationHeaders(builder, lease.state.accessToken)
+        val account = lease.state
+        builder.tag(CodexAuthLease::class.java, lease)
         builder.header("ChatGPT-Account-ID", account.accountId)
         builder.header("originator", "operit")
         builder.header("User-Agent", "Operit/${BuildConfig.VERSION_NAME}")
@@ -146,11 +177,8 @@ object CodexModelListFetcher {
         return try {
             val auth = CodexAuthManager.getInstance(context)
             if (auth.authState.value != null) {
-                val accessToken = auth.getValidAccessToken()
-                val account = auth.accountForAccessToken(accessToken)
-                val models = CodexModelsClient().fetch(accessToken, account.accountId, account.residency)
-                if (auth.currentAccountId() != account.accountId) {
-                    throw IOException("Codex account changed while loading models")
+                val models = auth.withAuthRecovery { account ->
+                    CodexModelsClient().fetch(account.accessToken, account.accountId, account.residency)
                 }
                 return Result.success(models)
             }

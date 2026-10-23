@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.Block
@@ -47,6 +46,7 @@ import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.TipsAndUpdates
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.TipsAndUpdates
@@ -57,7 +57,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -113,6 +112,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ComposerPredictionTextField
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberComposerPredictionTransformation
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.api.chat.EnhancedAIService
 import com.ai.assistance.operit.api.chat.library.MemoryAutoSaveScheduler
@@ -183,6 +184,7 @@ fun AgentChatInputSection(
     actualViewModel: ChatViewModel,
     userMessage: TextFieldValue,
     onUserMessageChange: (TextFieldValue) -> Unit,
+    composerPrediction: String? = null,
     enableEnterToSend: Boolean = false,
     onSendMessage: () -> Unit,
     onQueueMessage: () -> Unit,
@@ -372,6 +374,10 @@ fun AgentChatInputSection(
 
     val inputTextStyle = chatComposerTextStyle(agent = true)
     val mentionVisualTransformation = rememberMentionVisualTransformation(inputTextStyle)
+    val composerTransformation = rememberComposerPredictionTransformation(
+        userMessage, composerPrediction,
+        mentionVisualTransformation,
+    )
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
 
@@ -435,14 +441,13 @@ fun AgentChatInputSection(
         configSummaries.find { it.id == effectiveConfigMapping.configId }
     val mappedModelName =
         activeConfigSummary?.let { config ->
-            val validIndex = getValidModelIndex(config.modelName, effectiveConfigMapping.modelIndex)
-            getModelByIndex(config.modelName, validIndex)
+            getModelList(config.modelName).getOrNull(effectiveConfigMapping.modelIndex)
         }
     val displayModelName =
         if (isModelSelectionLockedByCharacterCard) {
             mappedModelName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.not_selected)
         } else {
-            mappedModelName?.takeIf { it.isNotBlank() } ?: currentModelName
+            mappedModelName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.functional_model_reselect)
         }
     val claudeThinkingFormats by ClaudeThinkingFormatState.formats.collectAsState()
     val thinkingRequestSummary =
@@ -879,10 +884,12 @@ fun AgentChatInputSection(
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    OutlinedTextField(
+                    ComposerPredictionTextField(
                         value = userMessage,
+                        prediction = composerPrediction,
+                        onAcceptPrediction = actualViewModel::acceptComposerPrediction,
                         onValueChange = onUserMessageChange,
-                        visualTransformation = mentionVisualTransformation,
+                        visualTransformation = composerTransformation,
                         placeholder = {
                             Text(
                                 if (isWorkspaceOpen) {
@@ -893,7 +900,8 @@ fun AgentChatInputSection(
                                 style = inputTextStyle,
                             )
                         },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).onPreviewKeyEvent(onEnterToSendKeyEvent),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                            .onPreviewKeyEvent(onEnterToSendKeyEvent),
                         textStyle = inputTextStyle,
                         maxLines = 6,
                         minLines = 1,
@@ -919,12 +927,17 @@ fun AgentChatInputSection(
                             ),
                         shape = RoundedCornerShape(14.dp),
                         trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            com.ai.assistance.operit.ui.features.chat.components.style.input.common.DraftVoiceInputButton(
+                                actualViewModel, userMessage, onUserMessageChange,
+                                !isProcessing || allowTextInputWhileProcessing)
                             IconButton(onClick = { showFullscreenInput.value = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Fullscreen,
                                     contentDescription = stringResource(R.string.chat_fullscreen_input),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
                             }
                         },
                         enabled = !isProcessing || allowTextInputWhileProcessing,
@@ -1120,14 +1133,14 @@ fun AgentChatInputSection(
                                             showCancelAction -> Icons.Default.Close
                                             showQueueAction -> Icons.Default.Add
                                             canSendMessage -> Icons.AutoMirrored.Filled.Send
-                                            else -> Icons.Default.Mic
+                                            else -> Icons.Rounded.GraphicEq
                                         },
                                     contentDescription =
                                         when {
                                             showCancelAction -> context.getString(R.string.cancel)
                                             showQueueAction -> context.getString(R.string.chat_queue_add_message)
                                             canSendMessage -> context.getString(R.string.send)
-                                            else -> context.getString(R.string.voice_input)
+                                            else -> context.getString(R.string.voice_conversation_entry)
                                         },
                                     tint = actionButtonIconTint,
                                     modifier = Modifier.size(18.dp),
@@ -1179,10 +1192,12 @@ fun AgentChatInputSection(
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
-                        OutlinedTextField(
+                        ComposerPredictionTextField(
                             value = userMessage,
+                            prediction = composerPrediction,
+                            onAcceptPrediction = actualViewModel::acceptComposerPrediction,
                             onValueChange = onUserMessageChange,
-                            visualTransformation = mentionVisualTransformation,
+                            visualTransformation = composerTransformation,
                             placeholder = {
                                 Text(
                                     if (isWorkspaceOpen) {
@@ -1193,7 +1208,8 @@ fun AgentChatInputSection(
                                     style = inputTextStyle,
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).onPreviewKeyEvent(onEnterToSendKeyEvent),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+                                .onPreviewKeyEvent(onEnterToSendKeyEvent),
                             textStyle = inputTextStyle,
                             maxLines = 6,
                             minLines = 1,
@@ -1219,12 +1235,17 @@ fun AgentChatInputSection(
                                 ),
                             shape = RoundedCornerShape(14.dp),
                             trailingIcon = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                com.ai.assistance.operit.ui.features.chat.components.style.input.common.DraftVoiceInputButton(
+                                    actualViewModel, userMessage, onUserMessageChange,
+                                    !isProcessing || allowTextInputWhileProcessing)
                                 IconButton(onClick = { showFullscreenInput.value = true }) {
                                     Icon(
                                         imageVector = Icons.Default.Fullscreen,
                                         contentDescription = stringResource(R.string.chat_fullscreen_input),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
+                                }
                                 }
                             },
                             enabled = !isProcessing || allowTextInputWhileProcessing,
@@ -1420,14 +1441,14 @@ fun AgentChatInputSection(
                                                 showCancelAction -> Icons.Default.Close
                                                 showQueueAction -> Icons.Default.Add
                                                 canSendMessage -> Icons.AutoMirrored.Filled.Send
-                                                else -> Icons.Default.Mic
+                                                else -> Icons.Rounded.GraphicEq
                                             },
                                         contentDescription =
                                             when {
                                                 showCancelAction -> context.getString(R.string.cancel)
                                                 showQueueAction -> context.getString(R.string.chat_queue_add_message)
                                                 canSendMessage -> context.getString(R.string.send)
-                                                else -> context.getString(R.string.voice_input)
+                                                else -> context.getString(R.string.voice_conversation_entry)
                                             },
                                         tint = actionButtonIconTint,
                                         modifier = Modifier.size(18.dp),
@@ -1526,6 +1547,10 @@ fun AgentChatInputSection(
             if (showFullscreenInput.value) {
                 FullscreenInputDialog(
                     value = userMessage,
+                    composerPrediction = composerPrediction,
+                    onAcceptPrediction = { expected ->
+                        if (actualViewModel.acceptComposerPrediction(expected)) actualViewModel.userMessage.value else null
+                    },
                     onValueChange = onUserMessageChange,
                     onDismiss = { showFullscreenInput.value = false },
                     onConfirm = { showFullscreenInput.value = false },
@@ -1580,8 +1605,7 @@ private fun AgentModelSelectorPopup(
     val inputMenuTogglesBySlot = inputMenuToggles.groupBy { InputMenuToggleSlots.normalize(it.slot) }
     val currentConfig = configSummaries.find { it.id == currentConfigMapping.configId }
     val currentModelName = currentConfig?.let { config ->
-        val validIndex = getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
-        getModelByIndex(config.modelName, validIndex)
+        getModelList(config.modelName).getOrNull(currentConfigMapping.modelIndex)
     }.orEmpty()
     val maxThinkingQualityLevel = ApiPreferences.MAX_THINKING_QUALITY_LEVEL
 
@@ -2097,9 +2121,8 @@ private fun AgentModelSelectorItem(
     var expandedConfigId by remember { mutableStateOf<String?>(null) }
     val currentModelName =
         currentConfig?.let { config ->
-            val validIndex = getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
-            getModelByIndex(config.modelName, validIndex)
-        } ?: stringResource(R.string.not_selected)
+            getModelList(config.modelName).getOrNull(currentConfigMapping.modelIndex)
+        } ?: stringResource(R.string.functional_model_reselect)
 
     Row(
         modifier =
@@ -2274,7 +2297,7 @@ private fun AgentModelSelectorItem(
                                 modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                     .padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 8.dp),
                             ) {
-                                val validIndex = getValidModelIndex(config.modelName, currentConfigMapping.modelIndex)
+                                val validIndex = currentConfigMapping.modelIndex
                                 modelList.forEachIndexed { index, modelName ->
                                     val isModelSelected = isSelected && validIndex == index
                                     val isModelFav = validFavorites.any { it.configId == config.id && it.modelName.equals(modelName, ignoreCase = true) }

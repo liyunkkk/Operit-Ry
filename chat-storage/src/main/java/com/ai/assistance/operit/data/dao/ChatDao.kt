@@ -42,6 +42,12 @@ interface ChatDao {
     @Query("SELECT * FROM chats WHERE id = :chatId")
     suspend fun getChatById(chatId: String): ChatEntity?
 
+    @Query("SELECT contextPolicyJson FROM chats WHERE id = :chatId")
+    fun observeContextPolicy(chatId: String): Flow<String?>
+
+    @Query("UPDATE chats SET contextPolicyJson = :policy WHERE id = :chatId")
+    suspend fun updateContextPolicy(chatId: String, policy: String)
+
     /** 只插入新聊天；禁止 REPLACE 触发消息外键级联。 */
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertChat(chat: ChatEntity)

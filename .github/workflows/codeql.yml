@@ -67,8 +67,8 @@ jobs:
         with:
           lane: full
           java-version: '21'
-          android-build-tools-version: '35.0.0'
-          android-ndk-version: '25.1.8937393'
+          android-build-tools-version: '37.0.0'
+          android-ndk-version: '27.0.12077973'
           android-cmake-version: '3.31.6'
           gradle-cache-read-only: 'true'
           dependency-cache-read-only: 'true'

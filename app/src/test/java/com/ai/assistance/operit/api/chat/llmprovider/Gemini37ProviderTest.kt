@@ -40,6 +40,29 @@ import org.junit.Test
 import org.mockito.Mockito
 
 class Gemini37ProviderTest {
+    @Test fun interruptedReplayKeepsSignatureButExcludesUnexecutedTool() {
+        val accumulator = GeminiReplayContentAccumulator()
+        accumulator.appendContent(JSONObject("""{"role":"model","parts":[
+            {"text":"reasoning","thought":true,"thoughtSignature":"signature"},
+            {"functionCall":{"name":"terminal","args":{"command":"never executed"}}},
+            {"text":"after the tool"}
+        ]}"""))
+        val retained = requireNotNull(accumulator.buildInterruptedContentOrNull()).getJSONArray("parts")
+        assertEquals(1, retained.length())
+        assertEquals("signature", retained.getJSONObject(0).getString("thoughtSignature"))
+    }
+
+    @Test fun mailboxBoundaryRequiresFinishedReasoningAndNoPriorTool() {
+        val accumulator = GeminiReplayContentAccumulator()
+        accumulator.appendContent(JSONObject("""{"parts":[{"text":"thinking","thought":true}]}"""))
+        assertFalse(accumulator.isReasoningBoundaryBefore(
+            JSONObject("""{"parts":[{"text":"still thinking","thought":true}]}""")
+        ))
+        val tool = JSONObject("""{"parts":[{"functionCall":{"name":"tool","args":{}}}]}""")
+        assertTrue(accumulator.isReasoningBoundaryBefore(tool))
+        accumulator.appendContent(tool)
+        assertFalse(accumulator.isReasoningBoundaryBefore(JSONObject("""{"parts":[{"text":"later"}]}""")))
+    }
 
     @Test
     fun providerDefaults_useStableGemini37AndLeaveGenericConfigurationExplicit() {

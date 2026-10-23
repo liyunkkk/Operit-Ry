@@ -18,6 +18,10 @@ class CollaborationWaitResultTest {
         assertTrue(result.message.contains("clamped to the minimum of 10000ms"))
         assertEquals("Wait completed.", CollaborationWaitResult(CollaborationWaitOutcome.MAILBOX, 30_000).message)
         assertTrue(CollaborationWaitResult(CollaborationWaitOutcome.TIMED_OUT, 30_000).timedOut)
+        val idle = CollaborationWaitResult(CollaborationWaitOutcome.IDLE, 30_000)
+        assertFalse(idle.timedOut)
+        assertTrue(idle.message.contains("no other agent is running"))
+        assertTrue(idle.message.contains("call wait_agent again"))
     }
 
     @Test fun limitsRejectImpossibleCapacityAndWaitSettings() {

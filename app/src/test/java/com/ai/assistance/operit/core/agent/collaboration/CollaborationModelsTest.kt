@@ -89,6 +89,7 @@ class CollaborationModelsTest {
             ))
             assertTrue(wait.contains(if (chinese) "留在邮箱" else "stays in the mailbox"))
             assertTrue(wait.contains(if (chinese) "下一轮" else "a later turn"))
+            assertTrue(wait.contains(if (chinese) "立即返回" else "returns immediately"))
         }
     }
 }

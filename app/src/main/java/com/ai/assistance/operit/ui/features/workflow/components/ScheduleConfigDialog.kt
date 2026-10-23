@@ -122,7 +122,7 @@ fun ScheduleConfigDialog(
                         readOnly = true,
                         label = { Text(stringResource(R.string.workflow_schedule_type_label)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scheduleTypeExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                        modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                     )
                     ExposedDropdownMenu(
                         expanded = scheduleTypeExpanded,
@@ -174,7 +174,7 @@ fun ScheduleConfigDialog(
                                     readOnly = true,
                                     label = { Text(stringResource(R.string.workflow_interval_unit_label)) },
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalUnitExpanded) },
-                                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                                    modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                                 )
                                 ExposedDropdownMenu(
                                     expanded = intervalUnitExpanded,
@@ -325,7 +325,7 @@ fun ScheduleConfigDialog(
                                 readOnly = true,
                                 label = { Text(stringResource(R.string.workflow_preset_template_label)) },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cronPresetExpanded) },
-                                modifier = Modifier.fillMaxWidth().menuAnchor()
+                                modifier = Modifier.fillMaxWidth().menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             )
                             ExposedDropdownMenu(
                                 expanded = cronPresetExpanded,

@@ -3,10 +3,7 @@ package com.ai.assistance.operit.core.tools.defaultTool.standard
 import android.content.Context
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.api.chat.EnhancedAIService
-import com.ai.assistance.operit.api.chat.llmprovider.AIService
 import com.ai.assistance.operit.api.chat.llmprovider.MediaLinkParser
-import com.ai.assistance.operit.core.chat.hooks.PromptTurn
-import com.ai.assistance.operit.core.chat.hooks.PromptTurnKind
 import com.ai.assistance.operit.core.tools.DirectoryListingData
 import com.ai.assistance.operit.core.tools.FileContentData
 import com.ai.assistance.operit.core.tools.FileApplyResultData
@@ -21,8 +18,6 @@ import com.ai.assistance.operit.core.tools.GrepResultData
 import com.ai.assistance.operit.core.tools.StringResultData
 import com.ai.assistance.operit.core.tools.ToolExecutionLimits
 import com.ai.assistance.operit.data.model.AITool
-import com.ai.assistance.operit.data.model.FunctionType
-import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.ToolParameter
 import com.ai.assistance.operit.data.model.ToolResult
 import java.io.BufferedInputStream
@@ -31,7 +26,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,16 +41,10 @@ import com.ai.assistance.operit.util.MediaPoolManager
 import com.ai.assistance.operit.util.HttpMultiPartDownloader
 import com.ai.assistance.operit.util.FFmpegUtil
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.last
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -64,18 +52,13 @@ import androidx.core.content.FileProvider
 import android.webkit.MimeTypeMap
 import com.ai.assistance.operit.api.chat.enhance.FileBindingService
 import com.ai.assistance.operit.api.chat.enhance.ToolExecutionManager
-import com.ai.assistance.operit.core.config.FunctionalPrompts
 import com.ai.assistance.operit.data.preferences.ApiPreferences
-import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
-import com.ai.assistance.operit.data.preferences.ModelConfigManager
 import com.ai.assistance.operit.terminal.TerminalManager
 import com.ai.assistance.operit.terminal.provider.filesystem.FileSystemProvider
 import com.ai.assistance.operit.terminal.utils.SSHFileConnectionManager
 import com.ai.assistance.operit.core.tools.defaultTool.PathValidator
-import com.ai.assistance.operit.util.LocaleUtils
 import com.ai.assistance.operit.util.ripgrep.NativeRipgrep
 import org.json.JSONObject
-import java.util.concurrent.atomic.AtomicInteger
 
 internal enum class ImageReadRoute {
     CURRENT_MODEL,
@@ -202,15 +185,6 @@ open class StandardFileSystemTools(protected val context: Context) {
         return environment?.lowercase() == "linux"
     }
 
-    protected data class GrepContextCandidate(
-        val filePath: String,
-        val lineNumber: Int,
-        val lineContent: String,
-        val matchContext: String?,
-        val query: String,
-        val round: Int
-    )
-
     protected data class RipgrepBlock(
         val filePath: String,
         val firstMatchLine: Int,
@@ -218,109 +192,6 @@ open class StandardFileSystemTools(protected val context: Context) {
         val matchContext: String,
         val matchCount: Int
     )
-
-    private data class RipgrepQueryExecution(
-        val index: Int,
-        val query: String,
-        val parsedBlocks: List<RipgrepBlock>
-    )
-
-    protected suspend fun getGrepService(): AIService {
-        return EnhancedAIService.getAIServiceForFunction(context, FunctionType.GREP)
-    }
-
-    protected suspend fun getGrepModelParameters(): List<ModelParameter<*>> {
-        val functionalConfigManager = FunctionalConfigManager(context)
-        functionalConfigManager.initializeIfNeeded()
-        val modelConfigManager = ModelConfigManager(context)
-        val mapping = functionalConfigManager.getConfigMappingForFunction(FunctionType.GREP)
-        return modelConfigManager.getModelParametersForConfig(mapping.configId)
-    }
-
-    protected suspend fun runGrepModel(prompt: String): String {
-        val service = getGrepService()
-        val modelParameters = getGrepModelParameters()
-        val sb = StringBuilder()
-        val stream =
-            service.sendMessage(
-                context = context,
-                chatHistory = listOf(PromptTurn(kind = PromptTurnKind.USER, content = prompt)),
-                modelParameters = modelParameters,
-                enableThinking = false,
-                stream = false,
-                availableTools = null
-            )
-        stream.collect { chunk -> sb.append(chunk) }
-        return sb.toString().trim()
-    }
-
-    protected fun extractFirstJsonObject(text: String): JSONObject? {
-        val start = text.indexOf('{')
-        val end = text.lastIndexOf('}')
-        if (start < 0 || end <= start) return null
-        return try {
-            JSONObject(text.substring(start, end + 1))
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    protected fun parseQueryListFromModelOutput(text: String, fallback: List<String>): List<String> {
-        val obj = extractFirstJsonObject(text) ?: return fallback
-        val arr = obj.optJSONArray("queries") ?: return fallback
-        val queries = mutableListOf<String>()
-        for (i in 0 until arr.length()) {
-            val q = arr.optString(i, "").trim()
-            if (q.isNotBlank()) queries.add(q)
-        }
-        return if (queries.isEmpty()) fallback else queries
-    }
-
-    protected fun parseSelectedIdsFromModelOutput(text: String): List<Int> {
-        val obj = extractFirstJsonObject(text) ?: return emptyList()
-        val arr = obj.optJSONArray("selected") ?: return emptyList()
-        val ids = mutableListOf<Int>()
-        for (i in 0 until arr.length()) {
-            val v = arr.optInt(i, -1)
-            if (v >= 0) ids.add(v)
-        }
-        return ids
-    }
-
-    protected fun parseReadIdsFromModelOutput(text: String): List<Int> {
-        val obj = extractFirstJsonObject(text) ?: return emptyList()
-        val arr = obj.optJSONArray("read") ?: return emptyList()
-        val ids = mutableListOf<Int>()
-        for (i in 0 until arr.length()) {
-            val v = arr.optInt(i, -1)
-            if (v >= 0) ids.add(v)
-        }
-        return ids
-    }
-
-    protected fun normalizeQueries(queries: List<String>): List<String> {
-        val seen = LinkedHashSet<String>()
-        for (q in queries) {
-            val trimmed = q.trim()
-            if (trimmed.isNotBlank()) {
-                val isDotPlaceholder = trimmed.length >= 3 && trimmed.all { it == '.' }
-                val isEllipsisPlaceholder = trimmed.all { it == '…' }
-                if (isDotPlaceholder || isEllipsisPlaceholder) continue
-                seen.add(trimmed)
-            }
-        }
-        return seen.toList()
-    }
-
-    private fun shellQuote(value: String): String {
-        return "'" + value.replace("'", "'\"'\"'") + "'"
-    }
-
-    private fun clipGrepText(raw: String, maxChars: Int): String {
-        val trimmed = raw.trim()
-        if (trimmed.length <= maxChars) return trimmed
-        return trimmed.take(maxChars) + "...(truncated)"
-    }
 
     private suspend fun searchNativeRipgrepBlocks(
         path: String,
@@ -367,194 +238,6 @@ open class StandardFileSystemTools(protected val context: Context) {
             }
         }
         return Pair(blocks, json.optInt("filesSearched", 0))
-    }
-
-    protected fun buildCandidateDigestForModel(
-        candidates: List<GrepContextCandidate>,
-        maxCharsPerItem: Int
-    ): String {
-        if (candidates.isEmpty()) return "(no matches)"
-        val sb = StringBuilder()
-        candidates.forEachIndexed { idx, c ->
-            sb.append("#").append(idx)
-                .append(" file=").append(c.filePath)
-                .append(" line=").append(c.lineNumber)
-                .append(" round=").append(c.round)
-                .append(" query=\"").append(c.query.replace("\"", "'"))
-                .append("\"\n")
-
-            val ctx = (c.matchContext ?: c.lineContent).trim()
-            val limited = if (ctx.length > maxCharsPerItem) ctx.take(maxCharsPerItem) else ctx
-            sb.append(limited).append("\n\n")
-        }
-        return sb.toString().trim()
-    }
-
-    protected suspend fun enrichCandidatesWithReadContext(
-        candidates: List<GrepContextCandidate>,
-        environment: String?,
-        readContextLines: Int,
-        maxCandidatesToRead: Int,
-        selectedCandidateIndexes: List<Int>? = null
-    ): List<GrepContextCandidate> {
-        if (candidates.isEmpty()) return candidates
-
-        val indexesToRead =
-            if (selectedCandidateIndexes == null) {
-                (0 until minOf(maxCandidatesToRead, candidates.size)).toList()
-            } else {
-                selectedCandidateIndexes
-                    .asSequence()
-                    .distinct()
-                    .filter { it >= 0 && it < candidates.size }
-                    .take(maxCandidatesToRead)
-                    .toList()
-            }
-
-        if (indexesToRead.isEmpty()) return candidates
-
-        val indexSet = indexesToRead.toHashSet()
-        val enriched = ArrayList<GrepContextCandidate>(candidates.size)
-
-        for ((idx, c) in candidates.withIndex()) {
-            if (!indexSet.contains(idx)) {
-                enriched.add(c)
-                continue
-            }
-
-            val startLine = maxOf(1, c.lineNumber - readContextLines)
-            val endLine = c.lineNumber + readContextLines
-            val params = mutableListOf(
-                ToolParameter("path", c.filePath),
-                ToolParameter("start_line", startLine.toString()),
-                ToolParameter("end_line", endLine.toString())
-            )
-            if (!environment.isNullOrBlank()) {
-                params.add(ToolParameter("environment", environment))
-            }
-
-            val readRes = readFilePart(AITool(name = "read_file_part", parameters = params))
-            val snippet = (readRes.result as? FilePartContentData)?.content
-
-            if (readRes.success && !snippet.isNullOrBlank()) {
-                enriched.add(c.copy(matchContext = snippet))
-            } else {
-                enriched.add(c)
-            }
-        }
-
-        return enriched
-    }
-
-    protected suspend fun runGrepCodeBatch(
-        searchPath: String,
-        environment: String?,
-        filePattern: String,
-        queries: List<String>,
-        perQueryMaxResults: Int,
-        round: Int,
-        prefetchedFiles: List<String>? = null,
-        toolNameForProgress: String? = null,
-        progressBase: Float = 0f,
-        progressSpan: Float = 0f,
-        progressMessage: String = ""
-    ): Pair<List<GrepContextCandidate>, Int> {
-        val limitedQueries = normalizeQueries(queries).take(8)
-        val candidates = mutableListOf<GrepContextCandidate>()
-        val dedup = HashSet<String>()
-
-        if (limitedQueries.isEmpty()) {
-            return Pair(emptyList(), 0)
-        }
-
-        if (prefetchedFiles != null && prefetchedFiles.isEmpty()) {
-            return Pair(emptyList(), 0)
-        }
-
-        val indexedQueries =
-            limitedQueries.mapIndexedNotNull { index, query ->
-                if (runCatching { Regex(query, RegexOption.IGNORE_CASE) }.isSuccess) {
-                    index to query
-                } else {
-                    null
-                }
-            }
-
-        if (indexedQueries.isEmpty()) {
-            return Pair(emptyList(), 0)
-        }
-
-        val completedQueries = AtomicInteger(0)
-        val executions =
-            coroutineScope {
-                indexedQueries.map { (index, query) ->
-                    async {
-                        val (parsedBlocks, _) =
-                            searchNativeRipgrepBlocks(
-                                path = searchPath,
-                                patterns = listOf(query),
-                                filePattern = filePattern,
-                                caseInsensitive = true,
-                                contextLines = 3,
-                                maxResults = perQueryMaxResults
-                            )
-
-                        if (toolNameForProgress != null && progressSpan > 0f) {
-                            val completed = completedQueries.incrementAndGet()
-                            val fraction =
-                                (completed.toFloat() / indexedQueries.size.toFloat()).coerceIn(0f, 1f)
-                            val msg = if (progressMessage.isNotBlank()) progressMessage else "Searching..."
-                            ToolProgressBus.update(
-                                toolNameForProgress,
-                                (progressBase + progressSpan * fraction).coerceIn(0f, 0.99f),
-                                "$msg (query $completed/${indexedQueries.size})"
-                            )
-                        }
-
-                        RipgrepQueryExecution(
-                            index = index,
-                            query = query,
-                            parsedBlocks = parsedBlocks
-                        )
-                    }
-                }.awaitAll()
-            }.sortedBy { it.index }
-
-        executions.forEach { execution ->
-            if (execution.parsedBlocks.isEmpty()) {
-                return@forEach
-            }
-
-            var remaining = perQueryMaxResults
-            execution.parsedBlocks.forEach { block ->
-                if (remaining <= 0) return@forEach
-                val candidate =
-                    GrepContextCandidate(
-                        filePath = block.filePath,
-                        lineNumber = block.firstMatchLine,
-                        lineContent = block.lineContent,
-                        matchContext = block.matchContext,
-                        query = execution.query,
-                        round = round
-                    )
-                val key =
-                    "${candidate.filePath}#${candidate.lineNumber}#${(candidate.matchContext ?: "").take(120)}"
-                if (!dedup.add(key)) return@forEach
-                candidates.add(candidate)
-                remaining--
-            }
-        }
-
-        if (toolNameForProgress != null && progressSpan > 0f) {
-            val msg = if (progressMessage.isNotBlank()) progressMessage else "Searching..."
-            ToolProgressBus.update(
-                toolNameForProgress,
-                (progressBase + progressSpan).coerceIn(0f, 0.99f),
-                "$msg (query ${indexedQueries.size}/${indexedQueries.size})"
-            )
-        }
-
-        return Pair(candidates, 0)
     }
 
     private fun groupRipgrepBlocks(
@@ -656,202 +339,6 @@ open class StandardFileSystemTools(protected val context: Context) {
                 success = false,
                 result = StringResultData(""),
                 error = "Native grep is unavailable: ${e.message}"
-            )
-        }
-    }
-
-    protected suspend fun grepContextAgentic(
-        toolName: String,
-        displayPath: String,
-        searchPath: String,
-        environment: String?,
-        intent: String,
-        filePattern: String,
-        maxResults: Int,
-        envLabel: String
-    ): ToolResult {
-        return try {
-            val overallStartTime = System.currentTimeMillis()
-            ToolProgressBus.update(toolName, 0f, "Preparing search...")
-
-            val useEnglish = LocaleUtils.getCurrentLanguage(context).lowercase().startsWith("en")
-
-            val fallback = listOf(intent.take(60)).filter { it.isNotBlank() }
-            var queries = normalizeQueries(fallback).take(8)
-            if (queries.isEmpty()) queries = fallback
-            ToolProgressBus.update(toolName, 0.05f, "Starting search rounds...")
-
-            val allCandidates = mutableListOf<GrepContextCandidate>()
-            val overallDedup = HashSet<String>()
-
-            val perRoundSearchSpan = 0.2f
-            val perRoundRefineSpan = 0.05f
-
-            for (round in 1..3) {
-                val roundBase = 0.1f + (round - 1) * (perRoundSearchSpan + perRoundRefineSpan)
-                AppLogger.d(TAG, "grep_context: Starting search round $round/3. queries=${queries.joinToString(" | ") { it.take(60) }}")
-                val (batchCandidates, _) =
-                    runGrepCodeBatch(
-                        searchPath = searchPath,
-                        environment = environment,
-                        filePattern = filePattern,
-                        queries = queries,
-                        perQueryMaxResults = 30,
-                        round = round,
-                        toolNameForProgress = toolName,
-                        progressBase = roundBase,
-                        progressSpan = perRoundSearchSpan,
-                        progressMessage = "Searching (round $round/3)"
-                    )
-
-                var storedBatchCandidates = batchCandidates
-
-                val digestCandidates = storedBatchCandidates.take(24)
-                val digest = buildCandidateDigestForModel(digestCandidates, 800)
-
-                val planPrompt =
-                    FunctionalPrompts.grepContextRefineWithReadPrompt(
-                        intent = intent,
-                        displayPath = displayPath,
-                        filePattern = filePattern,
-                        lastRoundDigest = digest,
-                        maxRead = 8,
-                        useEnglish = useEnglish
-                    )
-
-                ToolProgressBus.update(toolName, roundBase + perRoundSearchSpan, "Planning next steps (round $round/3)...")
-                val planStart = System.currentTimeMillis()
-                val planRaw = runGrepModel(planPrompt)
-                val plannedQueries = normalizeQueries(parseQueryListFromModelOutput(planRaw, queries)).take(8)
-                val readIds = parseReadIdsFromModelOutput(planRaw)
-                    .distinct()
-                    .filter { it >= 0 && it < digestCandidates.size }
-                    .take(8)
-
-                if (readIds.isNotEmpty()) {
-                    ToolProgressBus.update(toolName, roundBase + perRoundSearchSpan, "Reading selected snippets (round $round/3)...")
-                    val enrichedDigestCandidates =
-                        enrichCandidatesWithReadContext(
-                            candidates = digestCandidates,
-                            environment = environment,
-                            readContextLines = 25,
-                            maxCandidatesToRead = 8,
-                            selectedCandidateIndexes = readIds
-                        )
-
-                    val contextByKey = HashMap<String, String>()
-                    for (id in readIds) {
-                        val c = enrichedDigestCandidates.getOrNull(id) ?: continue
-                        val ctx = c.matchContext ?: continue
-                        contextByKey["${c.filePath}#${c.lineNumber}"] = ctx
-                    }
-
-                    storedBatchCandidates =
-                        storedBatchCandidates.map { c ->
-                            val key = "${c.filePath}#${c.lineNumber}"
-                            val ctx = contextByKey[key]
-                            if (!ctx.isNullOrBlank()) c.copy(matchContext = ctx) else c
-                        }
-                }
-
-                val planElapsed = System.currentTimeMillis() - planStart
-                if (round < 3 && plannedQueries.isNotEmpty()) {
-                    queries = plannedQueries
-                }
-                ToolProgressBus.update(toolName, roundBase + perRoundSearchSpan + perRoundRefineSpan, "Prepared next steps")
-                AppLogger.d(
-                    TAG,
-                    "grep_context: Plan after round $round/3 completed in ${planElapsed}ms. nextQueries=${plannedQueries.joinToString(" | ") { it.take(60) }} readIds=${readIds.joinToString(",") }"
-                )
-
-                storedBatchCandidates.forEach { c ->
-                    val key = "${c.filePath}#${c.lineNumber}"
-                    if (overallDedup.add(key)) {
-                        allCandidates.add(c)
-                    }
-                }
-            }
-
-            if (allCandidates.isEmpty()) {
-                ToolProgressBus.update(toolName, 1f, "Search completed, found 0")
-                return ToolResult(
-                    toolName = toolName,
-                    success = true,
-                    result =
-                    GrepResultData(
-                        searchPath = displayPath,
-                        pattern = intent,
-                        matches = emptyList(),
-                        totalMatches = 0,
-                        filesSearched = 0,
-                        env = envLabel
-                    ),
-                    error = ""
-                )
-            }
-
-            val selectionDigest = buildCandidateDigestForModel(allCandidates.take(60), 1000)
-            val selectPrompt =
-                FunctionalPrompts.grepContextSelectPrompt(
-                    intent = intent,
-                    displayPath = displayPath,
-                    candidatesDigest = selectionDigest,
-                    maxResults = maxResults,
-                    useEnglish = useEnglish
-                )
-
-            ToolProgressBus.update(toolName, 0.85f, "Selecting most relevant matches...")
-            val selectedIds = parseSelectedIdsFromModelOutput(runGrepModel(selectPrompt))
-            val selectedCandidates =
-                if (selectedIds.isNotEmpty()) {
-                    selectedIds.mapNotNull { id -> allCandidates.getOrNull(id) }.take(maxResults)
-                } else {
-                    allCandidates.take(maxResults)
-                }
-
-            val fileOrder = selectedCandidates.map { it.filePath }.distinct()
-            val fileMatches =
-                fileOrder.map { filePath ->
-                    val lineMatches =
-                        selectedCandidates
-                            .filter { it.filePath == filePath }
-                            .map {
-                                GrepResultData.LineMatch(
-                                    lineNumber = it.lineNumber,
-                                    lineContent = it.lineContent,
-                                    matchContext = it.matchContext
-                                )
-                            }
-                    GrepResultData.FileMatch(filePath = filePath, lineMatches = lineMatches)
-                }
-
-            ToolProgressBus.update(toolName, 1f, "Search completed, found ${selectedCandidates.size}")
-            val overallElapsed = System.currentTimeMillis() - overallStartTime
-            AppLogger.d(
-                TAG,
-                "grep_context: Completed in ${overallElapsed}ms. selected=${selectedCandidates.size} candidates=${allCandidates.size}"
-            )
-            ToolResult(
-                toolName = toolName,
-                success = true,
-                result =
-                GrepResultData(
-                    searchPath = displayPath,
-                    pattern = intent,
-                    matches = fileMatches,
-                    totalMatches = selectedCandidates.size,
-                    filesSearched = 0,
-                    env = envLabel
-                ),
-                error = ""
-            )
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Error performing context search", e)
-            ToolResult(
-                toolName = toolName,
-                success = false,
-                result = StringResultData(""),
-                error = "Error performing context search: ${e.message}"
             )
         }
     }
@@ -4753,98 +4240,6 @@ open class StandardFileSystemTools(protected val context: Context) {
             contextLines = contextLines,
             maxResults = maxResults,
             envLabel = envLabel
-        )
-    }
-
-    open suspend fun grepContext(tool: AITool): ToolResult {
-        val path = tool.parameters.find { it.name == "path" }?.value ?: ""
-        val environment = tool.parameters.find { it.name == "environment" }?.value
-        val intent = tool.parameters.find { it.name == "intent" }?.value ?: ""
-        val filePattern = tool.parameters.find { it.name == "file_pattern" }?.value ?: "*"
-        val maxResults = tool.parameters.find { it.name == "max_results" }?.value?.toIntOrNull() ?: 10
-
-        if (isLinuxEnvironment(environment)) {
-            return linuxTools.grepContext(tool)
-        }
-
-        if (isSafEnvironment(environment)) {
-            return ToolResult(
-                toolName = tool.name,
-                success = false,
-                result = StringResultData(""),
-                error = "grep_context is not supported for SAF/repo environment"
-            )
-        }
-
-        PathValidator.validateAndroidPath(path, tool.name)?.let { return it }
-
-        if (path.isBlank()) {
-            return ToolResult(
-                toolName = tool.name,
-                success = false,
-                result = StringResultData(""),
-                error = "Path parameter is required"
-            )
-        }
-
-        if (intent.isBlank()) {
-            return ToolResult(
-                toolName = tool.name,
-                success = false,
-                result = StringResultData(""),
-                error = "Intent parameter is required"
-            )
-        }
-
-        return try {
-            val file = File(path)
-            if (file.isFile) {
-                grepContextInFile(
-                    path = path,
-                    intent = intent,
-                    maxResults = maxResults,
-                    toolName = tool.name
-                )
-            } else {
-                grepContextAgentic(
-                    toolName = tool.name,
-                    displayPath = path,
-                    searchPath = path,
-                    environment = null,
-                    intent = intent,
-                    filePattern = filePattern,
-                    maxResults = maxResults,
-                    envLabel = "android"
-                )
-            }
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Error performing context search", e)
-            ToolResult(
-                toolName = tool.name,
-                success = false,
-                result = StringResultData(""),
-                error = "Error performing context search: ${e.message}"
-            )
-        }
-    }
-
-    protected suspend fun grepContextInFile(
-        path: String,
-        intent: String,
-        maxResults: Int,
-        toolName: String
-    ): ToolResult {
-        val file = File(path)
-        val parent = file.parent ?: path
-        return grepContextAgentic(
-            toolName = toolName,
-            displayPath = path,
-            searchPath = parent,
-            environment = null,
-            intent = intent,
-            filePattern = file.name,
-            maxResults = maxResults,
-            envLabel = "android"
         )
     }
 

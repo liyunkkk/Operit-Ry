@@ -1,6 +1,8 @@
 package com.ai.assistance.operit.ui.features.settings.sections
 
 import android.annotation.SuppressLint
+import com.ai.assistance.operit.ui.features.settings.components.rememberSettingsCardColor
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCardShape
 import com.ai.assistance.operit.util.AppLogger
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.AnimatedVisibility
@@ -787,9 +789,8 @@ fun ModelApiSettingsSection(
             modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            shape = SettingsCardShape,
+            colors = CardDefaults.cardColors(containerColor = rememberSettingsCardColor())
     ) {
         Column(
                 modifier = Modifier.padding(16.dp),

@@ -37,7 +37,6 @@ interface ToolResultMap {
 - `make_directory` → `FileOperationData`
 - `find_files` → `FindFilesResultData`
 - `grep_code` → `GrepResultData`
-- `grep_context` → `GrepResultData`
 - `file_info` → `FileInfoData`
 - `zip_files` → `FileOperationData`
 - `unzip_files` → `FileOperationData`
@@ -76,6 +75,10 @@ interface ToolResultMap {
 - `browser_tabs` → `StringResultData`
 - `multipart_request` → `HttpResponseData`
 - `manage_cookies` → `HttpResponseData`
+
+浏览器包提供 `browser:take_screenshot`，底层调用 `Tools.Net.browserTakeScreenshot`。
+不传参数时截取当前页面；`fullPage=true` 截取完整页面；元素截图需要同时提供最新快照的 `ref` 和 `element`，不能与 `fullPage` 合用。
+返回值包含图片绝对路径，可交给 `read_file` 查看。`browser:run_code` 是有限的 Playwright 风格接口，不支持 `page.screenshot` 或 `page.addStyleTag`；截图使用上述工具，注入样式使用 `page.evaluate` 创建 `style` 元素。
 
 ### 系统操作
 

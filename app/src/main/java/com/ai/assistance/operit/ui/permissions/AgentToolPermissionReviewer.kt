@@ -526,7 +526,8 @@ class AgentToolPermissionReviewer private constructor(context: Context) {
             } catch (error: Exception) {
                 AppLogger.e(TAG, "Permission reviewer failed closed", error)
                 PermissionReviewResponsePolicy.failed(
-                    reason = "The approval reviewer failed.",
+                    // Exception messages can contain provider credentials or response bodies.
+                    reason = "The approval reviewer failed (${error.javaClass.simpleName}).",
                     failureKind = PermissionReviewFailureKind.REVIEWER_ERROR,
                 ).copy(reviewerTaskId = latestReviewerTaskId)
             } finally {

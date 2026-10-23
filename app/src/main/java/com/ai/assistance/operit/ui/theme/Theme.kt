@@ -130,22 +130,18 @@ fun OperitTheme(updateSystemBars: Boolean = true, content: @Composable () -> Uni
                     statusBarTransparent -> Color.Transparent.toArgb()
                     useBackgroundImage && backgroundImageUri != null -> Color.Transparent.toArgb()  // 有背景时透明
                     useCustomStatusBarColor && customStatusBarColorValue != null -> customStatusBarColorValue!!.toInt()
-                    else -> colorScheme.primary.toArgb()
+                    else -> colorScheme.rainyAppBarFill.toArgb()
                 }
                 window.statusBarColor = statusBarColor
 
                 // 根据状态栏背景色动态设置状态栏图标颜色
                 // isAppearanceLightStatusBars = true 表示图标为深色（适用于浅色背景）
                 // isAppearanceLightStatusBars = false 表示图标为浅色（适用于深色背景）
-                // The theme's own bar keeps the tone it has always drawn; a custom bar colour is
-                // the user's own, so the tone is answered for that colour (see the helper).
-                val customStatusBarFill =
-                        !statusBarTransparent &&
-                                !(useBackgroundImage && backgroundImageUri != null) &&
-                                useCustomStatusBarColor &&
-                                customStatusBarColorValue != null
                 insetsController?.isAppearanceLightStatusBars =
-                        resolveStatusBarDarkIcons(Color(statusBarColor), customStatusBarFill)
+                        if (statusBarTransparent || (useBackgroundImage && backgroundImageUri != null))
+                            // Transparent bars retain the existing image-overlay appearance.
+                            true
+                        else resolveStatusBarDarkIcons(Color(statusBarColor))
             }
             
             // 设置导航栏颜色（底部小白条所在的区域）
@@ -168,7 +164,7 @@ fun OperitTheme(updateSystemBars: Boolean = true, content: @Composable () -> Uni
                 // 根据导航栏背景色动态设置导航栏图标颜色
                 // isAppearanceLightNavigationBars = true 表示图标为深色（适用于浅色背景）
                 // isAppearanceLightNavigationBars = false 表示图标为浅色（适用于深色背景）
-                insetsController?.isAppearanceLightNavigationBars = !isColorLight(colorScheme.background)
+                insetsController?.isAppearanceLightNavigationBars = isColorLight(colorScheme.background)
             }
         }
     }
@@ -454,98 +450,6 @@ fun OperitTheme(updateSystemBars: Boolean = true, content: @Composable () -> Uni
     }
 }
 
-/** 为亮色主题生成基于主色的完整颜色方案 */
-internal fun generateLightColorScheme(
-        primaryColor: Color,
-    secondaryColor: Color,
-    onColorMode: String
-): ColorScheme {
-    // A custom color is used verbatim and then drawn as accent *text* all over the UI, so a pale
-    // pick has to be strengthened before it is readable on the light surfaces.
-    val accent = ensureResolvedLightAccentContrast(primaryColor)
-    val accentSecondary = ensureResolvedLightAccentContrast(secondaryColor)
-    val onPrimary = resolveContrastingTextColor(accent, onColorMode)
-    val onSecondary = resolveContrastingTextColor(accentSecondary, onColorMode)
-
-    // Tints keep the value the user picked; only the accent itself is strengthened.
-    val primaryContainer = lightenColor(primaryColor, 0.7f)
-    val onPrimaryContainer = getResolvedContrastingTextColor(primaryContainer)
-    val secondaryContainer = lightenColor(secondaryColor, 0.7f)
-    val onSecondaryContainer = getResolvedContrastingTextColor(secondaryContainer)
-
-    // Return a complete color scheme, ensuring onSurface and onSurfaceVariant are consistent
-    return rainyBaseColorScheme(darkTheme = false).copy(
-            primary = accent,
-            onPrimary = onPrimary,
-            primaryContainer = primaryContainer,
-            onPrimaryContainer = onPrimaryContainer,
-            secondary = accentSecondary,
-            onSecondary = onSecondary,
-            secondaryContainer = secondaryContainer,
-            onSecondaryContainer = onSecondaryContainer,
-        // Ensure other colors are consistent with a light theme
-        onSurface = Color.Black,
-        onSurfaceVariant = Color.Black.copy(alpha = 0.7f),
-        onBackground = Color.Black
-    )
-}
-
-/** 为暗色主题生成基于主色的完整颜色方案 */
-internal fun generateDarkColorScheme(
-        primaryColor: Color,
-    secondaryColor: Color,
-    onColorMode: String
-): ColorScheme {
-    val adjustedPrimaryColor = lightenColor(primaryColor, 0.2f)
-    val adjustedSecondaryColor = lightenColor(secondaryColor, 0.2f)
-    // The fixed 0.2 is not enough for a very dark pick, so a dark custom color still needs the
-    // contrast guard on the dark surfaces.
-    val accent = ensureResolvedDarkAccentContrast(adjustedPrimaryColor)
-    val accentSecondary = ensureResolvedDarkAccentContrast(adjustedSecondaryColor)
-
-    val onPrimary = resolveContrastingTextColor(accent, onColorMode)
-    val onSecondary = resolveContrastingTextColor(accentSecondary, onColorMode)
-
-    val primaryContainer = darkenColor(primaryColor, 0.3f)
-    // Measured like every other label: a light pick leaves this container light enough that a
-    // forced white label would sit at 2.1:1 on it.
-    val onPrimaryContainer = getResolvedContrastingTextColor(primaryContainer)
-    val secondaryContainer = darkenColor(secondaryColor, 0.3f)
-    val onSecondaryContainer = getResolvedContrastingTextColor(secondaryContainer)
-
-    // Return a complete color scheme, ensuring onSurface and onSurfaceVariant are consistent
-    return rainyBaseColorScheme(darkTheme = true).copy(
-            primary = accent,
-            onPrimary = onPrimary,
-            primaryContainer = primaryContainer,
-            onPrimaryContainer = onPrimaryContainer,
-            secondary = accentSecondary,
-            onSecondary = onSecondary,
-            secondaryContainer = secondaryContainer,
-            onSecondaryContainer = onSecondaryContainer,
-        // Ensure other colors are consistent with a dark theme
-        onSurface = Color.White,
-        onSurfaceVariant = Color.White.copy(alpha = 0.7f),
-        onBackground = Color.White
-    )
-}
-
-/** 使颜色变亮 */
-private fun lightenColor(color: Color, factor: Float): Color {
-    val r = color.red + (1f - color.red) * factor
-    val g = color.green + (1f - color.green) * factor
-    val b = color.blue + (1f - color.blue) * factor
-    return Color(r, g, b, color.alpha)
-}
-
-/** 使颜色变暗 */
-private fun darkenColor(color: Color, factor: Float): Color {
-    val r = color.red * (1f - factor)
-    val g = color.green * (1f - factor)
-    val b = color.blue * (1f - factor)
-    return Color(r, g, b, color.alpha)
-}
-
 /** 混合两种颜色 */
 private fun blendColors(color1: Color, color2: Color, ratio: Float): Color {
     val r = color1.red * (1 - ratio) + color2.red * ratio
@@ -562,15 +466,10 @@ private fun isColorLight(color: Color): Boolean {
 }
 
 /**
- * Whether the system should draw the status bar icons in their dark appearance. The theme has always
- * flipped the lightness of its own bar, which is the look it ships (a light bar gets light icons);
- * that stays. A custom bar colour is the user's own, and the flip lands on the unreadable side
- * there - a near-black bar drew dark icons at 1.27:1, a white one light icons at 1:1 - so that case
- * is answered for the colour instead.
+ * Match icons to the actual opaque fill, including the pale default chrome.
  */
-internal fun resolveStatusBarDarkIcons(barColor: Color, customBarColor: Boolean): Boolean =
-        if (customBarColor) getResolvedContrastingTextColor(barColor) == Color.Black
-        else !isColorLight(barColor)
+internal fun resolveStatusBarDarkIcons(barColor: Color): Boolean =
+        getResolvedContrastingTextColor(barColor) == Color.Black
 
 /** 判断颜色是否较深 */
 private fun isColorDark(color: Color): Boolean {

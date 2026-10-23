@@ -16,6 +16,23 @@ import {
  * System operations namespace
  */
 export namespace System {
+    /** Managed, isolated Android Shell tasks; independent of Ubuntu Terminal sessions. */
+    namespace shellTask {
+        interface Result {
+            runId: string;
+            command: string;
+            status: "running" | "cancelling" | "completed" | "failed" | "timed_out" | "cancelled";
+            output: string;
+            outputTruncated: boolean;
+            outputMode: "tail_snapshot";
+            exitCode: number | null;
+            timedOut: boolean;
+            terminationReason: string | null;
+        }
+        function start(command: string, options?: { timeoutMs?: number; yieldMs?: number }): Promise<Result>;
+        function poll(runId: string, yieldMs?: number): Promise<Result>;
+        function cancel(runId: string): Promise<Result>;
+    }
 
     /**
      * Sleep for specified milliseconds

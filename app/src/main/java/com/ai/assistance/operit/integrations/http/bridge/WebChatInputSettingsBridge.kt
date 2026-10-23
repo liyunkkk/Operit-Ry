@@ -21,15 +21,17 @@ internal class WebChatInputSettingsBridge(
         val permissionLevel = core.getUiStateDelegate().masterPermissionLevel.first()
         val permissionStop = toolPermissionSystem.permissionStopFlow.first()
         val currentWindowTokens = core.currentWindowSizeFlow.first()
-        val baseContextLengthK = apiConfigDelegate.effectiveBaseContextLength.first()
-        val maxContextLengthK = apiConfigDelegate.effectiveMaxContextLengthSetting.first()
-        val activeContextLengthK = apiConfigDelegate.effectiveContextLength.first()
+        val resolved = apiConfigDelegate.resolveChatContextSettings(
+            apiConfigDelegate.effectiveChatConfigTarget.value.configId, core.currentChatId.value)
+        val baseContextLengthK = resolved.baseContextLength
+        val maxContextLengthK = resolved.maxContextLength
+        val activeContextLengthK = resolved.effectiveContextLength
         return WebInputSettingsState(
             enableThinkingMode = apiConfigDelegate.enableThinkingMode.first(),
             thinkingQualityLevel = apiConfigDelegate.thinkingQualityLevel.first(),
             enableMemoryAutoUpdate = apiConfigDelegate.enableMemoryAutoUpdate.first(),
             enableAutoRead = apiConfigDelegate.enableAutoRead.first(),
-            enableMaxContextMode = apiConfigDelegate.effectiveEnableMaxContextMode.first(),
+            enableMaxContextMode = resolved.enableMaxContextMode,
             enableTools = apiConfigDelegate.enableTools.first(),
             disableStreamOutput = apiConfigDelegate.disableStreamOutput.first(),
             disableUserPreferenceDescription = apiConfigDelegate.disableUserPreferenceDescription.first(),
@@ -47,6 +49,13 @@ internal class WebChatInputSettingsBridge(
         val apiConfigDelegate = core.getApiConfigDelegate()
         val uiStateDelegate = core.getUiStateDelegate()
         val toolPermissionSystem = ToolPermissionSystem.getInstance(appContext)
+        val targetChatId = core.currentChatId.value
+        val targetConfigId = apiConfigDelegate.effectiveChatConfigTarget.value.configId
+        if (request.enableMaxContextMode != null) {
+            require(targetChatId != null && request.chatId == targetChatId) {
+                "Select the target conversation before changing Max mode"
+            }
+        }
 
         request.enableThinkingMode?.let { target ->
             if (apiConfigDelegate.enableThinkingMode.value != target) {
@@ -69,8 +78,8 @@ internal class WebChatInputSettingsBridge(
             }
         }
         request.enableMaxContextMode?.let { target ->
-            if (apiConfigDelegate.effectiveEnableMaxContextMode.value != target) {
-                apiConfigDelegate.toggleEnableMaxContextMode()
+            apiConfigDelegate.updateChatContextPolicy(requireNotNull(targetChatId), targetConfigId) {
+                it.copy(maxMode = target)
             }
         }
         request.enableTools?.let { target ->

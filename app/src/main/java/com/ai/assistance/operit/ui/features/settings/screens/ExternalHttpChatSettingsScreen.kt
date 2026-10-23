@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.ui.features.settings.screens
 
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -20,23 +21,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.SettingsEthernet
-import androidx.compose.material.icons.filled.ToggleOn
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +50,22 @@ import com.ai.assistance.operit.api.chat.AIForegroundService
 import com.ai.assistance.operit.data.preferences.ExternalHttpApiPreferences
 import com.ai.assistance.operit.integrations.http.ExternalChatHttpNetworkInfo
 import com.ai.assistance.operit.ui.components.CustomScaffold
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Lan
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsIconBadge
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
 import kotlinx.coroutines.launch
 
 @Composable
@@ -132,9 +141,10 @@ adb shell am broadcast \
   --es reply_package "YOUR.APP.PACKAGE"
         """.trimIndent()
     }
-    val sectionContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
-    val exampleContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-    val cardBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+    val hasBackgroundImage by
+        remember { UserPreferencesManager.getInstance(context) }.useBackgroundImage.collectAsState(initial = false)
+    val cardColor = settingsCardColor(hasBackgroundImage)
+    val exampleContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
     fun showToast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -177,18 +187,15 @@ adb shell am broadcast \
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_enable),
                 subtitle = stringResource(R.string.external_http_chat_enable_desc),
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.ToggleOn, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.PowerSettingsNew
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -223,14 +230,11 @@ adb shell am broadcast \
                 }
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_port),
                 subtitle = stringResource(R.string.external_http_chat_port_desc),
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Router, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Router
             ) {
                 OutlinedTextField(
                     value = portText,
@@ -244,7 +248,7 @@ adb shell am broadcast \
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = ::savePort) {
+                    FilledTonalButton(onClick = ::savePort) {
                         Text(stringResource(R.string.external_http_chat_save_port))
                     }
                     if (enabled) {
@@ -256,14 +260,11 @@ adb shell am broadcast \
                 }
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_token),
                 subtitle = stringResource(R.string.external_http_chat_token_desc),
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Key, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Key
             ) {
                 OutlinedTextField(
                     value = bearerTokenText,
@@ -273,7 +274,7 @@ adb shell am broadcast \
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = ::saveToken) {
+                    FilledTonalButton(onClick = ::saveToken) {
                         Text(stringResource(R.string.external_http_chat_save_token))
                     }
                     TextButton(
@@ -310,14 +311,11 @@ adb shell am broadcast \
                 }
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_status),
                 subtitle = null,
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.SettingsEthernet, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.SettingsEthernet
             ) {
                 val statusText = when {
                     serviceState.isRunning -> stringResource(
@@ -333,14 +331,11 @@ adb shell am broadcast \
                 Text(text = statusText, style = MaterialTheme.typography.bodyLarge)
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_web_title),
                 subtitle = stringResource(R.string.external_http_chat_web_desc),
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Link, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Language
             ) {
                 SelectionContainer {
                     Text(
@@ -367,14 +362,11 @@ adb shell am broadcast \
                 }
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_access_urls),
                 subtitle = null,
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Link, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Lan
             ) {
                 Text(
                     text = stringResource(
@@ -399,14 +391,11 @@ adb shell am broadcast \
                 }
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_sync_example),
                 subtitle = null,
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Link, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Terminal
             ) {
                 ExampleBlock(syncCurl, exampleContainerColor)
                 TextButton(
@@ -422,38 +411,29 @@ adb shell am broadcast \
                 }
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_async_example),
                 subtitle = null,
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Link, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Terminal
             ) {
                 ExampleBlock(asyncCurl, exampleContainerColor)
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_health_example),
                 subtitle = null,
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Link, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Terminal
             ) {
                 ExampleBlock(healthCurl, exampleContainerColor)
             }
 
-            SettingsCard(
+            HttpSettingsCard(
                 title = stringResource(R.string.external_http_chat_intent_title),
                 subtitle = stringResource(R.string.external_http_chat_intent_desc),
-                containerColor = sectionContainerColor,
-                borderColor = cardBorderColor,
-                icon = {
-                    Icon(Icons.Default.Link, contentDescription = null)
-                }
+                cardColor = cardColor,
+                icon = Icons.Default.Android
             ) {
                 SelectionContainer {
                     Text(
@@ -484,34 +464,29 @@ private const val EXTERNAL_CHAT_INTENT_ACTION = "com.ai.assistance.operit.EXTERN
 private const val EXTERNAL_CHAT_RESULT_ACTION = "com.ai.assistance.operit.EXTERNAL_CHAT_RESULT"
 
 @Composable
-private fun SettingsCard(
+private fun HttpSettingsCard(
     title: String,
     subtitle: String?,
-    containerColor: Color,
-    borderColor: Color,
-    icon: @Composable () -> Unit,
+    cardColor: Color,
+    icon: ImageVector,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
-    ) {
+    SettingsCard(backgroundColor = cardColor, contentPadding = PaddingValues(16.dp)) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth().settingsSearchTarget(title),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                CompositionLocalProvider(
-                    LocalContentColor provides MaterialTheme.colorScheme.primary
-                ) {
-                    icon()
-                }
-                Column {
-                    Text(text = title, style = MaterialTheme.typography.titleMedium)
+                SettingsIconBadge(icon = icon, size = 36)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
                     if (!subtitle.isNullOrBlank()) {
                         Text(
                             text = subtitle,
@@ -521,7 +496,6 @@ private fun SettingsCard(
                     }
                 }
             }
-            HorizontalDivider()
             content()
         }
     }
@@ -532,9 +506,10 @@ private fun ExampleBlock(
     text: String,
     containerColor: Color
 ) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        shape = RoundedCornerShape(14.dp),
+        color = containerColor
     ) {
         SelectionContainer {
             Text(
@@ -542,7 +517,7 @@ private fun ExampleBlock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(12.dp),
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
             )
         }
     }

@@ -67,8 +67,6 @@
     <string name="used_tool">Alat yang digunakan</string>
     <string name="tool_category">Kategori alat</string>
     <string name="assistant_config_title">Konfigurasi asisten</string>
-    <string name="import_model">Impor model</string>
-    <string name="scan_user_models">Pindai model pengguna</string>
     <string name="operation_success">Operasi berhasil</string>
     <string name="error_occurred_simple">Terjadi kesalahan</string>
     <string name="function_config_title">Konfigurasi fungsi</string>
@@ -77,10 +75,7 @@
     <string name="not_configured">Belum dikonfigurasi</string>
     <string name="function_prompt">Prompt fungsi</string>
     <string name="function_model">Model fungsi</string>
-    <string name="importing_model">Mengimpor model...</string>
     <string name="processing">Memproses...</string>
-    <string name="error_occurred">Terjadi kesalahan: %1$s</string>
-    <string name="avatar_config">Konfigurasi avatar virtual</string>
 
     <string name="colorpicker_select_navigation_drawer_accent">Pilih warna aksen menu geser samping</string>
     <string name="colorpicker_select_history_icon">Pilih warna ikon riwayat</string>
@@ -369,87 +364,7 @@
     <string name="workflow_app_open_trigger_help">Penjelasan: Hanya terpicu saat pertama kali masuk ke antarmuka setelah aplikasi dijalankan dari awal (cold start), termasuk diluncurkan dengan mengeklik ikon atau dibuka dari tautan eksternal. Beralih dari latar belakang ke latar depan secara biasa tidak akan memicu.</string>
     <string name="workflow_select_predecessor_node">Pilih Node Pendahulu</string>
 
-    <string name="avatar_voice_call_enable_title">Apakah avatar diaktifkan</string>
-    <string name="avatar_voice_call_enable_summary">Setelah diaktifkan, antarmuka panggilan suara akan menggunakan avatar dan memainkan aksi emosi berdasarkan tag &lt;mood&gt; yang dikembalikan.</string>
-    <string name="select_model">Pilih model</string>
-    <string name="current_model">Model saat ini</string>
-    <string name="scale">Skala: %1$s</string>
-    <string name="x_translation">Pergeseran sumbu X: %1$s</string>
-    <string name="y_translation">Pergeseran sumbu Y: %1$s</string>
-    <string name="confirm_delete_model_title">Konfirmasi hapus model?</string>
-    <string name="confirm_delete_model_message">Tidak dapat dipulihkan setelah dihapus, yakin ingin menghapus model ini?</string>
-    <string name="rename_avatar_model_title">Ganti nama model</string>
-    <string name="rename_avatar_model_message">Masukkan nama tampilan baru untuk model</string>
-    <string name="avatar_model_name_label">Nama model</string>
     <string name="no_models_available">Tidak ada model yang tersedia</string>
-    <string name="please_select_model">Silakan pilih model</string>
-    <string name="unsupported_model_type">Jenis model tidak didukung: %1$s</string>
-    <string name="avatar_preview_error_log">Kesalahan pratinjau avatar: %1$s</string>
-    <string name="how_to_import">Bagaimana cara membuat dan mengimpor model?</string>
-    <string name="how_to_import_tap_to_expand">Bagaimana cara membuat dan mengimpor model? (ketuk untuk memperluas)</string>
-    <string name="how_to_import_tap_to_collapse">Bagaimana cara membuat dan mengimpor model? (ketuk untuk menutup)</string>
-    <string name="avatar_config_supported_formats">Didukung: DragonBones (.json + _tex.json + _tex.png), WebP (.webp), MP4 (.mp4), MMD (.pmx/.pmd + opsional .vmd), glTF (.glb/.gltf), FBX (.fbx).</string>
-    <string name="avatar_config_import_methods">Impor file langsung mendukung .glb/.gltf/.mp4/.fbx; DragonBones, WebP, MP4, MMD, glTF multi-file, atau FBX dengan tekstur/aset eksternal harap impor sebagai .zip.</string>
-    <string name="avatar_mood_trigger_mapping_title">Pemetaan pemicu Mood</string>
-    <string name="avatar_mood_trigger_mapping_desc">&lt;mood&gt; yang dikembalikan oleh desktop pet dan avatar suara akan mencocokkan trigger di sini terlebih dahulu. Hanya tipe kustom yang terikat dengan animasi yang akan digabungkan ke dalam petunjuk.</string>
-    <string name="avatar_no_model_actions">Avatar saat ini tidak memiliki aksi yang tersedia</string>
-    <string name="avatar_custom_types_title">Tipe Kustom</string>
-    <string name="avatar_custom_type_add">Tambahkan tipe kustom</string>
-    <string name="avatar_custom_type_none">Belum ada tipe kustom</string>
-    <string name="avatar_trigger_key_label">Kunci pemicu: %1$s</string>
-    <string name="avatar_fallback_emotion_label">Ekspresi fallback: %1$s</string>
-    <string name="avatar_edit_custom_mood_type">Edit tipe kustom</string>
-    <string name="avatar_delete_custom_mood_type">Hapus tipe kustom</string>
-    <string name="avatar_mapped_action">Aksi terikat</string>
-    <string name="avatar_preview_action">Pratinjau</string>
-    <string name="avatar_unmapped">Tidak terikat</string>
-    <string name="avatar_custom_type_add_title">Tambahkan tipe kustom</string>
-    <string name="avatar_custom_type_edit_title">Edit tipe kustom</string>
-    <string name="avatar_custom_type_key">Kunci tipe</string>
-    <string name="avatar_custom_type_key_hint">Hanya huruf kecil, angka, _ dan - yang diizinkan. Kunci yang dinormalisasi: %1$s</string>
-    <string name="avatar_empty_value_placeholder">&lt;空&gt;</string>
-    <string name="avatar_custom_type_prompt_hint_label">Penjelasan petunjuk</string>
-
-    <string name="avatar_custom_type_prompt_hint_help">Petunjuk ini akan digabungkan ke dalam aturan mood avatar desktop/suara, untuk memandu model kapan menggunakan tipe ini.</string>
-    <string name="avatar_emotion_mapping_title">Pemetaan Ekspresi</string>
-    <string name="avatar_emotion_mapping_chip">%1$s：%2$s</string>
-    <string name="avatar_emotion_label">Ekspresi</string>
-    <string name="avatar_clear_selected_mapping">Hapus pemetaan saat ini</string>
-    <string name="avatar_emotion_idle">Siaga</string>
-    <string name="avatar_emotion_listening">Mendengarkan</string>
-    <string name="avatar_emotion_thinking">Berpikir</string>
-    <string name="avatar_emotion_happy">Senang</string>
-    <string name="avatar_emotion_sad">Sedih</string>
-    <string name="avatar_emotion_confused">Bingung</string>
-    <string name="avatar_emotion_surprised">Terkejut</string>
-    <string name="avatar_mood_angry_name">Marah</string>
-    <string name="avatar_mood_happy_name">Senang</string>
-    <string name="avatar_mood_shy_name">Malu</string>
-    <string name="avatar_mood_aojiao_name">Tsundere</string>
-    <string name="avatar_mood_cry_name">Sedih</string>
-    <string name="avatar_mood_angry_hint">Digunakan saat pengguna menyatakan penghinaan, ketidakadilan, celaan, kemarahan, atau ketidakpuasan yang kuat.</string>
-    <string name="avatar_mood_happy_hint">Digunakan saat pengguna menyatakan pujian jelas, mencapai tujuan, menerima hadiah, atau terlihat jelas senang.</string>
-    <string name="avatar_mood_shy_hint">Digunakan saat pengguna memuji, ambigu, menyentuh titik lucu, dan karakter menunjukkan rasa malu.</string>
-    <string name="avatar_mood_aojiao_hint">Digunakan saat pengguna bercanda, berselisih ringan, karakter bersikap keras kepala lalu melunak.</string>
-    <string name="avatar_mood_cry_hint">Digunakan saat pengguna kecewa, sedih, frustrasi, mengeluh menangis, atau murung setelah meminta maaf.</string>
-    <string name="avatar_custom_type_prompt_hint_required">Deskripsi prompt tidak boleh kosong</string>
-    <string name="avatar_custom_type_invalid_key">Kunci tipe kustom hanya boleh menggunakan huruf kecil, angka, _ atau -, dan tidak boleh bentrok dengan kunci bawaan</string>
-    <string name="avatar_custom_type_duplicate_key">Kunci tipe kustom sudah ada</string>
-    <string name="avatar_mmd_camera_pitch">Pitch kamera MMD (%1$s)</string>
-    <string name="avatar_mmd_camera_yaw">Yaw kamera MMD (%1$s)</string>
-    <string name="avatar_mmd_camera_distance">Jarak kamera MMD (%1$s)</string>
-    <string name="avatar_mmd_orbit_pivot_height">Tinggi pusat orbit MMD (%1$s)</string>
-    <string name="avatar_gltf_camera_pitch">Pitch kamera glTF (%1$s)</string>
-    <string name="avatar_gltf_camera_yaw">Yaw kamera glTF (%1$s)</string>
-    <string name="avatar_gltf_camera_distance">Jarak kamera glTF (%1$s)</string>
-    <string name="avatar_gltf_orbit_pivot_height">Tinggi pusat orbit glTF (%1$s)</string>
-    <string name="avatar_fbx_camera_pitch">Pitch kamera FBX (%1$s)</string>
-    <string name="avatar_fbx_camera_yaw">Yaw kamera FBX (%1$s)</string>
-    <string name="avatar_fbx_camera_distance">Jarak kamera FBX (%1$s)</string>
-    <string name="avatar_fbx_orbit_pivot_height">Tinggi pusat orbit FBX (%1$s)</string>
-    <string name="avatar_supported_formats_title">Format yang Didukung</string>
-    <string name="avatar_supported_formats_desc">- DragonBones: Tulang .json + *_tex.json + *_tex.png\n- WebP: Satu atau lebih file .webp\n- MP4: Satu atau lebih file .mp4\n- MMD: Model .pmx atau .pmd, opsional aksi .vmd\n- glTF: .glb atau .gltf (jika ada referensi, diperlukan sumber daya .bin/tekstur dll.)\n- FBX: .fbx (unggahan langsung hanya untuk sumber daya mandiri)</string>
-    <string name="avatar_import_methods_title">Metode Impor</string>
 
     <string name="theme_select_color">Pilih Warna</string>
     <string name="theme_primary_color">Warna Utama</string>
@@ -925,28 +840,7 @@
     <string name="overlay_permission_required">Izin Jendela Mengambang Diperlukan</string>
     <string name="overlay_permission_denied">Izin jendela mengambang tidak diberikan, jendela mengambang tidak dapat ditampilkan</string>
 
-    <string name="avatar_import_methods_desc">- Pilih file langsung: .glb / .gltf / .mp4 / .fbx\n- Impor ZIP: DragonBones, WebP, MP4, MMD, glTF multi-file, atau paket FBX dengan tekstur/aset eksternal</string>
-    <string name="import_structure_guide_tap_to_expand">Panduan Struktur Impor (ketuk untuk memperluas)</string>
-    <string name="import_structure_guide_tap_to_collapse">Panduan Struktur Impor (ketuk untuk menutup)</string>
-    <string name="import_structure_guide_content">Ini adalah struktur direktori "paket impor" (ZIP atau di dalam file yang dipilih), bukan penyimpanan internal aplikasi.\n\nDragonBones (.zip)\n  my_dragonbones.zip\n    any_folder_name/\n      hero_ske.json\n      hero_tex.json\n      hero_tex.png\n  Persyaratan: awalan nama file ske/tex json/png harus sama.\n\nWebP (.zip)\n  my_webp.zip\n    any_folder_name/\n      idle.webp\n      talking.webp\n      happy.webp\n  Persyaratan: setidaknya berisi satu file .webp.\n\nMP4\n  Metode A (file langsung):\n    avatar.mp4\n  Metode B (.zip):\n    my_mp4.zip\n      any_folder_name/\n        idle.mp4\n        talking.mp4\n        happy.mp4\n  Persyaratan: setidaknya berisi satu file .mp4.\n\nMMD (.zip)\n  my_mmd.zip\n    any_folder_name/\n      character.pmx (atau .pmd)\n      motions/idle.vmd (opsional)\n      textures/...\n  Persyaratan: pertahankan jalur relatif yang dirujuk oleh PMX/PMD.\n\nglTF\n  Metode A (file langsung):\n    avatar.glb\n  Metode B (glTF multi-file gunakan .zip):\n    my_gltf.zip\n      any_folder_name/\n        avatar.gltf\n        avatar.bin\n        textures/...\n  Persyaratan: pertahankan jalur relatif yang dirujuk oleh .gltf.\n\nFBX\n  Metode A (file langsung, hanya untuk aset yang mandiri):\n    avatar.fbx\n  Metode B (untuk tekstur/aset eksternal gunakan .zip):\n    my_fbx.zip\n      any_folder_name/\n        avatar.fbx\n        textures/...\n  Persyaratan: unggah langsung .fbx hanya mendukung aset tertanam; jika model merujuk tekstur eksternal atau aset lain, pertahankan jalur relatif dan masukkan ke ZIP.</string>
     <string name="enter">Masuk</string>
-    <string name="about_avatar_formats">Aplikasi ini mendukung berbagai format avatar virtual, termasuk DragonBones. Berikut adalah petunjuk untuk membuat dan mengimpor model.</string>
-    <string name="dragon_bones_config">Konfigurasi DragonBones</string>
-    <string name="dragon_bones_renamed">DragonBones telah berganti nama menjadi LoongBones, dan meluncurkan editor online baru.\nLoongBones mendukung fitur animasi profesional seperti IK, mesh deformation, dan bone binding.</string>
-    <string name="making_models">1. Membuat Model:</string>
-    <string name="making_models_desc">    · Direkomendasikan: Gunakan editor online versi baru.\n    · Alternatif: Unduh editor offline v5.6.3 lama dari situs arsip pihak ketiga.</string>
-    <string name="making_models_desc_general">    · Anda dapat menggunakan berbagai alat untuk membuat model avatar virtual Anda.\n    · Untuk DragonBones, direkomendasikan menggunakan editor online versi baru, atau bisa juga menggunakan editor offline v5.6.3 lama.</string>
-    <string name="exporting_files">2. Mengekspor File:</string>
-    <string name="exporting_files_desc">    · Apapun versi yang digunakan, saat mengekspor data, pilih tipe JSON dan versi 5.5 (runtime 6.0 belum didukung saat ini).\n    · File inti yang diekspor adalah: *_ske.json, *_tex.json, *_tex.png.</string>
-    <string name="exporting_files_desc_general">    · Ikuti panduan ekspor untuk format yang Anda pilih.\n    · Untuk DragonBones, saat mengekspor data, pilih tipe JSON dan versi 5.5 (runtime 6.0 belum didukung saat ini).\n    · File inti yang diekspor adalah: *_ske.json, *_tex.json, *_tex.png.</string>
-    <string name="configuring_interaction">3. Mengonfigurasi Interaksi:</string>
-    <string name="configuring_interaction_desc">    · Untuk mengimplementasikan head tracking, tambahkan constraint IK, dan beri nama tulang targetnya sebagai ik_target.\n    · Animasi idle: Pastikan ada animasi bernama idle, sebagai animasi standby dasar, akan diputar berulang secara otomatis.\n    · Animasi acak: Anda dapat menambahkan animasi seperti blink (berkedip), shake_head (menggelengkan kepala), wag_tail (mengibaskan ekor),\n      sistem akan secara acak memicu animasi ini secara otomatis, memperkaya ekspresi hewan peliharaan.</string>
-    <string name="packaging_and_importing">4. Membungkus dan Mengimpor:</string>
-    <string name="packaging_and_importing_desc">    · Bungkus tiga file yang diekspor menjadi satu file .zip lalu impor.</string>
-    <string name="important_tip">Penting: Di halaman unduhan editor versi lama, tautan unduhan untuk Windows dan Mac tertukar, harap perhatikan untuk memilih tautan yang benar.</string>
-    <string name="dragonbones_important_tip">Penting: Di halaman unduhan editor versi lama, tautan unduhan untuk Windows dan Mac tertukar, harap perhatikan untuk memilih tautan yang benar.</string>
-    <string name="download_old_editor">Unduh Editor Versi Lama</string>
-    <string name="visit_online_editor">Kunjungi Editor Online</string>
     <string name="voice_wakeup_section_title">Panggilan Suara</string>
     <string name="voice_wakeup_always_listen_title">Selalu Mendengarkan</string>
     <string name="voice_wakeup_always_listen_desc">Mendengarkan kata panggilan secara terus-menerus di latar belakang (memerlukan izin mikrofon)</string>
@@ -1581,8 +1475,6 @@
     <string name="ai_assistant">Asisten AI</string>
     <string name="send_message">Kirim Pesan</string>
     <string name="chat_with_pet">Bicara dengan Hewan Peliharaan</string>
-    <string name="dragonbones_mode">Mode DragonBones</string>
-    <string name="avatar_mode">Mode Avatar</string>
     <string name="loading_failed">Gagal memuat: %1$s</string>
     <string name="loading">Sedang memuat...</string>
     <string name="floating_service_description">Layanan jendela mengambang untuk menampilkan Asisten AI</string>
@@ -2593,7 +2485,6 @@
     <string name="functional_model_config_title">Pengaturan Konfigurasi Model Fungsional</string>
     <string name="functional_model_config_desc">Atur konfigurasi model terpisah untuk fungsi yang berbeda, sehingga setiap fungsi dapat menggunakan pengaturan API yang paling sesuai.</string>
     <string name="manage_all_model_configs">Kelola semua konfigurasi model</string>
-    <string name="manage_model_configs_desc">Kelola konfigurasi model</string>
     <string name="reset_all_functions_to_default">Setel ulang semua fungsi ke konfigurasi default</string>
 
     <string name="speech_services_openai_models_fetch_failed">Gagal mengambil daftar model: %1$s</string>
@@ -2736,7 +2627,6 @@
     <string name="chat_speak_message_failed">Gagal membaca pesan: %1$s</string>
     <string name="chat_prefill_check_file">Tolong periksa file ini</string>
     <string name="workspace_unknown_error">Kesalahan tidak diketahui</string>
-    <string name="workspace_suggestion_search_first">Untuk maksud pengguna, disarankan untuk menggunakan alat grep_context (mencari file terkait berdasarkan maksud) dan grep_code (mencari pola kode tertentu) terlebih dahulu untuk memahami situasi proyek saat ini, sebelum melakukan perubahan.</string>
     <string name="workspace_suggestion_separate_files">Harap simpan kode HTML, CSS, dan JavaScript dalam file terpisah.</string>
     <string name="workspace_suggestion_create_folders">Jika proyek cukup kompleks, pertimbangkan untuk membuat folder js dan css baru serta membuat beberapa file.</string>
     <string name="workspace_no_suggestions">Belum ada saran</string>
@@ -2782,7 +2672,6 @@
     <string name="function_type_file_binding">Pemrosesan Pengikatan File</string>
     <string name="function_type_ui_controller">Pengontrol UI</string>
     <string name="function_type_translation">Fungsi Terjemahan</string>
-    <string name="function_type_grep">Pencarian Grep</string>
     <string name="function_type_role_response_planner">Perencanaan Grup</string>
     <string name="function_type_image_recognition">Pengenalan Gambar</string>
     <string name="function_type_audio_recognition">Pengenalan Audio</string>
@@ -2794,7 +2683,6 @@
     <string name="function_desc_file_binding">Memproses pengikatan dan pencampuran konten file secara cerdas, menyediakan kemampuan pemrosesan kode yang lebih presisi. Disarankan menggunakan model cepat dan murah seperti Gemini Flash, tidak disarankan menggunakan DeepSeek R1</string>
     <string name="function_desc_ui_controller">Digunakan untuk navigasi dan operasi otomatis antarmuka UI, model pengontrol UI terkait hanya akan diaktifkan ketika pengguna secara eksplisit meminta penggunaan kontrol "Agen", misalnya dapat memilih model khusus seperti autoglm.</string>
     <string name="function_desc_translation">Menyediakan fungsi terjemahan multibahasa, mendukung konversi bahasa untuk konten teks. Disarankan menggunakan model yang mendukung multibahasa.</string>
-    <string name="function_desc_grep">Digunakan untuk perencanaan pencarian dan penyaringan hasil grep_context (grep_code multi-ronde)</string>
     <string name="function_desc_role_response_planner">Digunakan untuk menentukan urutan giliran bicara dan strategi skip secara dinamis dalam grup, mendukung diskusi multi-ronde</string>
     <string name="function_desc_image_recognition">Digunakan untuk pengenalan dan analisis konten gambar, mendukung parameter intent untuk pemahaman mendalam saat memanggil alat read_file untuk membaca gambar. Disarankan menggunakan model multimodal yang mendukung visi.</string>
     <string name="function_desc_audio_recognition">Digunakan untuk pengenalan dan analisis konten audio, dapat menggunakan parameter intent untuk pemahaman mendalam (seperti transkripsi/ringkasan/pengenalan konten pembicaraan) saat memanggil alat read_file untuk membaca audio. Disarankan menggunakan model yang mendukung input audio atau transkripsi berkualitas tinggi.</string>
@@ -5160,7 +5048,6 @@
     <string name="toolreg_share_file_desc">Membagikan file: %1$s%2$s</string>
     <string name="toolreg_grep_code_with_file_pattern_desc">Mencari kode di %1$s: 「%2$s」%3$s (tipe file: %4$s)</string>
     <string name="toolreg_grep_code_desc">Mencari kode di %1$s: 「%2$s」%3$s</string>
-    <string name="toolreg_grep_context_desc">Mencari file terkait berdasarkan maksud di %1$s: 「%2$s」%3$s</string>
     <string name="toolreg_download_file_desc">Mengunduh file: %1$s -&gt; %2$s%3$s</string>
     <string name="toolreg_index_suffix">, indeks: %1$s</string>
     <string name="toolreg_click_element_resourceid_desc">Klik elemen [ID Sumber Daya: %1$s%2$s]</string>
@@ -5562,9 +5449,6 @@
     <string name="theme_avatar_description">Keterangan: Avatar pengguna di sebelah kiri adalah pengaturan khusus kartu karakter. Jika kosong, akan menggunakan avatar pengguna global di sebelah kanan. Avatar pengguna global digunakan bersama di semua kartu karakter.</string>
     <string name="functional_config_model_count">%1$d model</string>
     <string name="functional_config_test_title_generation_user_text">Saya ingin merencanakan perjalanan tiga hari ke Tokyo, termasuk transportasi, hotel, dan rekomendasi makanan.</string>
-    <string name="functional_config_test_grep_intent">Temukan potongan yang berisi sapaan.</string>
-    <string name="functional_config_test_grep_display_path">&lt;测试&gt;</string>
-    <string name="functional_config_test_grep_candidates_digest">#1 [file: example.txt]\nHalo dunia\n#2 [file: main.kt]\nfun main() {}</string>
     <string name="functional_config_test_ui_controller_prompt">Status UI saat ini: [Button(label="OK", bounds="[0,0][100,50]")]\nTujuan tugas: Klik OK.\nRiwayat eksekusi: []</string>
     <string name="functional_config_test_memory_prompt">Isi percakapan:\nPengguna: Masalah uji koneksi.\nAsisten: Jawaban uji koneksi.</string>
     <string name="tool_permission_instruction_title">Petunjuk penggunaan</string>
@@ -6824,10 +6708,7 @@
     <string name="show_message_timing_stats_description">Tampilkan waktu paket pertama dan waktu generasi di bagian bawah pesan AI</string>
     <string name="chat_message_token_stats_compact">token: %1$d ↑ %3$d (cache: %2$d) ↓ %4$d</string>
     <string name="chat_message_timing_stats_compact">waktu: %1$s (pertama %2$s generasi %3$s)</string>
-    <string name="software_identity_title">Identitas Perangkat Lunak</string>
-    <string name="software_identity_description">Ubah identitas perangkat lunak yang ditampilkan di bagian atas sidebar.</string>
     <string name="software_identity_option_operit">Operit AI</string>
-    <string name="software_identity_option_lingshu">Lingshu AI</string>
     <string name="chat_auto_update_memory_failed">Gagal memperbarui memori otomatis: %1$s</string>
 
     <string name="nav_group_plugins">Plugin</string>

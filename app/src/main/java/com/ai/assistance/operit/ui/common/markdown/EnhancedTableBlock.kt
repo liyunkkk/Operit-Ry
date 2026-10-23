@@ -136,6 +136,7 @@ fun EnhancedTableBlock(
             density,
             textLayoutSettings.lineHeightMultiplier,
             textLayoutSettings.letterSpacingSp,
+            textLayoutSettings.tonedIconStyle,
             normalTypeface,
             boldTypeface,
         ) {
@@ -149,6 +150,7 @@ fun EnhancedTableBlock(
                 primaryColor = primaryColor,
                 globalLineHeightMultiplier = textLayoutSettings.lineHeightMultiplier,
                 globalLetterSpacingSp = textLayoutSettings.letterSpacingSp,
+                iconStyle = textLayoutSettings.tonedIconStyle,
             )
         }
 
@@ -320,6 +322,7 @@ private fun measureTableLayout(
     primaryColor: Color,
     globalLineHeightMultiplier: Float,
     globalLetterSpacingSp: Float,
+    iconStyle: com.ai.assistance.operit.ui.theme.TonedIconStyle,
 ): TableRenderLayout {
     val rowCount = tableData.rows.size
     val columnCount = tableData.rows.maxOfOrNull { it.size } ?: 0
@@ -369,7 +372,8 @@ private fun measureTableLayout(
                     textColor = textColor,
                     primaryColor = primaryColor,
                     density = density,
-                    fontSize = bodyTextStyle.fontSize
+                    fontSize = bodyTextStyle.fontSize,
+                    iconStyle = iconStyle,
                 ) as CharSequence
             }
         }

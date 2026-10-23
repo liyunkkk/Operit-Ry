@@ -30,11 +30,14 @@ class CommandSessionCloseTest {
                 session.rawBuffer.append(" tail without newline")
                 session.commandQueue.addAll(listOf(QueuedCommand("b", "touch b"), QueuedCommand("c", "touch c")))
 
-                processor.finishClosedSession(session, "closed")
+                processor.finishClosedSession(session, "closed", sessionExitCode = 7)
                 // A read-job EOF racing with explicit close must not emit duplicates.
                 processor.finishClosedSession(session.copy(), "closed again")
 
                 assertEquals(listOf("a", "b", "c"), events.map { it.commandId })
+                assertEquals(7, events.first().sessionExitCode)
+                assertTrue(events.all { it.exitCode == null })
+                assertTrue(events.drop(1).all { it.sessionExitCode == null })
                 assertTrue(events.all { it.isCompleted && it.terminationReason == "session_closed" })
                 assertTrue(events.first().outputChunk.contains("first page\nlast page"))
                 assertTrue(events.first().outputChunk.contains("last page tail without newline\nclosed"))

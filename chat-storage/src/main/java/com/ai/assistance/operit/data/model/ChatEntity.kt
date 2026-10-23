@@ -52,6 +52,7 @@ data class ChatEntity(
         val isHidden: Boolean = false,
         /** 隐藏原因；以 READING_COMPANION_AUDIT_ 开头的聊天永久隐藏，不可取消。 */
         val hiddenReason: String? = null,
+        val contextPolicyJson: String? = null,
 ) {
     companion object
 }

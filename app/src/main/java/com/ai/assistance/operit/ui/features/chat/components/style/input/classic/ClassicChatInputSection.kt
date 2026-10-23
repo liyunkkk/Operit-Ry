@@ -6,6 +6,11 @@ import com.ai.assistance.operit.ui.features.chat.components.style.input.common.c
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.Mic
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,10 +28,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +54,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.composerPredictionSemantics
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.composerPredictionGesture
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ComposerPredictionViewport
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberComposerPredictionTransformation
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.visibleComposerPrediction
 import com.ai.assistance.operit.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -71,6 +85,20 @@ import com.ai.assistance.operit.ui.features.chat.components.style.input.common.r
 import com.ai.assistance.operit.ui.features.chat.components.SimpleLinearProgressIndicator
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingMessageQueuePanel
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.PendingQueueMessageItem
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ThinkingStrengthControl
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ComposerPermissionControl
+import com.ai.assistance.operit.ui.permissions.ToolPermissionStop
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.VoiceRecordingWaveform
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberDraftVoiceController
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.HoldToTalkArea
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.SuppressFieldLongPress
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.holdToTalk
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberKeyboardDown
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlinx.coroutines.delay
+import com.ai.assistance.operit.data.preferences.ApiPreferences
 import com.ai.assistance.operit.ui.features.chat.viewmodel.ChatViewModel
 import com.ai.assistance.operit.ui.floating.FloatingMode
 import com.ai.assistance.operit.ui.theme.isLiquidGlassSupported
@@ -79,6 +107,7 @@ import com.ai.assistance.operit.ui.theme.liquidGlass
 import com.ai.assistance.operit.ui.theme.waterGlass
 import com.ai.assistance.operit.util.ChatUtils
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import android.net.Uri
 
 @Composable
@@ -86,6 +115,7 @@ fun ClassicChatInputSection(
     actualViewModel: ChatViewModel,
     userMessage: TextFieldValue,
     onUserMessageChange: (TextFieldValue) -> Unit,
+    composerPrediction: String? = null,
     enableEnterToSend: Boolean = false,
     onSendMessage: () -> Unit,
     onQueueMessage: () -> Unit,
@@ -113,6 +143,13 @@ fun ClassicChatInputSection(
     onAttachmentPanelStateChange: ((Boolean) -> Unit)? = null,
     showInputProcessingStatus: Boolean = true,
     enableTools: Boolean = true,
+    permissionStop: ToolPermissionStop = ToolPermissionStop.DEFAULT,
+    onSetPermissionStop: (ToolPermissionStop) -> Unit = {},
+    onToggleTools: () -> Unit = {},
+    enableThinkingMode: Boolean = false,
+    onSetThinkingMode: (Boolean) -> Unit = {},
+    thinkingQualityLevel: Int = ApiPreferences.DEFAULT_THINKING_QUALITY_LEVEL,
+    onThinkingQualityLevelChange: (Int) -> Unit = {},
     replyToMessage: ChatMessage? = null, // 回复目标消息
     onClearReply: (() -> Unit)? = null, // 清除回复状态的回调
     isWorkspaceOpen: Boolean = false,
@@ -164,6 +201,10 @@ fun ClassicChatInputSection(
     }
     val modernTextStyle = chatComposerTextStyle(agent = false)
     val mentionVisualTransformation = rememberMentionVisualTransformation(modernTextStyle)
+    val composerTransformation = rememberComposerPredictionTransformation(
+        userMessage, composerPrediction,
+        mentionVisualTransformation,
+    )
     val colorScheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
 
@@ -185,6 +226,36 @@ fun ClassicChatInputSection(
 
     val hasDraftText = userMessage.text.isNotBlank()
     val canSendMessage = hasDraftText || attachments.isNotEmpty()
+
+    // Dictation only ever writes into the draft, so it stays a separate entry from the voice
+    // conversation button at the end of the row.
+    val dictation = rememberDraftVoiceController(actualViewModel, userMessage, onUserMessageChange)
+    val dictationPermissionLauncher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {
+            isGranted ->
+            if (isGranted) {
+                dictation.open()
+            } else {
+                actualViewModel.showToast(context.getString(R.string.voice_draft_permission))
+            }
+        }
+    // Returns whether a session started; without the microphone permission it asks for it instead.
+    val startDictation: (Boolean) -> Boolean = { holding ->
+        if (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            dictation.open(holding)
+            true
+        } else {
+            dictationPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            false
+        }
+    }
+    BackHandler(enabled = dictation.isActive) { dictation.cancel() }
+    val holdArea = remember { HoldToTalkArea() }
+    val keyboardDown = rememberKeyboardDown()
+
     val showQueueAction = isProcessing && canSendMessage
     val showCancelAction = isProcessing && !showQueueAction
     val sendButtonEnabled =
@@ -239,6 +310,21 @@ fun ClassicChatInputSection(
         }
         onSendMessage()
         setShowAttachmentPanel(false)
+    }
+
+    // Releasing a hold to the send side sends the transcribed draft through the normal send path,
+    // once this composition sees the text the transcription put in the box.
+    var pendingVoiceSend by remember { mutableStateOf<String?>(null) }
+    dictation.bindSend { pendingVoiceSend = actualViewModel.userMessage.value.text }
+    LaunchedEffect(pendingVoiceSend, userMessage.text) {
+        val expected = pendingVoiceSend ?: return@LaunchedEffect
+        if (userMessage.text == expected) {
+            pendingVoiceSend = null
+            handleEnterSendAction()
+        } else {
+            delay(1000)
+            pendingVoiceSend = null
+        }
     }
 
     val surfaceColor = chatComposerColor(false, chatInputTransparent, hasBackgroundImage)
@@ -483,9 +569,7 @@ fun ClassicChatInputSection(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = classicInputRowHorizontalPadding)
-                    .padding(top = classicInputRowVerticalPadding, bottom = classicInputRowVerticalPadding)
-                    .wrapContentHeight(),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = classicInputRowVerticalPadding, bottom = classicInputRowVerticalPadding),
             ) {
                 // Input field (保持原有高度)
 
@@ -497,13 +581,225 @@ fun ClassicChatInputSection(
                     } else {
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)
                     }
+                // The text sits on top and the actions underneath, so the field no longer carries a
+                // frame of its own. One is drawn only when the card behind it is see-through, where
+                // that frame is the only thing keeping the text readable.
+                val classicInputNeedsBackdrop =
+                    chatInputTransparent && !inputLiquidGlassEnabled && !inputWaterGlassEnabled
 
+                Column(
+                    modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { holdArea.container = it }
+                        .holdToTalk(
+                            enabled = classicInputEnabled && keyboardDown && !dictation.isActive,
+                            area = holdArea,
+                            onStart = { startDictation(true) },
+                            onTargetChange = dictation::setHoldTarget,
+                            onRelease = dictation::releaseHold,
+                        )
+                        .then(
+                            if (classicInputNeedsBackdrop) {
+                                Modifier.border(1.dp, classicInputBorderColor, classicInputShape)
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .clip(classicInputShape)
+                        .background(
+                            if (classicInputNeedsBackdrop) {
+                                MaterialTheme.colorScheme.surface
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                        .padding(start = 14.dp, end = 10.dp, top = 14.dp, bottom = 4.dp),
+                ) {
+
+                if (dictation.isActive) {
+                    val recognitionState by dictation.recognitionStateFlow.collectAsState()
+                    val transcriptScroll = rememberScrollState()
+                    LaunchedEffect(dictation.liveText, transcriptScroll.maxValue) {
+                        transcriptScroll.scrollTo(transcriptScroll.maxValue)
+                    }
+                    // An error keeps the panel open with nothing to stop: the microphone is already
+                    // off, so the row offers another attempt instead.
+                    val dictationFailed = dictation.errorText != null
+                    Box(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 120.dp)
+                            .verticalScroll(transcriptScroll).padding(vertical = 4.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(
+                            text =
+                                dictation.liveText.ifBlank {
+                                    dictation.errorText
+                                        ?: if (dictation.isProcessing) {
+                                            stringResource(R.string.voice_transcribing)
+                                        } else {
+                                            dictation.statusText
+                                        }
+                                },
+                            style = modernTextStyle,
+                            color =
+                                if (dictation.liveText.isBlank()) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                        )
+                    }
+
+                    if (dictationFailed && dictation.liveText.isNotBlank()) {
+                        Text(
+                            text = dictation.errorText.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    } else if (dictation.isProcessing && dictation.liveText.isNotBlank()) {
+                        // Letting go is not the end: the last words are still being turned into text.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.voice_transcribing),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (dictation.isHolding) {
+                        HoldToTalkRow(
+                            releaseToSend = dictation.releaseToSend,
+                            releaseToCancel = dictation.releaseToCancel,
+                            volumeLevelFlow = dictation.volumeLevelFlow,
+                            isRecording = dictation.isRecording,
+                            isCapturing = dictation.isHearingEarly || recognitionState ==
+                                com.ai.assistance.operit.api.speech.SpeechService.RecognitionState.RECOGNIZING,
+                        )
+                    } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            onClick = { dictation.cancel() },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+
+                        if (dictationFailed) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        } else {
+                            VoiceRecordingWaveform(
+                                volumeLevelFlow = dictation.volumeLevelFlow,
+                                isRecording = dictation.isRecording,
+                                isCapturing = dictation.isHearingEarly || recognitionState ==
+                                    com.ai.assistance.operit.api.speech.SpeechService.RecognitionState.RECOGNIZING,
+                                modifier =
+                                    Modifier.weight(1f).height(22.dp).padding(horizontal = 8.dp),
+                            )
+                        }
+
+                        if (dictationFailed) {
+                            IconButton(
+                                onClick = { dictation.open() },
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.voice_draft_retry),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = { dictation.finishRecording() },
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                if (dictation.isPreparing || dictation.isProcessing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Stop,
+                                        contentDescription = stringResource(R.string.voice_draft_finish),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Takes what has already been recognised. It fills the message box; it
+                        // never sends.
+                        val hasLiveText = dictation.liveText.isNotBlank()
+                        Box(
+                            modifier =
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (hasLiveText) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                )
+                                .clickable(enabled = hasLiveText) { dictation.confirmNow() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription =
+                                stringResource(R.string.voice_draft_fill_message_box),
+                                tint =
+                                if (hasLiveText) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    }
+                } else {
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                SuppressFieldLongPress(active = classicInputEnabled && keyboardDown) {
                 BasicTextField(
                     value = userMessage,
                     onValueChange = onUserMessageChange,
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 30.dp)
+                        .onGloballyPositioned { holdArea.field = it }
+                        .heightIn(min = 24.dp)
+                        .composerPredictionSemantics(userMessage, composerPrediction,
+                            enabled = classicInputEnabled,
+                            onAccept = actualViewModel::acceptComposerPrediction)
+                        .composerPredictionGesture(userMessage, composerPrediction,
+                            enabled = classicInputEnabled,
+                            onAccept = actualViewModel::acceptComposerPrediction)
                         .onPreviewKeyEvent { keyEvent ->
                             if (!enableEnterToSend) {
                                 false
@@ -520,8 +816,8 @@ fun ClassicChatInputSection(
                         },
                     textStyle = modernTextStyle.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    visualTransformation = mentionVisualTransformation,
-                    maxLines = 5,
+                    visualTransformation = composerTransformation,
+                    maxLines = if (visibleComposerPrediction(userMessage, composerPrediction) == null) 5 else Int.MAX_VALUE,
                     minLines = 1,
                     keyboardOptions =
                     KeyboardOptions(imeAction = if (enableEnterToSend) ImeAction.Send else ImeAction.Default),
@@ -533,66 +829,60 @@ fun ClassicChatInputSection(
                     },
                     enabled = classicInputEnabled,
                     decorationBox = { innerTextField ->
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .border(
-                                        width = 1.dp,
-                                        color = classicInputBorderColor,
-                                        shape = classicInputShape,
-                                    )
-                                    .clip(classicInputShape)
-                                    .background(
-                                        if (inputLiquidGlassEnabled || inputWaterGlassEnabled) {
-                                            Color.Transparent
-                                        } else {
-                                            MaterialTheme.colorScheme.surface
-                                        }
-                                    )
-                                    .padding(start = 14.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            contentAlignment = Alignment.CenterStart,
                         ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .padding(end = 6.dp, top = 7.dp, bottom = 7.dp),
-                                contentAlignment = Alignment.CenterStart,
-                            ) {
-                                if (userMessage.text.isEmpty()) {
-                                    Text(
-                                        text =
-                                            if (isWorkspaceOpen) {
-                                                context.getString(R.string.input_question_with_workspace)
-                                            } else {
-                                                context.getString(R.string.input_question_hint)
-                                            },
-                                        style = modernTextStyle,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                innerTextField()
-                            }
-
-                            IconButton(
-                                onClick = { showFullscreenInput.value = true },
-                                modifier = Modifier.size(30.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Fullscreen,
-                                    contentDescription = stringResource(R.string.chat_fullscreen_input),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp),
+                            if (userMessage.text.isEmpty() && visibleComposerPrediction(userMessage, composerPrediction) == null) {
+                                Text(
+                                    text =
+                                        if (isWorkspaceOpen) {
+                                            context.getString(R.string.input_question_with_workspace_hold)
+                                        } else {
+                                            context.getString(R.string.input_question_hint_hold)
+                                        },
+                                    style = modernTextStyle,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
+                            ComposerPredictionViewport(
+                                userMessage, composerPrediction, modernTextStyle, 5,
+                                innerTextField,
+                            )
                         }
                     },
                 )
+                }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    // A plain box rather than IconButton: IconButton enforces a 48dp minimum touch
+                    // target that would stretch the draft row past the text line and leave the icon
+                    // sitting below the line it belongs to.
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .clickable(role = Role.Button) {
+                                    showFullscreenInput.value = true
+                                },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fullscreen,
+                            contentDescription = stringResource(R.string.chat_fullscreen_input),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                // Attachment button (+ 按钮) - 确保圆形
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // Attachment button (+ 按钮) - 确保圆形
 
                 Box(
                     modifier =
@@ -630,10 +920,42 @@ fun ClassicChatInputSection(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        ComposerPermissionControl(
+                            enableTools = enableTools,
+                            permissionStop = permissionStop,
+                            onSetPermissionStop = onSetPermissionStop,
+                            onToggleTools = onToggleTools,
+                        )
 
-                // Send button (发送按钮) - 确保圆形
-                Box(
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        ThinkingStrengthControl(
+                            thinkingEnabled = enableThinkingMode,
+                            qualityLevel = thinkingQualityLevel,
+                            onSetThinkingMode = onSetThinkingMode,
+                            onQualityLevelChange = onThinkingQualityLevelChange,
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        IconButton(
+                            onClick = { startDictation(false) },
+                            enabled = classicInputEnabled,
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = stringResource(R.string.voice_draft_button),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Send button (发送按钮) - 确保圆形
+                        Box(
                     modifier =
                     Modifier
                         .size(36.dp)
@@ -713,14 +1035,14 @@ fun ClassicChatInputSection(
                             showCancelAction -> Icons.Default.Close
                             showQueueAction -> Icons.Default.Add
                             canSendMessage -> Icons.AutoMirrored.Filled.Send
-                            else -> Icons.Default.Mic
+                            else -> Icons.Rounded.GraphicEq
                         },
                         contentDescription =
                         when {
                             showCancelAction -> context.getString(R.string.cancel)
                             showQueueAction -> context.getString(R.string.chat_queue_add_message)
                             canSendMessage -> context.getString(R.string.send)
-                            else -> context.getString(R.string.voice_input)
+                            else -> context.getString(R.string.voice_conversation_entry)
                         },
                         tint = iconTint,
                         modifier = Modifier.size(18.dp)
@@ -731,11 +1053,15 @@ fun ClassicChatInputSection(
 
 
 
+                }
+                }
+
+            }
+
             // Token limit warning
             if (isOverTokenLimit && canSendMessage && !showQueueAction) {
                 Text(
-                    text =
-                    context.getString(R.string.token_limit_exceeded_message, projectedTokens, maxTokens),
+                    text = stringResource(R.string.token_limit_exceeded_message, projectedTokens, maxTokens),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall,
                     modifier =
@@ -767,6 +1093,10 @@ fun ClassicChatInputSection(
             if (showFullscreenInput.value) {
                 FullscreenInputDialog(
                     value = userMessage,
+                    composerPrediction = composerPrediction,
+                    onAcceptPrediction = { expected ->
+                        if (actualViewModel.acceptComposerPrediction(expected)) actualViewModel.userMessage.value else null
+                    },
                     onValueChange = onUserMessageChange,
                     onDismiss = { showFullscreenInput.value = false },
                     onConfirm = { showFullscreenInput.value = false }
@@ -774,5 +1104,75 @@ fun ClassicChatInputSection(
             }
 
         }
+    }
+}
+
+/**
+ * The panel's bottom row while a finger holds the composer: stop on the left, send on the right;
+ * sliding up turns both off and the label into the cancel warning.
+ */
+@Composable
+private fun HoldToTalkRow(
+    releaseToSend: Boolean,
+    releaseToCancel: Boolean,
+    volumeLevelFlow: kotlinx.coroutines.flow.StateFlow<Float>,
+    isRecording: Boolean,
+    isCapturing: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HoldTarget(
+            icon = androidx.compose.material.icons.Icons.Filled.Stop,
+            highlighted = !releaseToSend && !releaseToCancel,
+        )
+        Text(
+            text = stringResource(
+                when {
+                    releaseToCancel -> R.string.voice_hold_release_to_cancel
+                    releaseToSend -> R.string.voice_hold_release_to_send
+                    else -> R.string.voice_hold_release_to_stop
+                }
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (releaseToCancel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 10.dp),
+        )
+        VoiceRecordingWaveform(
+            volumeLevelFlow = volumeLevelFlow,
+            isRecording = isRecording,
+            isCapturing = isCapturing,
+            modifier = Modifier.weight(1f).height(22.dp).padding(horizontal = 8.dp),
+        )
+        HoldTarget(
+            icon = androidx.compose.material.icons.Icons.Filled.ArrowUpward,
+            highlighted = releaseToSend,
+        )
+    }
+}
+
+@Composable
+private fun HoldTarget(icon: androidx.compose.ui.graphics.vector.ImageVector, highlighted: Boolean) {
+    Box(
+        modifier =
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(
+                    if (highlighted) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint =
+                if (highlighted) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }

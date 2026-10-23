@@ -58,7 +58,6 @@ object ImagePoolManager {
         }
 
     private var cacheDir: File? = null
-    private var hasResetCacheOnInitialize = false
 
     data class ImageData(
         val base64: String,
@@ -85,8 +84,7 @@ object ImagePoolManager {
             override fun removeEldestEntry(eldest: Map.Entry<String, ImageData>?): Boolean {
                 val shouldRemove = size > maxPoolSize
                 if (shouldRemove && eldest != null) {
-                    AppLogger.d(TAG, "池子已满，移除最旧的图片: ${eldest.key}")
-                    deleteFromDisk(eldest.key)
+                    AppLogger.d(TAG, "释放图片内存，保留聊天附件: ${eldest.key}")
                 }
                 return shouldRemove
             }
@@ -94,6 +92,16 @@ object ImagePoolManager {
 
     fun defaultRegistrationOptions(): ImageRegistrationOptions = DEFAULT_REGISTRATION_OPTIONS.copy()
 
+    /** Disk storage is durable; source recovery is only for media lost by older versions. */
+    fun resolveImage(id: String, sourcePath: String? = null): ImageData? {
+        getImage(id)?.let { return it }
+        if (!sourcePath.isNullOrBlank() && ensureImageFromSource(id, sourcePath)) {
+            return getImage(id)
+        }
+        return null
+    }
+
+    @Synchronized
     fun initialize(cacheDirPath: File, preloadNow: Boolean = true) {
         val targetDir = OperitPaths.imagePoolDir(cacheDirPath)
         if (!targetDir.exists()) {
@@ -101,18 +109,10 @@ object ImagePoolManager {
             AppLogger.d(TAG, "创建图片缓存目录: ${targetDir.absolutePath}")
         }
 
-        val shouldResetCache =
-            !hasResetCacheOnInitialize ||
-                cacheDir?.absolutePath != targetDir.absolutePath
-
-        cacheDir = targetDir
-
-        if (shouldResetCache) {
+        if (cacheDir?.absolutePath != targetDir.absolutePath) {
             imagePool.clear()
-            clearDiskCache()
-            hasResetCacheOnInitialize = true
-            AppLogger.d(TAG, "启动时已清空旧图片池缓存")
         }
+        cacheDir = targetDir
 
         if (preloadNow) {
             loadAllFromDisk()
@@ -773,7 +773,7 @@ object ImagePoolManager {
         try {
             val files = dir.listFiles { file -> file.extension == "meta" } ?: return
             var loadedCount = 0
-            for (file in files) {
+            for (file in files.sortedByDescending { it.lastModified() }.take(maxPoolSize)) {
                 val id = file.nameWithoutExtension
                 val imageData = loadFromDisk(id) ?: continue
                 imagePool[id] = imageData

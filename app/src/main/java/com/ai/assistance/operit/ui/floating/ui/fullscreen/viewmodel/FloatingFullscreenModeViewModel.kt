@@ -3,7 +3,6 @@ package com.ai.assistance.operit.ui.floating.ui.fullscreen.viewmodel
 import android.content.Context
 import androidx.compose.runtime.*
 import com.ai.assistance.operit.R
-import com.ai.assistance.operit.core.avatar.common.state.AvatarEmotion
 import com.ai.assistance.operit.data.model.ChatMessage
 import com.ai.assistance.operit.data.model.InputProcessingState
 import com.ai.assistance.operit.data.model.PromptFunctionType
@@ -11,10 +10,10 @@ import com.ai.assistance.operit.data.preferences.WakeWordPreferences
 import com.ai.assistance.operit.ui.floating.FloatContext
 import com.ai.assistance.operit.ui.floating.isReadOnlyTranscript
 import com.ai.assistance.operit.ui.floating.ui.fullscreen.XmlTextProcessor
-import com.ai.assistance.operit.ui.floating.ui.pet.AvatarEmotionManager
 import com.ai.assistance.operit.ui.floating.voice.SpeechInteractionManager
 import com.ai.assistance.operit.util.AppLogger
 import com.ai.assistance.operit.util.TtsSegmenter
+import com.ai.assistance.operit.util.XmlTagStripper
 import com.ai.assistance.operit.util.stream.Stream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -29,13 +28,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "FloatingFullscreenViewModel"
 private const val FULLSCREEN_TTS_CAPTURE_SUPPRESS_MS = 1200L
-
-data class VoiceAvatarMotionRequest(
-    val emotion: AvatarEmotion = AvatarEmotion.IDLE,
-    val triggerName: String? = null,
-    val playOnce: Boolean = false,
-    val sequence: Long = 0L
-)
 
 class FloatingFullscreenModeViewModel(
     private val context: Context,
@@ -64,8 +56,6 @@ class FloatingFullscreenModeViewModel(
     var attachLocation by mutableStateOf(false)
     var hasOcrSelection by mutableStateOf(false)
     var isStreamingTtsMuted by mutableStateOf(false)
-    var voiceAvatarMotionRequest by mutableStateOf(VoiceAvatarMotionRequest())
-        private set
     
     val isInitialLoad = mutableStateOf(true)
 
@@ -73,6 +63,20 @@ class FloatingFullscreenModeViewModel(
      private var activeAiStreamIdentity: Int? = null
      private var activeAiMessageTimestamp: Long? = null
      private var ttsSpeakJob: Job? = null
+     private var speechQueue = kotlinx.coroutines.channels.Channel<Pair<String, Boolean>>(8)
+     private var playbackSuppressed by mutableStateOf(false)
+     private var voiceInterruptionEnabled = false
+     private var interruptionCapture = false
+     private var interruptionSpeechDetected = false
+     var microphoneMuted by mutableStateOf(false)
+         private set
+     val isPlaybackSuppressed get() = playbackSuppressed
+     val canSendEditedMessage get() = !isAiBusy()
+     val hasSpeechPlayback get() = speechQueueBusy || speechManager.voiceService.isSpeaking
+     private var speechQueueBusy by mutableStateOf(false)
+     private var speechQueueGeneration = 0L
+     private var pendingSpeech = 0
+     private var stopSpeechJob: Job? = null
 
     private val wakePrefs by lazy { WakeWordPreferences(context.applicationContext) }
     private var inactivityTimeoutSeconds: Int = WakeWordPreferences.DEFAULT_VOICE_CALL_INACTIVITY_TIMEOUT_SECONDS
@@ -86,9 +90,6 @@ class FloatingFullscreenModeViewModel(
     private var suppressRecognitionUntilMs: Long = 0L
     private var waveModeAutoTimeoutEnabled: Boolean = false
     var isVoiceCapturePausedForAi by mutableStateOf(false)
-    private var voiceAvatarSequence: Long = 0L
-    private var lastHandledVoiceAvatarMessageKey: String? = null
-    private var hasInitializedVoiceAvatarFromSnapshot: Boolean = false
     
     // ===== 语音交互管理器 =====
     val speechManager = SpeechInteractionManager(
@@ -97,13 +98,22 @@ class FloatingFullscreenModeViewModel(
         onSpeechResult = { text, _ -> 
             // 收到最终语音结果后直接发送，不再写入底部输入框
             val finalText = text.trim()
-            if (finalText.isNotEmpty()) {
+            if (finalText.isNotEmpty() && !isWaveActive) {
+                inputText = finalText
+                voiceStatus = context.getString(R.string.voice_draft_ready)
+                aiMessage = voiceStatus
+            } else if (finalText.isNotEmpty() && interruptionCapture) {
+                stopSpeaking()
+                editableText = finalText
+                isEditMode = true
+                interruptionCapture = false
+                voiceStatus = context.getString(R.string.voice_interruption_draft)
+            } else if (finalText.isNotEmpty()) {
                 if (isCurrentChatReadOnly()) {
                     aiMessage = context.getString(R.string.floating_chat_subagent_read_only)
                 } else {
                     aiMessage = context.getString(R.string.floating_thinking)
                     coroutineScope.launch {
-                        startVoiceAvatarThinking()
                         prepareVoiceCaptureForAiTurn()
                         try {
                             maybeAutoAttachByKeyword(finalText)
@@ -144,13 +154,38 @@ class FloatingFullscreenModeViewModel(
     }
 
     private fun stopCurrentTtsPlayback() {
+        ++speechQueueGeneration
         ttsSpeakJob?.cancel()
         ttsSpeakJob = null
-        coroutineScope.launch { speechManager.voiceService.stop() }
+        speechQueue.close()
+        speechQueue = kotlinx.coroutines.channels.Channel(8)
+        speechQueueBusy = false
+        pendingSpeech = 0
+        val service = speechManager.voiceService
+        stopSpeechJob = coroutineScope.launch { service.stop() }
     }
 
     private fun isAiBusyOrSpeaking(): Boolean {
-        return isAiBusy() || speechManager.voiceService.isSpeaking
+        return isAiBusy() || speechManager.voiceService.isSpeaking || speechQueueBusy
+    }
+
+    private fun canListenDuringPlayback(): Boolean {
+        if (!voiceInterruptionEnabled || microphoneMuted || isEditMode) return false
+        val audio = context.getSystemService(android.media.AudioManager::class.java)
+        val connected = audio.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any {
+            it.type in setOf(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+                android.media.AudioDeviceInfo.TYPE_BLE_HEADSET)
+        }
+        val voice = speechManager.voiceService
+        return connected && (voice.isPlayingThroughHeadphones || (interruptionCapture && !voice.isSpeaking))
+    }
+
+    fun toggleMicrophone() {
+        microphoneMuted = !microphoneMuted
+        if (microphoneMuted) stopVoiceCapture(true)
+        else if (!isAiBusyOrSpeaking()) startVoiceCapture()
     }
 
     /**
@@ -172,7 +207,7 @@ class FloatingFullscreenModeViewModel(
         shouldResumeVoiceCaptureAfterAiTurn = true
         isVoiceCapturePausedForAi = true
         resumeVoiceCaptureJob?.cancel()
-        if (speechManager.isRecording || speechManager.isProcessingSpeech) {
+        if (speechManager.isPreparing || speechManager.isRecording || speechManager.isProcessingSpeech) {
             stopVoiceCapture(true)
         }
     }
@@ -185,15 +220,33 @@ class FloatingFullscreenModeViewModel(
             var observedAiBusy = false
             while (isActive && isWaveActive && shouldResumeVoiceCaptureAfterAiTurn) {
                 val busy = isAiBusyOrSpeaking()
+                if (interruptionCapture && !canListenDuringPlayback()) {
+                    stopVoiceCapture(true)
+                    interruptionCapture = false
+                }
                 if (busy) {
                     observedAiBusy = true
+                    if (canListenDuringPlayback() && !speechManager.isPreparing &&
+                        !speechManager.isRecording && !speechManager.isProcessingSpeech) {
+                        startVoiceCapture(interruption = true)
+                    } else if (interruptionCapture && !canListenDuringPlayback()) {
+                        stopVoiceCapture(true)
+                        interruptionCapture = false
+                    }
                 }
                 if (observedAiBusy && !busy) {
+                    if (interruptionCapture && !interruptionSpeechDetected) interruptionCapture = false
+                    if (interruptionCapture && (speechManager.isPreparing ||
+                        speechManager.isRecording || speechManager.isProcessingSpeech)) {
+                        delay(120)
+                        continue
+                    }
                     shouldResumeVoiceCaptureAfterAiTurn = false
                     isVoiceCapturePausedForAi = false
                     // AI 这一轮结束后，总是从此刻重新开始计算空闲超时。
                     lastVoiceActivityAtMs = System.currentTimeMillis()
-                    if (!speechManager.isRecording && !speechManager.isProcessingSpeech) {
+                    if (!microphoneMuted && !isEditMode && !speechManager.isPreparing &&
+                        !speechManager.isRecording && !speechManager.isProcessingSpeech) {
                         startVoiceCapture()
                     }
                     return@launch
@@ -224,7 +277,7 @@ class FloatingFullscreenModeViewModel(
         
         if (isInitialLoad.value) {
             isInitialLoad.value = false
-            if (message.sender == "ai") aiMessage = stripVoiceAvatarTags(message.content)
+            if (message.sender == "ai") aiMessage = XmlTagStripper.stripXmlLikeTags(message.content)
             return
         }
         
@@ -295,16 +348,17 @@ class FloatingFullscreenModeViewModel(
     }
 
     private fun handleStaticResponse(content: String) {
-        val plainContent = stripVoiceAvatarTags(content)
+        val plainContent = XmlTagStripper.stripXmlLikeTags(content)
         aiMessage = plainContent
     }
 
-    private fun trySpeak(
+    private suspend fun trySpeak(
         text: String,
         interrupt: Boolean,
         cleaners: List<String>,
         armMicSuppression: Boolean = false
     ): Boolean {
+        if (playbackSuppressed) return true
         val cleanText = speechManager.cleanTextForTts(text.trim(), cleaners)
         if (cleanText.isNotEmpty()) {
             // 仅在非直接对话模式（底部输入模式）下应用静音
@@ -320,40 +374,75 @@ class FloatingFullscreenModeViewModel(
         return false
     }
 
-    private fun enqueueSpeak(text: String, interrupt: Boolean) {
-        val previousJob = if (interrupt) {
-            ttsSpeakJob?.cancel()
-            null
-        } else {
-            ttsSpeakJob
-        }
-
-        ttsSpeakJob =
-            coroutineScope.launch {
-                try {
-                    previousJob?.join()
-                    speechManager.voiceService.speak(text, interrupt)
-                } catch (_: kotlinx.coroutines.CancellationException) {
-                } catch (e: Exception) {
-                    AppLogger.e(TAG, "TTS playback failed", e)
+    private suspend fun enqueueSpeak(text: String, interrupt: Boolean) {
+        val queue = speechQueue
+        val generation = speechQueueGeneration
+        if (ttsSpeakJob?.isActive != true) {
+            ttsSpeakJob = coroutineScope.launch {
+                stopSpeechJob?.join()
+                for ((sentence, replace) in queue) {
+                    try {
+                        if (!playbackSuppressed) {
+                            val played = speechManager.voiceService.speak(sentence, replace)
+                            if (!played && generation == speechQueueGeneration) {
+                                playbackSuppressed = true
+                                voiceStatus = context.getString(R.string.voice_playback_failed)
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.e(TAG, "TTS playback failed", e)
+                        if (generation == speechQueueGeneration) {
+                            playbackSuppressed = true
+                            voiceStatus = context.getString(R.string.voice_playback_failed)
+                        }
+                    } finally {
+                        if (generation == speechQueueGeneration) {
+                            pendingSpeech = (pendingSpeech - 1).coerceAtLeast(0)
+                            speechQueueBusy = pendingSpeech > 0
+                        }
+                    }
                 }
             }
+        }
+        ++pendingSpeech
+        speechQueueBusy = true
+        try {
+            queue.send(text to interrupt)
+        } catch (e: kotlinx.coroutines.channels.ClosedSendChannelException) {
+            if (generation == speechQueueGeneration) throw e
+        }
+    }
+
+    fun stopSpeaking() {
+        playbackSuppressed = true
+        stopCurrentTtsPlayback()
+        voiceStatus = context.getString(if (isAiBusy()) R.string.voice_task_continues else R.string.voice_playback_stopped)
     }
 
     // ===== 语音交互 =====
 
-    fun startVoiceCapture() {
-        // 如果AI正在生成，尝试取消
-        val lastMessage = floatContext.messages.lastOrNull()
-        val isAiWorking = lastMessage?.sender == "think" || 
-                          (lastMessage?.sender == "ai" && lastMessage.contentStream != null)
-        
-        if (isAiWorking) {
-            floatContext.onCancelMessage?.invoke()
-        }
-        
+    fun startVoiceCapture(interruption: Boolean = false) {
+        if (microphoneMuted) return
+        interruptionCapture = interruption
+        interruptionSpeechDetected = false
+        if (!interruption) playbackSuppressed = false
         voiceStatus = ""
-        speechManager.startListening { errorMsg ->
+        speechManager.startListening(onStarted = {
+            if (isWaveActive && waveModeAutoTimeoutEnabled) {
+                lastVoiceActivityAtMs = System.currentTimeMillis()
+                startInactivityMonitor()
+            }
+        }) { errorMsg ->
+            if (interruption) {
+                interruptionCapture = false
+                voiceInterruptionEnabled = false
+                voiceStatus = errorMsg
+                return@startListening
+            }
+            isWaveActive = false
+            showBottomControls = true
             voiceStatus = errorMsg
             aiMessage = errorMsg
         }
@@ -371,6 +460,7 @@ class FloatingFullscreenModeViewModel(
         wakeEnterJob = coroutineScope.launch {
             // 语音态 UI 先切换出来（唤醒场景更符合预期）
             isWaveActive = true
+            microphoneMuted = false
             waveModeAutoTimeoutEnabled = enableAutoTimeout
             inactivityJob?.cancel()
             inactivityJob = null
@@ -378,15 +468,7 @@ class FloatingFullscreenModeViewModel(
             playWakeGreetingIfNeeded(wakeLaunched)
 
             startVoiceCapture()
-            if (speechManager.isRecording && waveModeAutoTimeoutEnabled) {
-                lastVoiceActivityAtMs = System.currentTimeMillis()
-                startInactivityMonitor()
-            } else {
-                if (!speechManager.isRecording) {
-                    isWaveActive = false
-                    showBottomControls = true
-                }
-            }
+
         }
     }
     
@@ -397,12 +479,11 @@ class FloatingFullscreenModeViewModel(
         suppressRecognitionUntilMs = 0L
         waveModeAutoTimeoutEnabled = false
         stopVoiceCapture(true)
-        coroutineScope.launch { speechManager.voiceService.stop() }
+        stopSpeaking()
         isWaveActive = false
         showBottomControls = true
         inactivityJob?.cancel()
         inactivityJob = null
-        resetVoiceAvatarToIdle()
     }
 
     private suspend fun playWakeGreetingIfNeeded(wakeLaunched: Boolean) {
@@ -426,17 +507,7 @@ class FloatingFullscreenModeViewModel(
 
     fun onCenterAvatarClick() {
         if (isWaveActive && shouldInterceptCenterAvatarClick()) {
-            val shouldCancelAiTurn = shouldResumeVoiceCaptureAfterAiTurn || isAiBusy()
-            cancelPendingVoiceCaptureResume()
-            if (shouldCancelAiTurn) {
-                floatContext.onCancelMessage?.invoke()
-            }
-            coroutineScope.launch {
-                speechManager.voiceService.stop()
-                if (!speechManager.isRecording && !speechManager.isProcessingSpeech) {
-                    startVoiceCapture()
-                }
-            }
+            stopSpeaking()
             return
         }
 
@@ -448,10 +519,11 @@ class FloatingFullscreenModeViewModel(
     }
 
     fun handleRecognitionResult(resultText: String, isFinal: Boolean) {
-        if (isWaveActive && System.currentTimeMillis() < suppressRecognitionUntilMs) {
+        if (isWaveActive && !interruptionCapture && System.currentTimeMillis() < suppressRecognitionUntilMs) {
             return
         }
         if (isWaveActive && resultText.isNotBlank()) {
+            if (interruptionCapture) interruptionSpeechDetected = true
             lastVoiceActivityAtMs = System.currentTimeMillis()
         }
         // 委托给 Manager 处理，波浪模式下启用自动静默发送
@@ -465,17 +537,28 @@ class FloatingFullscreenModeViewModel(
          cancelPendingVoiceCaptureResume()
          prefsJob?.cancel()
          prefsJob = coroutineScope.launch {
-             wakePrefs.voiceCallInactivityTimeoutSecondsFlow.collectLatest { seconds ->
-                 inactivityTimeoutSeconds = seconds.coerceIn(1, 600)
+             launch {
+                 wakePrefs.voiceCallInactivityTimeoutSecondsFlow.collectLatest { seconds ->
+                     inactivityTimeoutSeconds = seconds.coerceIn(1, 600)
+                 }
+             }
+             launch {
+                 wakePrefs.voiceInterruptionEnabledFlow.collectLatest { voiceInterruptionEnabled = it }
+             }
+             launch {
+                 speechManager.speechService.speechActivityFlow.collectLatest { active ->
+                     if (active && interruptionCapture && canListenDuringPlayback()) {
+                         interruptionSpeechDetected = true
+                         delay(150)
+                         if (interruptionCapture && speechManager.isRecording && canListenDuringPlayback()) stopSpeaking()
+                     }
+                 }
              }
          }
          isInitialLoad.value = true
          isWaveActive = autoEnterVoiceChat
          showBottomControls = true
-         hasInitializedVoiceAvatarFromSnapshot = false
-         lastHandledVoiceAvatarMessageKey = null
-         resetVoiceAvatarToIdle()
-         exitEditMode()
+         exitEditMode(resumeListening = false)
 
         // 获取焦点
         val view = floatContext.chatService?.getComposeView()
@@ -496,6 +579,7 @@ class FloatingFullscreenModeViewModel(
         speechManager.cleanup()
         ttsSpeakJob?.cancel()
         ttsSpeakJob = null
+        speechQueue.close()
         cancelPendingVoiceCaptureResume()
 
         prefsJob?.cancel()
@@ -509,15 +593,18 @@ class FloatingFullscreenModeViewModel(
 
         wakeEnterJob?.cancel()
         wakeEnterJob = null
-        hasInitializedVoiceAvatarFromSnapshot = false
-        lastHandledVoiceAvatarMessageKey = null
-        resetVoiceAvatarToIdle()
     }
 
     private fun startInactivityMonitor() {
         inactivityJob?.cancel()
         inactivityJob = coroutineScope.launch {
             while (isActive && isWaveActive) {
+                if (isEditMode || speechManager.isPreparing || speechManager.isProcessingSpeech ||
+                    microphoneMuted || speechQueueBusy) {
+                    lastVoiceActivityAtMs = System.currentTimeMillis()
+                    delay(250)
+                    continue
+                }
                 val timeoutMs = inactivityTimeoutSeconds.toLong() * 1000L
                 val elapsed = System.currentTimeMillis() - lastVoiceActivityAtMs
                 val remaining = timeoutMs - elapsed
@@ -580,13 +667,20 @@ class FloatingFullscreenModeViewModel(
         aiMessage = context.getString(R.string.floating_edit_your_message)
     }
     
-    fun exitEditMode() {
+    fun exitEditMode(resumeListening: Boolean = true) {
         isEditMode = false
         editableText = ""
         aiMessage = context.getString(R.string.floating_hold_microphone_to_speak)
+        if (resumeListening && isWaveActive && !microphoneMuted && !isAiBusyOrSpeaking()) {
+            startVoiceCapture()
+        }
     }
     
     fun sendEditedMessage() {
+        if (isAiBusy()) {
+            voiceStatus = context.getString(R.string.voice_draft_wait)
+            return
+        }
         if (isCurrentChatReadOnly()) {
             aiMessage = context.getString(R.string.floating_chat_subagent_read_only)
             isEditMode = false
@@ -594,7 +688,7 @@ class FloatingFullscreenModeViewModel(
             return
         }
         if (editableText.isNotBlank()) {
-            startVoiceAvatarThinking()
+            playbackSuppressed = false
             prepareVoiceCaptureForAiTurn()
             floatContext.onSendMessage?.invoke(editableText, PromptFunctionType.VOICE)
             awaitAiTurnAndResumeVoiceCapture()
@@ -614,6 +708,7 @@ class FloatingFullscreenModeViewModel(
         }
 
         // 立即清理UI状态，不等待协程
+        playbackSuppressed = false
         val shouldCaptureScreen = attachScreenContent
         val shouldCaptureNotifications = attachNotifications
         val shouldCaptureLocation = attachLocation
@@ -625,7 +720,6 @@ class FloatingFullscreenModeViewModel(
         hasOcrSelection = false
         aiMessage = context.getString(R.string.floating_thinking)
 
-        startVoiceAvatarThinking()
         prepareVoiceCaptureForAiTurn()
 
         coroutineScope.launch {
@@ -699,97 +793,6 @@ class FloatingFullscreenModeViewModel(
         return keywords.any { k -> text.contains(k, ignoreCase = true) }
     }
 
-    fun handleVoiceAvatarMessage(message: ChatMessage?) {
-        if (!hasInitializedVoiceAvatarFromSnapshot) {
-            hasInitializedVoiceAvatarFromSnapshot = true
-            if (message?.sender == "ai" && message.contentStream == null) {
-                lastHandledVoiceAvatarMessageKey = buildVoiceAvatarMessageKey(message)
-                return
-            }
-        }
-
-        when (message?.sender) {
-            "think" -> startVoiceAvatarThinking()
-            "ai" -> {
-                if (message.contentStream != null) {
-                    startVoiceAvatarThinking()
-                    return
-                }
-
-                val messageKey = buildVoiceAvatarMessageKey(message)
-                if (lastHandledVoiceAvatarMessageKey == messageKey) {
-                    return
-                }
-                lastHandledVoiceAvatarMessageKey = messageKey
-
-                val triggerName = AvatarEmotionManager.extractMoodTagValue(message.content)
-                if (!triggerName.isNullOrBlank()) {
-                    pushVoiceAvatarMotion(
-                        emotion = AvatarEmotionManager.analyzeEmotion(message.content),
-                        triggerName = triggerName,
-                        playOnce = true
-                    )
-                    return
-                }
-
-                val emotion = AvatarEmotionManager.analyzeEmotion(message.content)
-                if (emotion == AvatarEmotion.IDLE) {
-                    resetVoiceAvatarToIdle()
-                } else {
-                    pushVoiceAvatarMotion(emotion = emotion, playOnce = true)
-                }
-            }
-        }
-    }
-
-    fun syncVoiceAvatarWithProcessingState(
-        state: InputProcessingState,
-        latestMessage: ChatMessage?
-    ) {
-        val shouldResetThinking =
-            (state is InputProcessingState.Idle || state is InputProcessingState.Error) &&
-                voiceAvatarMotionRequest.triggerName.isNullOrBlank() &&
-                voiceAvatarMotionRequest.emotion == AvatarEmotion.THINKING
-        if (!shouldResetThinking) {
-            return
-        }
-
-        val hasCompletedAiMessage =
-            latestMessage?.sender == "ai" && latestMessage.contentStream == null
-        if (!hasCompletedAiMessage) {
-            resetVoiceAvatarToIdle()
-        }
-    }
-
-    private fun buildVoiceAvatarMessageKey(message: ChatMessage): String {
-        return "${message.sender}:${message.timestamp}:${message.content.hashCode()}:${message.contentStream == null}"
-    }
-
-    private fun pushVoiceAvatarMotion(
-        emotion: AvatarEmotion,
-        triggerName: String? = null,
-        playOnce: Boolean
-    ) {
-        voiceAvatarSequence += 1
-        voiceAvatarMotionRequest = VoiceAvatarMotionRequest(
-            emotion = emotion,
-            triggerName = triggerName,
-            playOnce = playOnce,
-            sequence = voiceAvatarSequence
-        )
-    }
-
-    private fun startVoiceAvatarThinking() {
-        pushVoiceAvatarMotion(emotion = AvatarEmotion.THINKING, playOnce = false)
-    }
-
-    private fun resetVoiceAvatarToIdle() {
-        pushVoiceAvatarMotion(emotion = AvatarEmotion.IDLE, playOnce = false)
-    }
-
-    private fun stripVoiceAvatarTags(content: String): String {
-        return AvatarEmotionManager.stripXmlLikeTags(content)
-    }
 }
 
 @Composable

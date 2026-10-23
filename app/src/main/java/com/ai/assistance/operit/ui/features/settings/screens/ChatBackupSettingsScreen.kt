@@ -41,7 +41,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.HorizontalDivider
@@ -86,6 +85,8 @@ import com.ai.assistance.operit.data.repository.ChatHistoryManager
 import com.ai.assistance.operit.data.repository.MemoryRepository
 import com.ai.assistance.operit.data.converter.ExportFormat
 import com.ai.assistance.operit.data.converter.ChatFormat
+import com.ai.assistance.operit.ui.features.settings.components.rememberSettingsCardColor
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
 import com.ai.assistance.operit.ui.features.settings.components.BackupFilesStatisticsCard
 import com.ai.assistance.operit.ui.features.settings.components.CharacterCardManagementCard
 import com.ai.assistance.operit.ui.features.settings.components.ChatHistoryOperation
@@ -809,9 +810,9 @@ fun ChatBackupSettingsScreen() {
         }
 
         item {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     SectionHeader(
@@ -1080,9 +1081,9 @@ fun ChatBackupSettingsScreen() {
         }
 
         item {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     SectionHeader(
@@ -1233,9 +1234,9 @@ fun ChatBackupSettingsScreen() {
         }
 
         item {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     SectionHeader(

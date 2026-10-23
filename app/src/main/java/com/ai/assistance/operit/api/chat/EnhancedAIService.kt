@@ -19,6 +19,7 @@ import com.ai.assistance.operit.api.chat.llmprovider.AIService
 import com.ai.assistance.operit.core.chat.logMessageTiming
 import com.ai.assistance.operit.core.chat.messageTimingNow
 import com.ai.assistance.operit.core.chat.TurnInputInbox
+import com.ai.assistance.operit.core.chat.runSteerableSampling
 import com.ai.assistance.operit.core.chat.AssistantToolSequence
 import com.ai.assistance.operit.core.chat.hooks.PromptHookContext
 import com.ai.assistance.operit.core.chat.hooks.PromptHookRegistry
@@ -470,6 +471,7 @@ class EnhancedAIService private constructor(
 
     private data class MessageExecutionContext(
         val executionId: Int,
+        val dynamicUiRunId: String = java.util.UUID.randomUUID().toString(),
         val streamBuffer: StringBuilder = StringBuilder(),
         val roundManager: ConversationRoundManager = ConversationRoundManager(),
         val isConversationActive: AtomicBoolean = AtomicBoolean(true),
@@ -493,8 +495,38 @@ class EnhancedAIService private constructor(
         val learningToolIterations: AtomicInteger = AtomicInteger(0),
         val subagentToolLoopGuard: ToolExecutionManager.SubagentToolLoopGuard =
             ToolExecutionManager.SubagentToolLoopGuard(),
-        var modelExecutionSnapshot: ModelExecutionSnapshot? = null
+        var modelExecutionSnapshot: ModelExecutionSnapshot? = null,
+        var composerPredictionAllowed: Boolean = true,
+        var samplingInterrupted: Boolean = false,
+        var samplingSavepoint: String = "",
+        var samplingReplayStart: Int = 0,
+        var samplingReplayMetadata: String = "",
+        /**
+         * The tool definitions the most recent request actually sent. The auxiliary prediction
+         * request must declare the same ones, because the tools shape both the provider request and
+         * the way tool turns serialize, and a provider only reuses a prefix that is still the same.
+         */
+        var composerPredictionTools: List<ToolPrompt>? = null,
+        /**
+         * The parameter list the most recent request actually sent, after collaboration effort was
+         * folded in. Thinking intensity is part of what a provider matches its cache on, so the
+         * auxiliary prediction has to repeat these instead of falling back to its own defaults.
+         */
+        var composerPredictionParameters: List<ModelParameter<*>>? = null,
+        /** Whether the most recent request ran with thinking enabled. */
+        var composerPredictionEnableThinking: Boolean = false,
     )
+
+    @Volatile
+    private var completedComposerPrediction: com.ai.assistance.operit.api.chat.prediction.ComposerPredictionSnapshot? = null
+
+    /** Consumed only by the persisted successful-turn boundary, never by an intermediate EOF. */
+    fun takeComposerPredictionSnapshot(sourceTurnId: String): com.ai.assistance.operit.api.chat.prediction.ComposerPredictionSnapshot? {
+        val snapshot = completedComposerPrediction ?: return null
+        if (snapshot.sourceTurnId != sourceTurnId) return null
+        completedComposerPrediction = null
+        return snapshot
+    }
 
     private val activeExecutionContexts = ConcurrentHashMap<Int, MessageExecutionContext>()
     internal fun collaborationHistorySnapshot(): List<PromptTurn> {
@@ -510,10 +542,12 @@ class EnhancedAIService private constructor(
 
     private fun registerExecutionContext(context: MessageExecutionContext) {
         activeExecutionContexts[context.executionId] = context
+        com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.begin(context.dynamicUiRunId)
         com.ai.assistance.operit.core.tools.phone.PhoneControlTools.registerTurn(context.toolSequence.scopeId)
     }
 
     private fun unregisterExecutionContext(context: MessageExecutionContext) {
+        com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.end(context.dynamicUiRunId)
         com.ai.assistance.operit.core.tools.phone.PhoneControlTools.finishTurn(context.toolSequence.scopeId)
         activeExecutionContexts.remove(context.executionId, context)
     }
@@ -550,7 +584,7 @@ class EnhancedAIService private constructor(
             if (functionType == FunctionType.CHAT && overrideConfigId != null) {
                 multiServiceManager.acquireServiceForConfig(
                     configId = overrideConfigId,
-                    modelIndex = (chatModelIndexOverride ?: 0).coerceAtLeast(0)
+                    modelIndex = chatModelIndexOverride ?: 0
                 )
             } else {
                 multiServiceManager.acquireServiceForFunction(functionType)
@@ -648,7 +682,7 @@ class EnhancedAIService private constructor(
         return if (functionType == FunctionType.CHAT && overrideConfigId != null) {
             multiServiceManager.getServiceForConfig(
                 configId = overrideConfigId,
-                modelIndex = (chatModelIndexOverride ?: 0).coerceAtLeast(0)
+                modelIndex = chatModelIndexOverride ?: 0
             )
         } else {
             multiServiceManager.getServiceForFunction(functionType)
@@ -672,7 +706,7 @@ class EnhancedAIService private constructor(
         return if (functionType == FunctionType.CHAT && overrideConfigId != null) {
             multiServiceManager.acquireServiceForConfig(
                 configId = overrideConfigId,
-                modelIndex = (chatModelIndexOverride ?: 0).coerceAtLeast(0),
+                modelIndex = chatModelIndexOverride ?: 0,
             )
         } else {
             multiServiceManager.acquireServiceForFunction(functionType)
@@ -747,8 +781,7 @@ class EnhancedAIService private constructor(
         val overrideConfigId = chatModelConfigIdOverride?.takeIf { it.isNotBlank() }
         return if (functionType == FunctionType.CHAT && overrideConfigId != null) {
             multiServiceManager
-                .getModelConfigForConfig(overrideConfigId)
-                .forSelectedModel((chatModelIndexOverride ?: 0).coerceAtLeast(0))
+                .getSelectedModelConfigForConfig(overrideConfigId, chatModelIndexOverride ?: 0)
         } else {
             multiServiceManager.getModelConfigForFunction(functionType)
         }
@@ -1198,6 +1231,7 @@ class EnhancedAIService private constructor(
                 ?: chatId?.takeIf { it.isNotBlank() }
                 ?: providerSessionId
 
+        completedComposerPrediction = null
         val eventChannel = MutableSharedStream<TextStreamEvent>(replay = Int.MAX_VALUE)
         val wrappedStream = stream {
             val responseCollector = this
@@ -1329,6 +1363,9 @@ class EnhancedAIService private constructor(
                         toolsEnabled = toolsEnabled,
                         isolatedToolPrompts = isolatedToolPrompts,
                     )
+                    execContext.composerPredictionTools = availableTools
+                    execContext.composerPredictionParameters = modelParameters
+                    execContext.composerPredictionEnableThinking = enableThinking
                     val tAfterGetTools = messageTimingNow()
                     AppLogger.d(TAG, "sendMessage本地耗时: getAvailableToolsForFunction=${tAfterGetTools - tAfterGetService}ms")
 
@@ -1435,6 +1472,15 @@ class EnhancedAIService private constructor(
                     val requestStartTime = messageTimingNow()
                     notifyModelRequestStarted(chatId, isSubTask, modelSnapshot)
                     val inputUsage = beginInputUsage(serviceForFunction, requestHistory, availableTools)
+                    var requestReportedTokens = false
+                    startAssistantResponseRound(execContext, responseCollector)
+                    execContext.samplingSavepoint = "sampling_${java.util.UUID.randomUUID()}"
+                    execContext.samplingReplayStart = execContext.emittedReplayCharCount.get()
+                    execContext.eventChannel.emit(TextStreamEvent(TextStreamEventType.SAVEPOINT, execContext.samplingSavepoint))
+                    execContext.samplingReplayMetadata = ""
+                    execContext.samplingInterrupted = runSteerableSampling(
+                        execContext.turnInputInbox, { execContext.samplingReplayMetadata = it },
+                    ) {
                     val responseStream =
                             serviceForFunction.sendMessage(
                                     context = this@EnhancedAIService.context,
@@ -1445,6 +1491,7 @@ class EnhancedAIService private constructor(
                                     availableTools = availableTools,
                                     onUsageReported = { usage, attempt -> reportInputUsage(inputUsage, usage, attempt) },
                                     onTokensUpdated = { input, cachedInput, output ->
+                                        requestReportedTokens = true
                                         currentRequestInputTokenCount = input.coerceAtLeast(0)
                                         currentRequestOutputTokenCount = output.coerceAtLeast(0)
                                         currentRequestCachedInputTokenCount = cachedInput.coerceAtLeast(0)
@@ -1463,8 +1510,10 @@ class EnhancedAIService private constructor(
                     var isFirstChunk = true
 
                     // 创建一个新的轮次来管理内容
-                    startAssistantResponseRound(execContext, responseCollector)
                     val revisionTracker = TextStreamRevisionTracker()
+                    val cardReferences = com.ai.assistance.operit.ui.common.dynamicui.CardReferenceExpander(
+                        { com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.resolve(execContext.dynamicUiRunId, it) },
+                    )
                     val replayRoundStart = execContext.emittedReplayCharCount.get()
                     var processedRevisionEventCount = 0
 
@@ -1474,10 +1523,14 @@ class EnhancedAIService private constructor(
                             val event = events[processedRevisionEventCount++]
                             execContext.eventChannel.emit(event)
                             when (event.eventType) {
-                                TextStreamEventType.SAVEPOINT -> revisionTracker.savepoint(event.id)
+                                TextStreamEventType.SAVEPOINT -> {
+                                    revisionTracker.savepoint(event.id)
+                                    cardReferences.savepoint(event.id)
+                                }
                                 TextStreamEventType.ROLLBACK -> {
                                     val snapshot = revisionTracker.rollback(event.id)?.toString()
                                         ?: continue
+                                    cardReferences.rollback(event.id)
                                     execContext.streamBuffer.clear()
                                     execContext.streamBuffer.append(snapshot)
                                     execContext.roundManager.updateContent(snapshot)
@@ -1495,11 +1548,12 @@ class EnhancedAIService private constructor(
                     var lastLogTime = messageTimingNow()
 
                     try {
-                    responseStream.collect { content ->
+                    responseStream.collect { rawContent ->
                                 // Providers publish revision events before the text they govern.
                                 // Drain that replay log in this collector so rollback and content
                                 // cannot overtake one another in separate coroutines.
                                 drainRevisionEvents()
+                                val content = cardReferences.push(rawContent)
                                 // 第一次收到响应，更新状态
                                 if (isFirstChunk) {
                                     if (!isSubTask) {
@@ -1518,7 +1572,7 @@ class EnhancedAIService private constructor(
 
                                 // 累计统计
                                 chunkCount++
-                                totalChars += content.length
+                                totalChars += rawContent.length
 
                                 // 周期性日志
                                 val currentTime = messageTimingNow()
@@ -1539,13 +1593,24 @@ class EnhancedAIService private constructor(
                                 execContext.emittedReplayCharCount.addAndGet(content.length)
                     }
                     } finally {
-                        drainRevisionEvents()
+                        withContext(NonCancellable) {
+                            drainRevisionEvents()
+                            val tail = cardReferences.finish()
+                            if (tail.isNotEmpty()) {
+                                revisionTracker.append(tail)
+                                execContext.streamBuffer.append(tail)
+                                execContext.roundManager.appendChunk(tail)
+                                emit(tail)
+                                execContext.emittedReplayCharCount.addAndGet(tail.length)
+                            }
+                        }
+                    }
                     }
 
                     // Update accumulated token counts and persist them
-                    val inputTokens = serviceForFunction.inputTokenCount
-                    val cachedInputTokens = serviceForFunction.cachedInputTokenCount
-                    val outputTokens = serviceForFunction.outputTokenCount
+                    val inputTokens = if (requestReportedTokens) serviceForFunction.inputTokenCount else 0
+                    val cachedInputTokens = if (requestReportedTokens) serviceForFunction.cachedInputTokenCount else 0
+                    val outputTokens = if (requestReportedTokens) serviceForFunction.outputTokenCount else 0
                     accumulatedInputTokenCount = saturatedTokenSum(accumulatedInputTokenCount, inputTokens)
                     accumulatedOutputTokenCount = saturatedTokenSum(accumulatedOutputTokenCount, outputTokens)
                     accumulatedCachedInputTokenCount =
@@ -1561,7 +1626,7 @@ class EnhancedAIService private constructor(
                     logMessageTiming(
                         stage = "enhanced.sendMessage.streamComplete",
                         startTimeMs = requestStartTime,
-                        details = "functionType=$functionType, totalChars=$totalChars, stream=$stream"
+                        details = "functionType=$functionType, interrupted=${execContext.samplingInterrupted}, stream=$stream"
                     )
                 }
             } catch (e: CancellationException) {
@@ -1569,6 +1634,7 @@ class EnhancedAIService private constructor(
                 AppLogger.d(TAG, "sendMessage流被取消")
                 throw e
             } catch (e: Exception) {
+                execContext.composerPredictionAllowed = false
                 // 用户取消导致的 Socket closed 是预期行为，不应作为错误处理
                 if (e.message?.contains("Socket closed", ignoreCase = true) == true) {
                     if (isExecutionContextActive(execContext)) {
@@ -1782,6 +1848,38 @@ class EnhancedAIService private constructor(
                 return
             }
 
+            if (context.samplingInterrupted) {
+                context.samplingInterrupted = false
+                val original = context.streamBuffer.toString()
+                val retained = com.ai.assistance.operit.services.core.finalizeInterruptedStreamingContent(
+                    ExecutableToolProtocolParser.retainBeforeUnexecutedTool(original)
+                ) + context.samplingReplayMetadata
+                // Replace only this unfinished sampling round. Earlier tool results and reasoning
+                // stay intact; discarded arguments must not reappear as executable history.
+                if (retained != original ||
+                    context.emittedReplayCharCount.get() - context.samplingReplayStart != retained.length
+                ) {
+                    context.eventChannel.emit(TextStreamEvent(TextStreamEventType.ROLLBACK, context.samplingSavepoint))
+                    context.streamBuffer.clear()
+                    context.streamBuffer.append(retained)
+                    context.roundManager.updateContent(retained)
+                    context.emittedReplayCharCount.set(context.samplingReplayStart)
+                    collector.emit(retained)
+                    context.emittedReplayCharCount.addAndGet(retained.length)
+                }
+                if (retained.isNotBlank()) context.conversationHistory.add(
+                    PromptTurn(
+                        kind = PromptTurnKind.ASSISTANT,
+                        content = com.ai.assistance.operit.ui.common.dynamicui.CardTranscript.forModel(retained),
+                        metadata = mapOf(
+                            com.ai.assistance.operit.core.agent.collaboration.CollaborationPromptHistory.INTERMEDIATE_METADATA to true,
+                        ),
+                    )
+                )
+                finishTurn()
+                return
+            }
+
             // Get response content
             val content = context.streamBuffer.toString().trim()
 
@@ -1905,7 +2003,9 @@ class EnhancedAIService private constructor(
                 context.conversationHistory.add(
                     PromptTurn(
                         kind = PromptTurnKind.ASSISTANT,
-                        content = context.roundManager.getCurrentRoundContent(),
+                        content = com.ai.assistance.operit.ui.common.dynamicui.CardTranscript.forModel(
+                            context.roundManager.getCurrentRoundContent()
+                        ),
                         metadata = mapOf(
                             com.ai.assistance.operit.core.agent.collaboration.CollaborationPromptHistory.INTERMEDIATE_METADATA to
                                 (extractedToolInvocations.isNotEmpty() || truncatedToolRecovery != null),
@@ -2067,6 +2167,45 @@ class EnhancedAIService private constructor(
         notifyReplyOverride: Boolean? = null,
         memorySpaceIdOverride: String? = null
     ) {
+        // Capture before teardown from the effective final request history, including the final
+        // assistant. Re-running preparation here would execute hooks/memory work a second time.
+        try {
+            val modelSnapshot = context.modelExecutionSnapshot
+            val finalTurn = context.conversationHistory.lastOrNull()
+            if (context.composerPredictionAllowed && !isSubTask && !chatId.isNullOrBlank() && !context.toolTimingScopeId.isNullOrBlank() &&
+                modelSnapshot != null && finalTurn?.kind == PromptTurnKind.ASSISTANT &&
+                finalTurn.metadata[com.ai.assistance.operit.core.agent.collaboration.CollaborationPromptHistory.INTERMEDIATE_METADATA] != true &&
+                ChatUtils.removeThinkingContentWindow(finalTurn.content, 0).length > 0 &&
+                com.ai.assistance.operit.data.preferences.DisplayPreferencesManager.getInstance(this@EnhancedAIService.context)
+                    .composerPredictionsEnabled.first()
+            ) {
+                try {
+                    val config = modelSnapshot.config
+                    completedComposerPrediction = com.ai.assistance.operit.api.chat.prediction.ComposerPredictionSnapshot(
+                        chatId = chatId,
+                        sourceTurnId = context.toolTimingScopeId,
+                        history = com.ai.assistance.operit.api.chat.prediction.freezePredictionHistory(context.conversationHistory),
+                        modelConfig = com.ai.assistance.operit.api.chat.prediction.freezePredictionConfig(config),
+                        modelParameters = com.ai.assistance.operit.api.chat.prediction.freezePredictionParameters(
+                            context.composerPredictionParameters ?: modelSnapshot.modelParameters
+                        ),
+                        availableTools = com.ai.assistance.operit.api.chat.prediction.freezePredictionTools(context.composerPredictionTools),
+                        providerSessionId = context.providerSessionId,
+                        workspacePath = context.workspacePath,
+                        enableThinking = context.composerPredictionEnableThinking,
+                    )
+                } catch (_: IllegalArgumentException) {
+                    // Unknown hook-owned mutable metadata cannot safely cross the isolation boundary.
+                    completedComposerPrediction = null
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Auxiliary capture must not turn a successfully completed main request into a failure.
+            completedComposerPrediction = null
+        }
+
         // Mark conversation as complete
         context.turnInputInbox?.seal()
         context.isConversationActive.set(false)
@@ -2296,6 +2435,7 @@ class EnhancedAIService private constructor(
                 callerChatId = chatId,
                 callerCardId = roleCardId,
                 resolvedMemorySpaceId = memorySpaceIdOverride,
+                dynamicUiRunId = context.dynamicUiRunId,
                 conversationLabel = conversationLabel,
                 parentModelConfigId = modelSnapshot.config.id,
                 parentModelIndex = modelSnapshot.lease.modelIndex,
@@ -2541,9 +2681,6 @@ class EnhancedAIService private constructor(
             }
         }
 
-        // Add short delay to make state change more visible
-        delay(300)
-
         // Get all model parameters from preferences (with enabled state)
         val modelSnapshot = getModelExecutionSnapshot(
             context,
@@ -2571,6 +2708,9 @@ class EnhancedAIService private constructor(
             toolsEnabled = context.toolsEnabled,
             isolatedToolPrompts = context.isolatedToolPrompts,
         )
+        context.composerPredictionTools = availableTools
+        context.composerPredictionParameters = modelParameters
+        context.composerPredictionEnableThinking = enableThinking
  
         val currentTokens = estimatePreparedRequestWindow(
             serviceForFunction = serviceForFunction,
@@ -2617,6 +2757,14 @@ class EnhancedAIService private constructor(
                 val aiStartTime = messageTimingNow()
                 notifyModelRequestStarted(chatId, isSubTask, modelSnapshot)
                 val inputUsage = beginInputUsage(serviceForFunction, currentChatHistory, availableTools)
+                var requestReportedTokens = false
+                context.samplingSavepoint = "sampling_${java.util.UUID.randomUUID()}"
+                context.samplingReplayStart = context.emittedReplayCharCount.get()
+                context.eventChannel.emit(TextStreamEvent(TextStreamEventType.SAVEPOINT, context.samplingSavepoint))
+                context.samplingReplayMetadata = ""
+                context.samplingInterrupted = runSteerableSampling(
+                    context.turnInputInbox, { context.samplingReplayMetadata = it },
+                ) {
                 val responseStream =
                         serviceForFunction.sendMessage(
                                 context = this@EnhancedAIService.context,
@@ -2627,6 +2775,7 @@ class EnhancedAIService private constructor(
                                 availableTools = availableTools,
                                 onUsageReported = { usage, attempt -> reportInputUsage(inputUsage, usage, attempt) },
                                 onTokensUpdated = { input, cachedInput, output ->
+                                    requestReportedTokens = true
                                     currentRequestInputTokenCount = input.coerceAtLeast(0)
                                     currentRequestOutputTokenCount = output.coerceAtLeast(0)
                                     currentRequestCachedInputTokenCount = cachedInput.coerceAtLeast(0)
@@ -2655,6 +2804,9 @@ class EnhancedAIService private constructor(
                 var isFirstChunk = true
                 val revisableStream = responseStream as? TextStreamEventCarrier
                 val revisionTracker = TextStreamRevisionTracker()
+                val cardReferences = com.ai.assistance.operit.ui.common.dynamicui.CardReferenceExpander(
+                    { com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.resolve(context.dynamicUiRunId, it) },
+                )
                 val replayRoundStart = context.emittedReplayCharCount.get()
                 var processedRevisionEventCount = 0
 
@@ -2664,10 +2816,14 @@ class EnhancedAIService private constructor(
                         val event = events[processedRevisionEventCount++]
                         context.eventChannel.emit(event)
                         when (event.eventType) {
-                            TextStreamEventType.SAVEPOINT -> revisionTracker.savepoint(event.id)
+                            TextStreamEventType.SAVEPOINT -> {
+                                revisionTracker.savepoint(event.id)
+                                cardReferences.savepoint(event.id)
+                            }
                             TextStreamEventType.ROLLBACK -> {
                                 val snapshot = revisionTracker.rollback(event.id)?.toString()
                                     ?: continue
+                                cardReferences.rollback(event.id)
                                 context.streamBuffer.clear()
                                 context.streamBuffer.append(snapshot)
                                 context.roundManager.updateContent(snapshot)
@@ -2680,8 +2836,9 @@ class EnhancedAIService private constructor(
                 }
 
                 try {
-                responseStream.collect { content ->
+                responseStream.collect { rawContent ->
                             drainRevisionEvents()
+                            val content = cardReferences.push(rawContent)
                             if (isFirstChunk) {
                                 isFirstChunk = false
                                 logMessageTiming(
@@ -2699,7 +2856,7 @@ class EnhancedAIService private constructor(
 
                             // 累计统计
                             chunkCount++
-                            totalChars += content.length
+                            totalChars += rawContent.length
 
                             // 定期记录日志
                             val currentTime = messageTimingNow()
@@ -2712,13 +2869,24 @@ class EnhancedAIService private constructor(
                             context.emittedReplayCharCount.addAndGet(content.length)
                 }
                 } finally {
-                    drainRevisionEvents()
+                    withContext(NonCancellable) {
+                        drainRevisionEvents()
+                        val tail = cardReferences.finish()
+                        if (tail.isNotEmpty()) {
+                            revisionTracker.append(tail)
+                            context.streamBuffer.append(tail)
+                            context.roundManager.appendChunk(tail)
+                            collector.emit(tail)
+                            context.emittedReplayCharCount.addAndGet(tail.length)
+                        }
+                    }
+                }
                 }
 
                 // Update accumulated token counts and persist them
-                val inputTokens = serviceForFunction.inputTokenCount
-                val cachedInputTokens = serviceForFunction.cachedInputTokenCount
-                val outputTokens = serviceForFunction.outputTokenCount
+                val inputTokens = if (requestReportedTokens) serviceForFunction.inputTokenCount else 0
+                val cachedInputTokens = if (requestReportedTokens) serviceForFunction.cachedInputTokenCount else 0
+                val outputTokens = if (requestReportedTokens) serviceForFunction.outputTokenCount else 0
                 accumulatedInputTokenCount = saturatedTokenSum(accumulatedInputTokenCount, inputTokens)
                 accumulatedOutputTokenCount = saturatedTokenSum(accumulatedOutputTokenCount, outputTokens)
                 accumulatedCachedInputTokenCount =
@@ -2735,7 +2903,7 @@ class EnhancedAIService private constructor(
                 logMessageTiming(
                     stage = "enhanced.processToolResults.aiResponseComplete",
                     startTimeMs = aiStartTime,
-                    details = "toolNames=$displayToolNames, totalChars=$totalChars"
+                    details = "toolNames=$displayToolNames, interrupted=${context.samplingInterrupted}"
                 )
 
                 // 流处理完成，处理完成逻辑

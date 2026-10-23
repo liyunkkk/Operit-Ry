@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.ui.common.markdown
 
+import com.ai.assistance.operit.util.markdown.InlineDirectives
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.StaticLayout
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ai.assistance.operit.ui.common.displays.LatexCache
 import com.ai.assistance.operit.ui.theme.LocalAiMarkdownTextLayoutSettings
+import com.ai.assistance.operit.ui.theme.TonedIconStyle
 import com.ai.assistance.operit.util.markdown.MarkdownNodeStable
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
 import com.ai.assistance.operit.util.stream.Stream
@@ -252,7 +254,8 @@ private fun createSafeInlineStaticLayout(
     textPaint: TextPaint,
     width: Int,
     lineSpacingMultiplier: Float,
-    contextLabel: String
+    contextLabel: String,
+    iconStyle: TonedIconStyle = TonedIconStyle.Plain,
 ): StaticLayout {
     return try {
         val spannable = buildSpannableFromChildren(
@@ -260,7 +263,8 @@ private fun createSafeInlineStaticLayout(
             textColor = textColor,
             primaryColor = primaryColor,
             density = density,
-            fontSize = fontSize
+            fontSize = fontSize,
+            iconStyle = iconStyle,
         )
         createStaticLayout(spannable, textPaint, width, lineSpacingMultiplier)
     } catch (t: Throwable) {
@@ -388,6 +392,7 @@ private data class MarkdownLayoutKey(
     val lineHeight: Float,
     val letterSpacing: Float,
     val paragraphSpacing: Float,
+    val iconStyle: TonedIconStyle,
 )
 
 private object CompletedMarkdownLayoutCache {
@@ -669,7 +674,25 @@ private fun renderNodeContent(
             
             // 不使用 key()，让 Compose 根据位置自然识别组件
             // 这样可以保留内部状态（如"已复制"提示、Mermaid 渲染状态）
-            EnhancedCodeBlock(
+            if (language == "a2ui") {
+                com.ai.assistance.operit.ui.common.dynamicui.DynamicUiCard(
+                    source = codeLines.drop(1).let {
+                        if (it.lastOrNull()?.trim() == "```") it.dropLast(1) else it
+                    }.joinToString("\n"),
+                    closed = codeLines.size > 1 && codeLines.last().trim() == "```",
+                    streaming = LocalMarkdownRenderMode.current == MarkdownRenderMode.STREAMING,
+                    blockIndex = index,
+                    ink = textColor,
+                )
+            } else if (language == "a2ui-ref") {
+                // The reference did not resolve in its turn; keep the raw text for the model, show a notice.
+                androidx.compose.material3.Text(
+                    text = androidx.compose.ui.res.stringResource(com.ai.assistance.operit.R.string.dynamic_ui_reference_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 2.dp),
+                )
+            } else EnhancedCodeBlock(
                 code = codeContent,
                 language = language,
                 modifier = Modifier.fillMaxWidth(),
@@ -704,7 +727,8 @@ private fun renderNodeContent(
                         )
                         .padding(4.dp)
                 ) {
-                    val quoteText = content.lines().joinToString("\n") {
+                    // Quotes draw plain text, so inline badges show their label like copy does.
+                    val quoteText = InlineDirectives.toPlainText(content).lines().joinToString("\n") {
                         it.removePrefix("> ").removePrefix(">")
                     }
 
@@ -915,6 +939,7 @@ private fun UnifiedCanvasRenderer(
             normalTypeface, boldTypeface, localDensity.density, localDensity.fontScale,
             availableWidthPx, isLastNode, textLayoutSettings.lineHeightMultiplier,
             textLayoutSettings.letterSpacingSp, textLayoutSettings.paragraphSpacingDp,
+            textLayoutSettings.tonedIconStyle,
         )
         // A collapsed body leaves composition. Keep completed text layouts across re-expansion;
         // live tail versions remain local so token updates cannot evict the transcript cache.
@@ -940,6 +965,7 @@ private fun UnifiedCanvasRenderer(
                     globalLineHeightMultiplier = textLayoutSettings.lineHeightMultiplier,
                     globalLetterSpacingSp = textLayoutSettings.letterSpacingSp,
                     globalParagraphSpacingDp = textLayoutSettings.paragraphSpacingDp,
+                    inlineIconStyle = textLayoutSettings.tonedIconStyle,
                 ).also { if (useCache) CompletedMarkdownLayoutCache.put(layoutKey, it) }
         }
 
@@ -1254,7 +1280,8 @@ private fun calculateLayout(
     typewriterTailAlpha: Float = 1f,
     globalLineHeightMultiplier: Float = 1f,
     globalLetterSpacingSp: Float = 0f,
-    globalParagraphSpacingDp: Float = 0f
+    globalParagraphSpacingDp: Float = 0f,
+    inlineIconStyle: TonedIconStyle = TonedIconStyle.Plain,
 ): LayoutResult {
     if (availableWidthPx <= 0) return LayoutResult(0f, 0f, emptyList())
 
@@ -1322,7 +1349,8 @@ private fun calculateLayout(
                     textPaint = textPaint,
                     width = safeAvailableWidthPx,
                     lineSpacingMultiplier = lineSpacingMultiplier,
-                    contextLabel = "header"
+                    contextLabel = "header",
+                    iconStyle = inlineIconStyle,
                 )
             } else {
                 LayoutCache.getLayout(
@@ -1405,7 +1433,8 @@ private fun calculateLayout(
                     textPaint = textPaint,
                     width = contentWidth,
                     lineSpacingMultiplier = lineSpacingMultiplier,
-                    contextLabel = "ordered-list"
+                    contextLabel = "ordered-list",
+                    iconStyle = inlineIconStyle,
                 )
             } else {
                 LayoutCache.getLayout(
@@ -1482,7 +1511,8 @@ private fun calculateLayout(
                     textPaint = textPaint,
                     width = contentWidth,
                     lineSpacingMultiplier = lineSpacingMultiplier,
-                    contextLabel = "unordered-list"
+                    contextLabel = "unordered-list",
+                    iconStyle = inlineIconStyle,
                 )
             } else {
                 LayoutCache.getLayout(
@@ -1541,7 +1571,8 @@ private fun calculateLayout(
                             textColor = textColor,
                             primaryColor = primaryColor,
                             density = density,
-                            fontSize = bodyMediumSize
+                            fontSize = bodyMediumSize,
+                            iconStyle = inlineIconStyle,
                         ).trimAllPreservingSpans()
                     } catch (t: Throwable) {
                         AppLogger.w(TAG, "Inline markdown layout failed in plain-text, fallback to raw text", t)
@@ -1620,14 +1651,16 @@ private fun buildSpannableFromChildren(
     textColor: Color,
     primaryColor: Color,
     density: Density? = null,
-    fontSize: TextUnit? = null
+    fontSize: TextUnit? = null,
+    iconStyle: TonedIconStyle = TonedIconStyle.Plain,
 ): SpannableStringBuilder {
     return buildMarkdownInlineSpannableFromChildren(
         children = children,
         textColor = textColor,
         primaryColor = primaryColor,
         density = density,
-        fontSize = fontSize
+        fontSize = fontSize,
+        iconStyle = iconStyle,
     )
 }
 

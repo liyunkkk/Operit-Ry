@@ -9,6 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.Icon
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Link
@@ -18,7 +24,6 @@ import androidx.compose.material3.CardColors
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.OutlinedButton
@@ -35,10 +40,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +55,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCardShape
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsRowDivider
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSwitchRow
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
+import androidx.compose.foundation.layout.PaddingValues
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.features.settings.components.ChatStyleOption
@@ -76,10 +88,16 @@ internal fun ThemeSettingsCharacterBindingInfoCard(
     isGroupTarget: Boolean,
     cardColors: CardColors,
 ) {
+    // Theme changes are saved onto this card, so it gets the brand tint to stand out.
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-        colors = cardColors,
-        shape = RoundedCornerShape(8.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        .compositeOver(cardColors.containerColor),
+            ),
+        shape = SettingsCardShape,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -161,44 +179,29 @@ internal fun ThemeSettingsThemeModeSection(
         icon = Icons.Default.Brightness4,
     )
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = stringResource(id = R.string.theme_system_title),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.theme_follow_system),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.theme_follow_system_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                Switch(
-                    checked = useSystemThemeInput,
-                    onCheckedChange = {
-                        onUseSystemThemeInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(useSystemTheme = it)
-                        }
-                    },
-                )
-            }
+            SettingsSwitchRow(
+                title = stringResource(id = R.string.theme_follow_system),
+                subtitle = stringResource(id = R.string.theme_follow_system_desc),
+                checked = useSystemThemeInput,
+                onCheckedChange = {
+                    onUseSystemThemeInputChange(it)
+                    saveThemeSettingsWithCharacterCard {
+                        preferencesManager.saveThemeSettings(useSystemTheme = it)
+                    }
+                },
+                horizontalPadding = 0.dp,
+            )
 
             if (!useSystemThemeInput) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = stringResource(id = R.string.theme_select),
@@ -248,8 +251,6 @@ internal fun ThemeSettingsChatStyleSection(
     cardColors: CardColors,
     chatStyleInput: String,
     onChatStyleInputChange: (String) -> Unit,
-    inputStyleInput: String,
-    onInputStyleInputChange: (String) -> Unit,
     bubbleShowAvatarInput: Boolean,
     onBubbleShowAvatarInputChange: (Boolean) -> Unit,
     bubbleWideLayoutEnabledInput: Boolean,
@@ -356,18 +357,17 @@ internal fun ThemeSettingsChatStyleSection(
     onBubbleAiContentPaddingRightInputChange: (Float) -> Unit,
     saveThemeSettingsWithCharacterCard: SaveThemeSettingsAction,
     preferencesManager: UserPreferencesManager,
-    showInputStyleControls: Boolean = true,
 ) {
     ThemeSettingsSectionTitle(
         title = stringResource(id = R.string.chat_style_title),
         icon = Icons.Default.ColorLens,
     )
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = stringResource(id = R.string.chat_style_desc),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
 
@@ -402,178 +402,72 @@ internal fun ThemeSettingsChatStyleSection(
                 }
             }
 
-            if (showInputStyleControls) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                Text(
-                    text = stringResource(id = R.string.input_style_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-                Text(
-                    text = stringResource(id = R.string.input_style_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    ChatStyleOption(
-                        title = stringResource(id = R.string.input_style_classic),
-                        selected =
-                            inputStyleInput == UserPreferencesManager.INPUT_STYLE_CLASSIC,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        onInputStyleInputChange(UserPreferencesManager.INPUT_STYLE_CLASSIC)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(
-                                inputStyle = UserPreferencesManager.INPUT_STYLE_CLASSIC,
-                            )
-                        }
-                    }
-
-                    ChatStyleOption(
-                        title = stringResource(id = R.string.input_style_agent),
-                        selected = inputStyleInput == UserPreferencesManager.INPUT_STYLE_AGENT,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        onInputStyleInputChange(UserPreferencesManager.INPUT_STYLE_AGENT)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(
-                                inputStyle = UserPreferencesManager.INPUT_STYLE_AGENT,
-                            )
-                        }
-                    }
-                }
-            }
-
             if (chatStyleInput == UserPreferencesManager.CHAT_STYLE_CURSOR) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(id = R.string.chat_style_cursor_user_follow_theme),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(id = R.string.chat_style_cursor_user_follow_theme_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = cursorUserBubbleFollowThemeInput,
-                        onCheckedChange = {
-                            onCursorUserBubbleFollowThemeInputChange(it)
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    cursorUserBubbleFollowTheme = it,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_cursor_user_follow_theme),
+                    subtitle = stringResource(id = R.string.chat_style_cursor_user_follow_theme_desc),
+                    checked = cursorUserBubbleFollowThemeInput,
+                    onCheckedChange = {
+                        onCursorUserBubbleFollowThemeInputChange(it)
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                cursorUserBubbleFollowTheme = it,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_cursor_user_bubble_liquid_glass
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_cursor_user_bubble_liquid_glass_desc
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = cursorUserBubbleLiquidGlassInput,
-                        onCheckedChange = {
-                            onCursorUserBubbleLiquidGlassInputChange(it)
-                            if (it) {
-                                onCursorUserBubbleWaterGlassInputChange(false)
-                            }
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    cursorUserBubbleLiquidGlass = it,
-                                    cursorUserBubbleWaterGlass = if (it) false else null,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_cursor_user_bubble_liquid_glass),
+                    subtitle = stringResource(id = R.string.chat_style_cursor_user_bubble_liquid_glass_desc),
+                    checked = cursorUserBubbleLiquidGlassInput,
+                    onCheckedChange = {
+                        onCursorUserBubbleLiquidGlassInputChange(it)
+                        if (it) {
+                            onCursorUserBubbleWaterGlassInputChange(false)
+                        }
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                cursorUserBubbleLiquidGlass = it,
+                                cursorUserBubbleWaterGlass = if (it) false else null,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_cursor_user_bubble_water_glass
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_cursor_user_bubble_water_glass_desc
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = cursorUserBubbleWaterGlassInput,
-                        onCheckedChange = {
-                            onCursorUserBubbleWaterGlassInputChange(it)
-                            if (it) {
-                                onCursorUserBubbleLiquidGlassInputChange(false)
-                            }
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    cursorUserBubbleWaterGlass = it,
-                                    cursorUserBubbleLiquidGlass = if (it) false else null,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_cursor_user_bubble_water_glass),
+                    subtitle = stringResource(id = R.string.chat_style_cursor_user_bubble_water_glass_desc),
+                    checked = cursorUserBubbleWaterGlassInput,
+                    onCheckedChange = {
+                        onCursorUserBubbleWaterGlassInputChange(it)
+                        if (it) {
+                            onCursorUserBubbleLiquidGlassInputChange(false)
+                        }
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                cursorUserBubbleWaterGlass = it,
+                                cursorUserBubbleLiquidGlass = if (it) false else null,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
                 if (!cursorUserBubbleFollowThemeInput) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         ColorSelectionItem(
                             title = stringResource(id = R.string.chat_style_cursor_user_bubble_color),
                             color = Color(cursorUserBubbleColorInput),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                             onClick = { onShowColorPicker("cursorUserBubble") },
                         )
                     }
@@ -696,240 +590,131 @@ internal fun ThemeSettingsChatStyleSection(
                     )
                 }
             if (chatStyleInput == UserPreferencesManager.CHAT_STYLE_BUBBLE) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(id = R.string.chat_style_bubble_show_avatar),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(id = R.string.chat_style_bubble_show_avatar_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = bubbleShowAvatarInput,
-                        onCheckedChange = {
-                            onBubbleShowAvatarInputChange(it)
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(bubbleShowAvatar = it)
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_bubble_show_avatar),
+                    subtitle = stringResource(id = R.string.chat_style_bubble_show_avatar_desc),
+                    checked = bubbleShowAvatarInput,
+                    onCheckedChange = {
+                        onBubbleShowAvatarInputChange(it)
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(bubbleShowAvatar = it)
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(id = R.string.chat_style_bubble_wide_layout),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = stringResource(id = R.string.chat_style_bubble_wide_layout_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = bubbleWideLayoutEnabledInput,
-                        onCheckedChange = {
-                            onBubbleWideLayoutEnabledInputChange(it)
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    bubbleWideLayoutEnabled = it,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_bubble_wide_layout),
+                    subtitle = stringResource(id = R.string.chat_style_bubble_wide_layout_desc),
+                    checked = bubbleWideLayoutEnabledInput,
+                    onCheckedChange = {
+                        onBubbleWideLayoutEnabledInputChange(it)
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                bubbleWideLayoutEnabled = it,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_user_bubble_liquid_glass,
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_user_bubble_liquid_glass_desc,
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = bubbleUserBubbleLiquidGlassInput,
-                        onCheckedChange = {
-                            onBubbleUserBubbleLiquidGlassInputChange(it)
-                            if (it) {
-                                onBubbleUserBubbleWaterGlassInputChange(false)
-                                onBubbleUserUseImageInputChange(false)
-                            }
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    bubbleUserBubbleLiquidGlass = it,
-                                    bubbleUserBubbleWaterGlass = if (it) false else null,
-                                    bubbleUserUseImage = if (it) false else null,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_bubble_user_bubble_liquid_glass),
+                    subtitle = stringResource(id = R.string.chat_style_bubble_user_bubble_liquid_glass_desc),
+                    checked = bubbleUserBubbleLiquidGlassInput,
+                    onCheckedChange = {
+                        onBubbleUserBubbleLiquidGlassInputChange(it)
+                        if (it) {
+                            onBubbleUserBubbleWaterGlassInputChange(false)
+                            onBubbleUserUseImageInputChange(false)
+                        }
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                bubbleUserBubbleLiquidGlass = it,
+                                bubbleUserBubbleWaterGlass = if (it) false else null,
+                                bubbleUserUseImage = if (it) false else null,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_user_bubble_water_glass,
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_user_bubble_water_glass_desc,
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = bubbleUserBubbleWaterGlassInput,
-                        onCheckedChange = {
-                            onBubbleUserBubbleWaterGlassInputChange(it)
-                            if (it) {
-                                onBubbleUserBubbleLiquidGlassInputChange(false)
-                                onBubbleUserUseImageInputChange(false)
-                            }
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    bubbleUserBubbleWaterGlass = it,
-                                    bubbleUserBubbleLiquidGlass = if (it) false else null,
-                                    bubbleUserUseImage = if (it) false else null,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_bubble_user_bubble_water_glass),
+                    subtitle = stringResource(id = R.string.chat_style_bubble_user_bubble_water_glass_desc),
+                    checked = bubbleUserBubbleWaterGlassInput,
+                    onCheckedChange = {
+                        onBubbleUserBubbleWaterGlassInputChange(it)
+                        if (it) {
+                            onBubbleUserBubbleLiquidGlassInputChange(false)
+                            onBubbleUserUseImageInputChange(false)
+                        }
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                bubbleUserBubbleWaterGlass = it,
+                                bubbleUserBubbleLiquidGlass = if (it) false else null,
+                                bubbleUserUseImage = if (it) false else null,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_ai_bubble_liquid_glass,
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_ai_bubble_liquid_glass_desc,
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = bubbleAiBubbleLiquidGlassInput,
-                        onCheckedChange = {
-                            onBubbleAiBubbleLiquidGlassInputChange(it)
-                            if (it) {
-                                onBubbleAiBubbleWaterGlassInputChange(false)
-                                onBubbleAiUseImageInputChange(false)
-                            }
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    bubbleAiBubbleLiquidGlass = it,
-                                    bubbleAiBubbleWaterGlass = if (it) false else null,
-                                    bubbleAiUseImage = if (it) false else null,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_bubble_ai_bubble_liquid_glass),
+                    subtitle = stringResource(id = R.string.chat_style_bubble_ai_bubble_liquid_glass_desc),
+                    checked = bubbleAiBubbleLiquidGlassInput,
+                    onCheckedChange = {
+                        onBubbleAiBubbleLiquidGlassInputChange(it)
+                        if (it) {
+                            onBubbleAiBubbleWaterGlassInputChange(false)
+                            onBubbleAiUseImageInputChange(false)
+                        }
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                bubbleAiBubbleLiquidGlass = it,
+                                bubbleAiBubbleWaterGlass = if (it) false else null,
+                                bubbleAiUseImage = if (it) false else null,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_ai_bubble_water_glass,
-                                ),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text =
-                                stringResource(
-                                    id = R.string.chat_style_bubble_ai_bubble_water_glass_desc,
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = bubbleAiBubbleWaterGlassInput,
-                        onCheckedChange = {
-                            onBubbleAiBubbleWaterGlassInputChange(it)
-                            if (it) {
-                                onBubbleAiBubbleLiquidGlassInputChange(false)
-                                onBubbleAiUseImageInputChange(false)
-                            }
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(
-                                    bubbleAiBubbleWaterGlass = it,
-                                    bubbleAiBubbleLiquidGlass = if (it) false else null,
-                                    bubbleAiUseImage = if (it) false else null,
-                                )
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.chat_style_bubble_ai_bubble_water_glass),
+                    subtitle = stringResource(id = R.string.chat_style_bubble_ai_bubble_water_glass_desc),
+                    checked = bubbleAiBubbleWaterGlassInput,
+                    onCheckedChange = {
+                        onBubbleAiBubbleWaterGlassInputChange(it)
+                        if (it) {
+                            onBubbleAiBubbleLiquidGlassInputChange(false)
+                            onBubbleAiUseImageInputChange(false)
+                        }
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(
+                                bubbleAiBubbleWaterGlass = it,
+                                bubbleAiBubbleLiquidGlass = if (it) false else null,
+                                bubbleAiUseImage = if (it) false else null,
+                            )
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = stringResource(id = R.string.chat_style_bubble_image_render_mode_title),
@@ -985,7 +770,7 @@ internal fun ThemeSettingsChatStyleSection(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = stringResource(id = R.string.chat_style_bubble_rounded_corners),
@@ -1048,33 +833,30 @@ internal fun ThemeSettingsChatStyleSection(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = stringResource(id = R.string.chat_style_bubble_color_title),
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    modifier = Modifier.settingsSearchTarget(stringResource(id = R.string.chat_style_bubble_color_title)).padding(bottom = 8.dp),
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     ColorSelectionItem(
                         title = stringResource(id = R.string.chat_style_bubble_user_color),
                         color = Color(bubbleUserBubbleColorInput),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = { onShowColorPicker("bubbleUserBubble") },
                     )
                     ColorSelectionItem(
                         title = stringResource(id = R.string.chat_style_bubble_ai_color),
                         color = Color(bubbleAiBubbleColorInput),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = { onShowColorPicker("bubbleAiBubble") },
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = stringResource(id = R.string.chat_style_bubble_text_style_title),
@@ -1082,20 +864,17 @@ internal fun ThemeSettingsChatStyleSection(
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     ColorSelectionItem(
                         title = stringResource(id = R.string.chat_style_bubble_user_text_color),
                         color = Color(bubbleUserTextColorInput),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = { onShowColorPicker("bubbleUserText") },
                     )
                     ColorSelectionItem(
                         title = stringResource(id = R.string.chat_style_bubble_ai_text_color),
                         color = Color(bubbleAiTextColorInput),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = { onShowColorPicker("bubbleAiText") },
                     )
                 }
@@ -1170,7 +949,7 @@ internal fun ThemeSettingsChatStyleSection(
                     },
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 BubbleImageStyleEditor(
                     title = stringResource(id = R.string.chat_style_bubble_user_image_title),
@@ -1466,7 +1245,7 @@ internal fun ThemeSettingsChatStyleSection(
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
             val previewChatStyle =
                 if (chatStyleInput == UserPreferencesManager.CHAT_STYLE_BUBBLE) {
@@ -1531,23 +1310,16 @@ private fun BubbleFontStyleEditor(
             CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
             ),
+        shape = RoundedCornerShape(14.dp),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = title, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = stringResource(id = R.string.use_system_or_custom_font),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = useCustomFont, onCheckedChange = onUseCustomFontChange)
-            }
+            SettingsSwitchRow(
+                title = title,
+                subtitle = stringResource(id = R.string.use_system_or_custom_font),
+                checked = useCustomFont,
+                onCheckedChange = onUseCustomFontChange,
+                horizontalPadding = 0.dp,
+            )
 
             if (useCustomFont) {
                 Text(
@@ -1696,30 +1468,17 @@ private fun BubbleImageStyleEditor(
             CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
             ),
+        shape = RoundedCornerShape(14.dp),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = enabled,
-                    enabled = switchEnabled,
-                    onCheckedChange = onEnabledChange,
-                )
-            }
+            SettingsSwitchRow(
+                title = title,
+                subtitle = description,
+                checked = enabled,
+                enabled = switchEnabled,
+                onCheckedChange = onEnabledChange,
+                horizontalPadding = 0.dp,
+            )
 
             if (enabled) {
                 Row(
@@ -1752,117 +1511,145 @@ private fun BubbleImageStyleEditor(
                     modifier = Modifier.padding(top = 8.dp),
                 )
 
+                // Fine tuning is rarely needed, so the sliders stay folded until asked for.
+                var showFineTuning by remember { mutableStateOf(false) }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showFineTuning = !showFineTuning }
+                            .padding(vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_crop_left),
-                        value = cropLeft,
-                        range = 0f..0.45f,
-                        onValueChange = onCropLeftChange,
-                        onValueChangeFinished = onCropLeftChangeFinished,
+                    Text(
+                        text = stringResource(id = R.string.chat_style_bubble_fine_tuning),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f),
                     )
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_crop_top),
-                        value = cropTop,
-                        range = 0f..0.45f,
-                        onValueChange = onCropTopChange,
-                        onValueChangeFinished = onCropTopChangeFinished,
-                        modifier = Modifier.weight(1f),
+                    Icon(
+                        imageVector = if (showFineTuning) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
                     )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+                AnimatedVisibility(visible = showFineTuning) {
+                    Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_crop_left),
+                            value = cropLeft,
+                            range = 0f..0.45f,
+                            onValueChange = onCropLeftChange,
+                            onValueChangeFinished = onCropLeftChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_crop_top),
+                            value = cropTop,
+                            range = 0f..0.45f,
+                            onValueChange = onCropTopChange,
+                            onValueChangeFinished = onCropTopChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_crop_right),
+                            value = cropRight,
+                            range = 0f..0.45f,
+                            onValueChange = onCropRightChange,
+                            onValueChangeFinished = onCropRightChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_crop_bottom),
+                            value = cropBottom,
+                            range = 0f..0.45f,
+                            onValueChange = onCropBottomChange,
+                            onValueChangeFinished = onCropBottomChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_repeat_x_start),
+                            value = repeatXStart,
+                            range = 0.05f..0.9f,
+                            onValueChange = onRepeatXStartChange,
+                            onValueChangeFinished = onRepeatXStartChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_repeat_x_end),
+                            value = repeatXEnd,
+                            range = ((repeatXStart + 0.01f).coerceAtMost(0.95f))..0.95f,
+                            onValueChange = onRepeatXEndChange,
+                            onValueChangeFinished = onRepeatXEndChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_repeat_y_start),
+                            value = repeatYStart,
+                            range = 0.05f..0.9f,
+                            onValueChange = onRepeatYStartChange,
+                            onValueChangeFinished = onRepeatYStartChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                        BubbleStyleSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_repeat_y_end),
+                            value = repeatYEnd,
+                            range = ((repeatYStart + 0.01f).coerceAtMost(0.95f))..0.95f,
+                            onValueChange = onRepeatYEndChange,
+                            onValueChangeFinished = onRepeatYEndChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                     BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_crop_right),
-                        value = cropRight,
-                        range = 0f..0.45f,
-                        onValueChange = onCropRightChange,
-                        onValueChangeFinished = onCropRightChangeFinished,
-                        modifier = Modifier.weight(1f),
+                        label = stringResource(id = R.string.chat_style_bubble_image_scale),
+                        value = imageScale,
+                        range = 0.2f..3f,
+                        onValueChange = onImageScaleChange,
+                        onValueChangeFinished = onImageScaleChangeFinished,
                     )
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_crop_bottom),
-                        value = cropBottom,
-                        range = 0f..0.45f,
-                        onValueChange = onCropBottomChange,
-                        onValueChangeFinished = onCropBottomChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_repeat_x_start),
-                        value = repeatXStart,
-                        range = 0.05f..0.9f,
-                        onValueChange = onRepeatXStartChange,
-                        onValueChangeFinished = onRepeatXStartChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_repeat_x_end),
-                        value = repeatXEnd,
-                        range = ((repeatXStart + 0.01f).coerceAtMost(0.95f))..0.95f,
-                        onValueChange = onRepeatXEndChange,
-                        onValueChangeFinished = onRepeatXEndChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_repeat_y_start),
-                        value = repeatYStart,
-                        range = 0.05f..0.9f,
-                        onValueChange = onRepeatYStartChange,
-                        onValueChangeFinished = onRepeatYStartChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
-                    BubbleStyleSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_repeat_y_end),
-                        value = repeatYEnd,
-                        range = ((repeatYStart + 0.01f).coerceAtMost(0.95f))..0.95f,
-                        onValueChange = onRepeatYEndChange,
-                        onValueChangeFinished = onRepeatYEndChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                BubbleStyleSliderRow(
-                    label = stringResource(id = R.string.chat_style_bubble_image_scale),
-                    value = imageScale,
-                    range = 0.2f..3f,
-                    onValueChange = onImageScaleChange,
-                    onValueChangeFinished = onImageScaleChangeFinished,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    BubbleStyleDpSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_padding_left),
-                        value = contentPaddingLeft,
-                        range = 0f..32f,
-                        onValueChange = onContentPaddingLeftChange,
-                        onValueChangeFinished = onContentPaddingLeftChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
-                    BubbleStyleDpSliderRow(
-                        label = stringResource(id = R.string.chat_style_bubble_padding_right),
-                        value = contentPaddingRight,
-                        range = 0f..32f,
-                        onValueChange = onContentPaddingRightChange,
-                        onValueChangeFinished = onContentPaddingRightChangeFinished,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BubbleStyleDpSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_padding_left),
+                            value = contentPaddingLeft,
+                            range = 0f..32f,
+                            onValueChange = onContentPaddingLeftChange,
+                            onValueChangeFinished = onContentPaddingLeftChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                        BubbleStyleDpSliderRow(
+                            label = stringResource(id = R.string.chat_style_bubble_padding_right),
+                            value = contentPaddingRight,
+                            range = 0f..32f,
+                            onValueChange = onContentPaddingRightChange,
+                            onValueChangeFinished = onContentPaddingRightChangeFinished,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    }
                 }
             }
         }
@@ -1977,6 +1764,7 @@ private fun NineSliceSourcePreviewCard(
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)),
+        shape = RoundedCornerShape(14.dp),
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Text(
@@ -2172,6 +1960,7 @@ private fun ChatStylePreviewCard(
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)),
+        shape = RoundedCornerShape(14.dp),
     ) {
         val baseTypography = MaterialTheme.typography
         val userTypography =
@@ -2562,354 +2351,88 @@ internal fun ThemeSettingsDisplayOptionsSection(
         icon = Icons.Default.ColorLens,
     )
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_thinking_process),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_thinking_process_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showThinkingProcessInput,
-                    onCheckedChange = {
-                        onShowThinkingProcessInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showThinkingProcess = it)
-                        }
-                    },
-                )
-            }
+    // Each row: title, description, current value, and how to change and save it.
+    val rows =
+        listOf(
+            ThemeDisplayToggle(R.string.show_thinking_process, R.string.show_thinking_process_desc, showThinkingProcessInput) {
+                onShowThinkingProcessInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showThinkingProcess = it) }
+            },
+            ThemeDisplayToggle(R.string.show_model_provider, R.string.show_model_provider_description, showModelProviderInput) {
+                onShowModelProviderInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showModelProvider = it) }
+            },
+            ThemeDisplayToggle(R.string.show_model_name, R.string.show_model_name_description, showModelNameInput) {
+                onShowModelNameInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showModelName = it) }
+            },
+            ThemeDisplayToggle(R.string.show_role_name, R.string.show_role_name_description, showRoleNameInput) {
+                onShowRoleNameInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showRoleName = it) }
+            },
+            ThemeDisplayToggle(R.string.show_user_name, R.string.show_user_name_description, showUserNameInput) {
+                onShowUserNameInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showUserName = it) }
+            },
+            ThemeDisplayToggle(R.string.show_message_token_stats, R.string.show_message_token_stats_description, showMessageTokenStatsInput) {
+                onShowMessageTokenStatsInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showMessageTokenStats = it) }
+            },
+            ThemeDisplayToggle(R.string.show_message_timing_stats, R.string.show_message_timing_stats_description, showMessageTimingStatsInput) {
+                onShowMessageTimingStatsInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showMessageTimingStats = it) }
+            },
+            ThemeDisplayToggle(R.string.show_message_timestamp, R.string.show_message_timestamp_description, showMessageTimestampInput) {
+                onShowMessageTimestampInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showMessageTimestamp = it) }
+            },
+            ThemeDisplayToggle(R.string.show_status_tags, R.string.show_status_tags_desc, showStatusTagsInput) {
+                onShowStatusTagsInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showStatusTags = it) }
+            },
+            ThemeDisplayToggle(R.string.show_input_processing_status, R.string.show_input_processing_status_desc, showInputProcessingStatusInput) {
+                onShowInputProcessingStatusInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showInputProcessingStatus = it) }
+            },
+            ThemeDisplayToggle(R.string.show_chat_floating_dots_animation, R.string.show_chat_floating_dots_animation_desc, showChatFloatingDotsAnimationInput) {
+                onShowChatFloatingDotsAnimationInputChange(it)
+                saveThemeSettingsWithCharacterCard { preferencesManager.saveThemeSettings(showChatFloatingDotsAnimation = it) }
+            },
+        )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_model_provider),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_model_provider_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showModelProviderInput,
-                    onCheckedChange = {
-                        onShowModelProviderInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showModelProvider = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_model_name),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_model_name_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showModelNameInput,
-                    onCheckedChange = {
-                        onShowModelNameInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showModelName = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_role_name),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_role_name_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showRoleNameInput,
-                    onCheckedChange = {
-                        onShowRoleNameInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showRoleName = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_user_name),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_user_name_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showUserNameInput,
-                    onCheckedChange = {
-                        onShowUserNameInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showUserName = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_message_token_stats),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_message_token_stats_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showMessageTokenStatsInput,
-                    onCheckedChange = {
-                        onShowMessageTokenStatsInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showMessageTokenStats = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_message_timing_stats),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_message_timing_stats_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showMessageTimingStatsInput,
-                    onCheckedChange = {
-                        onShowMessageTimingStatsInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showMessageTimingStats = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_message_timestamp),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_message_timestamp_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showMessageTimestampInput,
-                    onCheckedChange = {
-                        onShowMessageTimestampInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showMessageTimestamp = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_status_tags),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_status_tags_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showStatusTagsInput,
-                    onCheckedChange = {
-                        onShowStatusTagsInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(showStatusTags = it)
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_input_processing_status),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text =
-                            stringResource(id = R.string.show_input_processing_status_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showInputProcessingStatusInput,
-                    onCheckedChange = {
-                        onShowInputProcessingStatusInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(
-                                showInputProcessingStatus = it,
-                            )
-                        }
-                    },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.show_chat_floating_dots_animation),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.show_chat_floating_dots_animation_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = showChatFloatingDotsAnimationInput,
-                    onCheckedChange = {
-                        onShowChatFloatingDotsAnimationInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(
-                                showChatFloatingDotsAnimation = it,
-                            )
-                        }
-                    },
-                )
-            }
+    SettingsCard(
+        backgroundColor = cardColors.containerColor,
+        modifier = Modifier.padding(bottom = 16.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+    ) {
+        rows.forEachIndexed { index, row ->
+            if (index > 0) SettingsRowDivider(inset = false)
+            SettingsSwitchRow(
+                title = stringResource(id = row.titleRes),
+                subtitle = stringResource(id = row.subtitleRes),
+                checked = row.checked,
+                onCheckedChange = row.onChange,
+            )
         }
     }
 }
+
+private class ThemeDisplayToggle(
+    val titleRes: Int,
+    val subtitleRes: Int,
+    val checked: Boolean,
+    val onChange: (Boolean) -> Unit,
+)
 
 @Composable
 internal fun ThemeSettingsSectionTitle(
     title: String,
     icon: ImageVector,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 8.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-    HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+    // Section titles double as search landing spots for the options grouped under them.
+    SettingsSectionTitle(
+        text = title,
+        icon = icon,
+        modifier = Modifier.settingsSearchTarget(title).padding(top = 8.dp),
+    )
 }

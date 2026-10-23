@@ -94,3 +94,6 @@
 # Reactor BlockHound integration with Netty
 -dontwarn reactor.blockhound.integration.BlockHoundIntegration
 -dontwarn io.netty.util.internal.Hidden$NettyBlockHoundIntegration
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+# Sherpa resolves the concrete callback's boxed, typed invoke method through JNI.
+-keep class com.ai.assistance.operit.api.voice.SherpaAudioCallback { *; }

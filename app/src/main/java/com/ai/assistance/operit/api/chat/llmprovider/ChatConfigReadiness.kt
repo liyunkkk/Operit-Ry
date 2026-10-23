@@ -5,7 +5,7 @@ import com.ai.assistance.operit.data.model.ApiKeyFormatValidator
 import com.ai.assistance.operit.data.model.ApiProviderType
 import com.ai.assistance.operit.data.model.ModelConfigData
 import com.ai.assistance.operit.data.model.getModelByIndex
-import com.ai.assistance.operit.data.model.getValidModelIndex
+import com.ai.assistance.operit.data.model.getModelList
 import java.net.URI
 
 enum class ChatConfigReadinessIssue {
@@ -46,6 +46,10 @@ object ChatConfigReadiness {
         if (providerTypeId.isEmpty()) {
             return ChatConfigReadinessResult(ChatConfigReadinessIssue.PROVIDER_MISSING)
         }
+        if (modelIndex < 0 || (config.modelName.isNotBlank() &&
+                modelIndex !in getModelList(config.modelName).indices)) {
+            return ChatConfigReadinessResult(ChatConfigReadinessIssue.MODEL_MISSING)
+        }
 
         val normalizedPluginIds = registeredPluginProviderIds.mapTo(mutableSetOf()) {
             it.trim().lowercase()
@@ -66,8 +70,7 @@ object ChatConfigReadiness {
         if (providerType == ApiProviderType.OPENAI_CODEX && !codexAuthenticated) {
             return ChatConfigReadinessResult(ChatConfigReadinessIssue.CODEX_LOGIN_REQUIRED)
         }
-        val validModelIndex = getValidModelIndex(config.modelName, modelIndex)
-        if (getModelByIndex(config.modelName, validModelIndex).isBlank()) {
+        if (getModelByIndex(config.modelName, modelIndex).isBlank()) {
             return ChatConfigReadinessResult(ChatConfigReadinessIssue.MODEL_MISSING)
         }
 

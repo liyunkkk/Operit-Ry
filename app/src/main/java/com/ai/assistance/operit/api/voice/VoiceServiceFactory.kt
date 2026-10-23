@@ -25,6 +25,7 @@ object VoiceServiceFactory {
         OPENAI_TTS,
         /** 基于 VITS/Piper ONNX Runtime 推理形态的本地 TTS 服务 */
         VITS_TTS,
+        SHERPA_ONNX,
     }
 
     /**
@@ -40,11 +41,14 @@ object VoiceServiceFactory {
         return createVoiceService(context, runBlocking { profiles.getCurrentTtsProfile() })
     }
 
-    private fun createVoiceService(
+    fun createVoiceService(
         context: Context,
         profile: SpeechServiceProfilesPreferences.TtsProfile,
     ): VoiceService {
-        return when (profile.serviceType) {
+        val provider = when (profile.serviceType) {
+                VoiceServiceType.SHERPA_ONNX -> OnnxVoiceProvider(context.applicationContext,
+                    profile.localModelId, profile.httpConfig.voiceId.toIntOrNull() ?: 0,
+                    profile.speechRate)
                 VoiceServiceType.SIMPLE_TTS -> {
                     SimpleVoiceProvider(
                         context = context,
@@ -108,6 +112,7 @@ object VoiceServiceFactory {
                     )
                 }
             }
+        return FocusedVoiceService(context.applicationContext, provider)
     }
 
     // 单例实例缓存

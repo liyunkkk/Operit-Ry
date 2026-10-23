@@ -2,9 +2,11 @@
 package com.ai.assistance.operit.ui.features.chat.components.style.bubble
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.data.model.ChatMessage
+import com.ai.assistance.operit.ui.common.dynamicui.LocalDynamicUiBackdrop
 import com.ai.assistance.operit.ui.features.chat.components.ChatMessageHeightMemory
 import com.ai.assistance.operit.ui.features.chat.components.style.cursor.SummaryMessageComposable
 import com.ai.assistance.operit.util.stream.Stream
@@ -64,6 +66,11 @@ fun BubbleStyleChatMessage(
             )
         }
         "ai" -> {
+            // Cards tune their text to a solid bubble; images and glass have no single color. A nearly
+            // opaque bubble (and the default one's light tonal tint) is close enough to measure against.
+            val backdrop = if (aiBubbleImageStyle == null && !aiMessageLiquidGlassEnabled && !aiMessageWaterGlassEnabled &&
+                aiMessageColor.alpha >= .95f) aiMessageColor.copy(alpha = 1f) else Color.Unspecified
+            CompositionLocalProvider(LocalDynamicUiBackdrop provides backdrop) {
             BubbleAiMessageComposable(
                 message = message,
                 showHeader = showAssistantHeader && !message.displayMode.isCollaborationEvent,
@@ -88,6 +95,7 @@ fun BubbleStyleChatMessage(
                 enableToolDetailDialogs = enableToolDetailDialogs,
                 onAvatarLongPressMention = onRoleAvatarLongPress,
             )
+            }
         }
         "summary" -> {
             SummaryMessageComposable(

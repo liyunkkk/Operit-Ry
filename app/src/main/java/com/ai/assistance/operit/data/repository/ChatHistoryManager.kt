@@ -544,6 +544,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
             lastMessageAt = longOrNull("lastMessageAt"),
             isHidden = getInt(getColumnIndexOrThrow("isHidden")) != 0,
             hiddenReason = stringOrNull("hiddenReason"),
+            contextPolicyJson = stringOrNull("contextPolicyJson"),
         )
 
     private fun SQLiteDatabase.materializeSnapshotContent(
@@ -753,7 +754,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
                         SELECT id, title, createdAt, updatedAt, inputTokens, outputTokens,
                                currentWindowSize, `group`, folderId, displayOrder, workspace,
                                workspaceEnv, parentChatId, chatKind, characterCardName, characterGroupId,
-                               locked, pinned, isFavorite, lastMessageAt, isHidden, hiddenReason
+                               locked, pinned, isFavorite, lastMessageAt, isHidden, hiddenReason, contextPolicyJson
                         FROM operit_export_source.chats
                         """.trimIndent(),
                     )
@@ -3279,6 +3280,12 @@ class ChatHistoryManager private constructor(private val context: Context) {
      */
     private suspend fun forgetDeletedChats(chatIds: Collection<String>) {
         chatIds.forEach { id ->
+            runCatching {
+                com.ai.assistance.operit.ui.common.dynamicui.DynamicUiStateStore.deleteChat(context, id)
+            }.onFailure { AppLogger.w(TAG, "Failed to drop card state of deleted chat $id", it) }
+            runCatching {
+                com.ai.assistance.operit.ui.permissions.PermissionReviewArchive.deleteChat(context, id)
+            }.onFailure { AppLogger.w(TAG, "Failed to drop review archive of deleted chat $id", it) }
             // Housekeeping must never turn a completed deletion into a reported failure.
             runCatching {
                 // Cancel only: marking a deleted conversation as a live turn would leave the
@@ -3334,6 +3341,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
         folderId: String?,
         characterCardName: String?,
         characterGroupId: String?,
+        contextPolicyJson: String,
     ): ChatHistory {
         val dateTime = LocalDateTime.now()
         val formattedTime =
@@ -3350,6 +3358,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
             folderId = folderId,
             characterCardName = characterCardName,
             characterGroupId = characterGroupId,
+            contextPolicyJson = contextPolicyJson,
         )
     }
 
@@ -3361,6 +3370,8 @@ class ChatHistoryManager private constructor(private val context: Context) {
         characterGroupId: String? = null,
         setAsCurrentChat: Boolean = true
     ): ChatHistory {
+        val contextPolicy = com.ai.assistance.operit.data.preferences.ChatContextPreferences(context)
+            .defaults.first().encode()
         val newHistory =
             createAndPersistNewChatHistory(
                 chatDao = chatDao,
@@ -3372,6 +3383,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
                     folderId = finalFolderId,
                     characterCardName = characterCardName,
                     characterGroupId = characterGroupId,
+                    contextPolicyJson = contextPolicy,
                 )
             }
         releaseLegacyFolderReservations(listOf(newHistory.folderId))
@@ -3451,6 +3463,8 @@ class ChatHistoryManager private constructor(private val context: Context) {
                 folderId = null,
                 characterCardName = characterCardName,
                 characterGroupId = characterGroupId,
+                contextPolicyJson = com.ai.assistance.operit.data.preferences.ChatContextPreferences(context)
+                    .defaults.first().encode(),
             )
         val initialEntity = ChatEntity.fromChatHistory(initialHistory)
         val openingMessageEntity =
@@ -3791,6 +3805,7 @@ class ChatHistoryManager private constructor(private val context: Context) {
                         workspaceEnv = parentChat.workspaceEnv,
                         parentChatId = parentChatId,
                         chatKind = ChatKind.BRANCH.name,
+                        contextPolicyJson = parentChat.contextPolicyJson,
                         characterCardName = parentChat.characterCardName,
                         characterGroupId = parentChat.characterGroupId,
                         locked = false,
@@ -3803,6 +3818,13 @@ class ChatHistoryManager private constructor(private val context: Context) {
                         branch = branchEntity,
                         upToTimestampInclusive = upToMessageTimestamp,
                     )
+
+                // Card selections and live data live beside the chat, keyed by message timestamp.
+                copyResult.copiedChatIds.forEach { (sourceId, targetId) ->
+                    runCatching {
+                        com.ai.assistance.operit.ui.common.dynamicui.DynamicUiStateStore.copyChat(context, sourceId, targetId)
+                    }.onFailure { AppLogger.w(TAG, "Failed to copy card state into branch $targetId", it) }
+                }
 
                 val branchHistory =
                     copyResult.branch
@@ -4815,6 +4837,8 @@ internal fun mergePersistedChatEntity(
         // unhide an existing hidden chat (audit chats are permanently hidden).
         isHidden = existing.isHidden,
         hiddenReason = existing.hiddenReason,
+        contextPolicyJson = if (preserveStructure) existing.contextPolicyJson
+            else incoming.contextPolicyJson ?: existing.contextPolicyJson,
     )
 
 data class ChatImportResult(

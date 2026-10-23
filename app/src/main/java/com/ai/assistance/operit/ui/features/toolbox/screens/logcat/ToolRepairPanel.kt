@@ -89,6 +89,7 @@ internal fun ToolRepairPanel(modifier: Modifier = Modifier) {
                                 ToolCallRepairRouter.READ_FILE_LINE_RANGE -> R.string.tool_repairs_line_range
                                 ToolCallRepairRouter.TERMINAL_SEPARATOR -> R.string.tool_repairs_separator
                                 ToolCallRepairRouter.TERMINAL_TIMEOUT -> R.string.tool_repairs_timeout
+                                ToolCallRepairRouter.TERMINAL_PROXY_YIELD -> R.string.tool_repairs_proxy_yield
                                 ToolCallRepairRouter.REDUNDANT_PACKAGE_NAME -> R.string.tool_repairs_package
                                 ToolCallRepairRouter.PROXY_FLATTENED_TOOL_NAME -> R.string.tool_repairs_flattened_proxy
                                 ToolCallRepairRouter.MEMORY_ARGUMENT_ALIAS -> R.string.tool_repairs_memory_argument

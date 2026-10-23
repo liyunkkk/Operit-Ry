@@ -560,6 +560,37 @@ class DebuggerShellExecutor(private val context: Context) : ShellExecutor {
         return result.toTypedArray()
     }
 
+    internal fun managedLauncher(): com.ai.assistance.operit.core.tools.system.ManagedShellLauncher {
+        val service = getShizukuService() ?: error("Shizuku service not available")
+        return object : com.ai.assistance.operit.core.tools.system.ManagedShellLauncher {
+            override fun prepareCommand(command: String): String {
+                val processed = if (command.contains("|") && command.contains("grep"))
+                    command.replace(" grep ", " /system/bin/grep ") else command
+                val enhanced = if (command.contains(">"))
+                    "umask 0022 && PATH=\$PATH:/system/bin:/system/xbin:/vendor/bin:/vendor/xbin && $processed"
+                    else processed
+                return "/system/bin/sh -e -c " +
+                    com.ai.assistance.operit.core.tools.system.ManagedShellScript.quote(enhanced)
+            }
+            override fun launch(script: String): com.ai.assistance.operit.core.tools.system.ManagedShellProcess {
+                val remote = service.newProcess(arrayOf("/system/bin/sh", "-c", script), null, null)
+                    ?: error("Failed to create Shizuku process")
+                return object : com.ai.assistance.operit.core.tools.system.ManagedShellProcess {
+                    private val stdout = remote.inputStream
+                    private val stderr = remote.errorStream
+                    private val stdin = remote.outputStream
+                    override val input = ParcelFileDescriptor.AutoCloseInputStream(stdout)
+                    override val errors = ParcelFileDescriptor.AutoCloseInputStream(stderr)
+                    override val output = ParcelFileDescriptor.AutoCloseOutputStream(stdin)
+                    // Binder does not preserve IllegalThreadStateException's concrete type.
+                    // Use the AIDL liveness API instead of treating remote exitValue as a probe.
+                    override fun exitCode(): Int? = if (remote.alive()) null else remote.exitValue()
+                    override fun destroy() { remote.destroy() }
+                }
+            }
+        }
+    }
+
     override suspend fun startProcess(command: String): ShellProcess {
         if (!hasPermission().granted) {
             throw SecurityException("Shizuku permission not granted.")

@@ -21,7 +21,7 @@ private val RainyDarkColorScheme =
         onPrimary = RainyDarkBackground,
         primaryContainer = RainyDarkElement,
         onPrimaryContainer = RainySakura,
-        inversePrimary = RainyPinkHover,
+        inversePrimary = RainyAccent,
         secondary = RainyPink,
         onSecondary = RainyDarkBackground,
         secondaryContainer = RainyDarkElement,
@@ -56,21 +56,21 @@ private val RainyDarkColorScheme =
 
 private val RainyLightColorScheme =
     lightColorScheme(
-        primary = RainyPinkHover,
-        onPrimary = RainyLightBackground,
+        primary = RainyAccent,
+        onPrimary = RainyLightPanel,
         primaryContainer = RainyLightHover,
         onPrimaryContainer = RainyLightText,
         inversePrimary = RainySakura,
-        secondary = RainyPink,
-        onSecondary = RainyLightText,
+        secondary = RainySecondary,
+        onSecondary = RainyLightPanel,
         secondaryContainer = RainyLightHover,
         onSecondaryContainer = RainyLightText,
-        tertiary = RainyRose,
-        onTertiary = RainyLightBackground,
+        tertiary = Color(0xFFAE244C),
+        onTertiary = RainyLightPanel,
         tertiaryContainer = Color(0xFFFDE8EF),
         onTertiaryContainer = RainyLightText,
-        error = RainyRose,
-        onError = RainyLightBackground,
+        error = Color(0xFFB3261E),
+        onError = RainyLightPanel,
         errorContainer = Color(0xFFFDE8EF),
         onErrorContainer = RainyLightText,
         // YUNKe local patch: the light theme's page/container surfaces are plain white instead of
@@ -101,14 +101,46 @@ private val RainyLightColorScheme =
         surfaceContainerHighest = Color.White,
     )
 
-internal fun rainyBaseColorScheme(darkTheme: Boolean): ColorScheme =
-    if (darkTheme) RainyDarkColorScheme else RainyLightColorScheme
+/**
+ * The default light palette while "enhanced contrast" is off. It keeps the sakura accents the
+ * Rainy style is drawn with; [RainyLightColorScheme] is the deeper variant the switch turns on for
+ * users who find the soft accents hard to read.
+ */
+private val RainySoftLightColorScheme =
+    RainyLightColorScheme.copy(
+        primary = RainySoftRose,
+        onPrimary = Color.White,
+        secondary = RainySoftMauve,
+        onSecondary = Color.White,
+        tertiary = RainySoftCoral,
+        onTertiary = Color.White,
+    )
+
+internal fun rainyBaseColorScheme(
+    darkTheme: Boolean,
+    enforceContrast: Boolean = false,
+): ColorScheme =
+    when {
+        darkTheme -> RainyDarkColorScheme
+        enforceContrast -> RainyLightColorScheme
+        else -> RainySoftLightColorScheme
+    }
+
+/**
+ * The top app bar and status bar fill. The default light page is almost white, so the bar gets its
+ * own sakura band to stay visible; custom colors and the dark palette keep their container tone.
+ */
+val ColorScheme.rainyAppBarFill: Color
+    get() =
+        if (background == RainyLightBackground && (primary == RainySoftRose || primary == RainyAccent)) {
+            RainyLightAppBar
+        } else {
+            surfaceContainerHigh
+        }
 
 /**
  * The tone for something that stopped without failing, such as a Subagent run an app restart cut
- * short. It is deliberately neither `error` nor `tertiary`: this palette paints the light theme's
- * tertiary with the very rose it paints `error`, so a stopped run would still read as one that went
- * wrong. The warning hue says "look at this" without saying "this broke".
+ * short. The amber warning remains distinct from both rose accents and red errors.
  */
 val ColorScheme.stoppedAttention: Color
     get() = if (background.luminance() > 0.5f) RainyWarningTextLight else RainyWarning
@@ -134,43 +166,60 @@ internal fun resolveThemeColorScheme(
     snapshot: ThemePreferenceSnapshot,
     darkTheme: Boolean
 ): ColorScheme {
-    var colorScheme = rainyBaseColorScheme(darkTheme)
-
-    if (snapshot.useCustomColors) {
-        snapshot.customPrimaryColor?.let { primaryArgb ->
-            val primary = Color(primaryArgb)
-            val secondary = snapshot.customSecondaryColor?.let(::Color) ?: colorScheme.secondary
-            colorScheme =
-                if (darkTheme) {
-                    generateResolvedDarkColorScheme(primary, secondary, snapshot.onColorMode)
-                } else {
-                    generateResolvedLightColorScheme(primary, secondary, snapshot.onColorMode)
-                }
-        }
-    }
-
-    return colorScheme
+    return resolveRainyColorScheme(
+        darkTheme = darkTheme,
+        useCustomColors = snapshot.useCustomColors,
+        customPrimaryColor = snapshot.customPrimaryColor,
+        customSecondaryColor = snapshot.customSecondaryColor,
+        onColorMode = snapshot.onColorMode,
+        enforceContrast = snapshot.enforceColorContrast,
+    )
 }
 
-private fun generateResolvedLightColorScheme(
+/** The one place the app palette is composed; the live theme and the web bridge both use it. */
+internal fun resolveRainyColorScheme(
+    darkTheme: Boolean,
+    useCustomColors: Boolean,
+    customPrimaryColor: Int?,
+    customSecondaryColor: Int?,
+    onColorMode: String,
+    enforceContrast: Boolean,
+): ColorScheme {
+    val base = rainyBaseColorScheme(darkTheme, enforceContrast)
+    val primaryArgb = customPrimaryColor?.takeIf { useCustomColors } ?: return base
+    val primary = Color(primaryArgb)
+    val secondary = customSecondaryColor?.let(::Color) ?: base.secondary
+    return if (darkTheme) {
+        generateDarkColorScheme(primary, secondary, onColorMode, enforceContrast)
+    } else {
+        generateLightColorScheme(primary, secondary, onColorMode, enforceContrast)
+    }
+}
+
+/**
+ * A light palette built on the user's colors. With [enforceContrast] on, a pale pick is deepened
+ * until it reads as accent text on the light surfaces; with it off the pick is used as chosen.
+ */
+internal fun generateLightColorScheme(
     primaryColor: Color,
     secondaryColor: Color,
-    onColorMode: String
+    onColorMode: String,
+    enforceContrast: Boolean = false,
 ): ColorScheme {
-    // A custom color is used verbatim and then drawn as accent *text* all over the UI, so a pale
-    // pick has to be strengthened before it is readable on the light surfaces.
-    val accent = ensureResolvedLightAccentContrast(primaryColor)
-    val accentSecondary = ensureResolvedLightAccentContrast(secondaryColor)
+    val accent =
+        if (enforceContrast) ensureResolvedLightAccentContrast(primaryColor) else primaryColor
+    val accentSecondary =
+        if (enforceContrast) ensureResolvedLightAccentContrast(secondaryColor) else secondaryColor
     val onPrimary = resolveContrastingTextColor(accent, onColorMode)
     val onSecondary = resolveContrastingTextColor(accentSecondary, onColorMode)
 
-    // Tints keep the value the user picked; only the accent itself is strengthened.
+    // Tints keep the value the user picked; only the accent itself may be strengthened.
     val primaryContainer = lightenResolvedColor(primaryColor, 0.7f)
     val onPrimaryContainer = getResolvedContrastingTextColor(primaryContainer)
     val secondaryContainer = lightenResolvedColor(secondaryColor, 0.7f)
     val onSecondaryContainer = getResolvedContrastingTextColor(secondaryContainer)
 
-    return RainyLightColorScheme.copy(
+    return rainyBaseColorScheme(darkTheme = false, enforceContrast = enforceContrast).copy(
         primary = accent,
         onPrimary = onPrimary,
         primaryContainer = primaryContainer,
@@ -185,17 +234,24 @@ private fun generateResolvedLightColorScheme(
     )
 }
 
-private fun generateResolvedDarkColorScheme(
+/**
+ * A dark palette built on the user's colors. The pick is always lifted by a fixed 0.2; with
+ * [enforceContrast] on, a very dark pick is lifted further until it reads on the dark cards.
+ */
+internal fun generateDarkColorScheme(
     primaryColor: Color,
     secondaryColor: Color,
-    onColorMode: String
+    onColorMode: String,
+    enforceContrast: Boolean = false,
 ): ColorScheme {
     val adjustedPrimaryColor = lightenResolvedColor(primaryColor, 0.2f)
     val adjustedSecondaryColor = lightenResolvedColor(secondaryColor, 0.2f)
-    // The fixed 0.2 is not enough for a very dark pick, so a dark custom color still needs the
-    // contrast guard on the dark surfaces.
-    val accent = ensureResolvedDarkAccentContrast(adjustedPrimaryColor)
-    val accentSecondary = ensureResolvedDarkAccentContrast(adjustedSecondaryColor)
+    val accent =
+        if (enforceContrast) ensureResolvedDarkAccentContrast(adjustedPrimaryColor)
+        else adjustedPrimaryColor
+    val accentSecondary =
+        if (enforceContrast) ensureResolvedDarkAccentContrast(adjustedSecondaryColor)
+        else adjustedSecondaryColor
 
     val onPrimary = resolveContrastingTextColor(accent, onColorMode)
     val onSecondary = resolveContrastingTextColor(accentSecondary, onColorMode)
@@ -240,8 +296,7 @@ internal fun getResolvedContrastingTextColor(backgroundColor: Color): Color {
 /**
  * The label colour for a filled accent: the measured side, unless the user's theme-text-colour
  * setting asks for a specific one and that side still reads on the fill. The setting is a
- * preference about tone, and a soft tone is legitimate - the shipped light palette draws its own
- * app bar (#FFF0F5 on #FF6B8E) at 2.44:1 - so the setting is honoured down to
+ * preference about tone, so an explicitly requested soft tone is honoured down to
  * [LABEL_VISIBILITY_FLOOR]. Below that the requested colour is not a tone but a smudge: a black
  * label on a black accent, or a white one on a white accent, measures 1:1, which is the defect this
  * guards.
@@ -269,12 +324,17 @@ internal fun resolveContrastingTextColor(fill: Color, onColorMode: String): Colo
  * that already read there come back untouched.
  */
 internal fun ensureAccentReadableOn(accent: Color, surface: Color): Color =
+    ensureReadableOn(accent, surface, ACCENT_TEXT_CONTRAST_TARGET)
+
+/** [ensureAccentReadableOn] with an explicit contrast [target], e.g. 4.5 for small secondary text. */
+internal fun ensureReadableOn(color: Color, surface: Color, target: Double): Color =
     ensureResolvedAccentContrast(
-        accent,
+        color,
         surface,
         lighten =
             resolvedContrastRatio(Color.White, surface) >
                 resolvedContrastRatio(Color.Black, surface),
+        target = target,
     )
 
 private fun lightenResolvedColor(color: Color, factor: Float): Color {
@@ -327,15 +387,16 @@ private fun ensureResolvedAccentContrast(
     accent: Color,
     surface: Color,
     lighten: Boolean,
+    target: Double = ACCENT_TEXT_CONTRAST_TARGET,
 ): Color {
-    if (resolvedContrastRatio(accent, surface) >= ACCENT_TEXT_CONTRAST_TARGET) return accent
+    if (resolvedContrastRatio(accent, surface) >= target) return accent
 
     val hsl = accent.toResolvedHsl()
     val saturation = hsl.saturation.coerceAtMost(ACCENT_SATURATION_CEILING)
     var lightness = hsl.lightness
     repeat(ACCENT_LIGHTNESS_STEPS) {
         val candidate = ResolvedHsl(hsl.hue, saturation, lightness.coerceIn(0f, 1f)).toResolvedColor()
-        if (resolvedContrastRatio(candidate, surface) >= ACCENT_TEXT_CONTRAST_TARGET) {
+        if (resolvedContrastRatio(candidate, surface) >= target) {
             return candidate
         }
         lightness += if (lighten) ACCENT_LIGHTNESS_STEP else -ACCENT_LIGHTNESS_STEP

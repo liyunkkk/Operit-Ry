@@ -12,6 +12,8 @@ internal data class ChatBranchCopyResult(
     val branch: ChatEntity,
     val copiedMessageCount: Int,
     val copiedSubagentCount: Int,
+    /** Source chat ID to its copy, including the branch itself, for chat-scoped files. */
+    val copiedChatIds: Map<String, String> = emptyMap(),
 )
 
 internal fun shouldCopyTodosToBranch(upToTimestampInclusive: Long?): Boolean =
@@ -60,12 +62,14 @@ internal class ChatBranchRepository(
                     upToTimestampInclusive = upToTimestampInclusive,
                 )
             }
+            val copiedChatIds = linkedMapOf(sourceChatId to branch.id)
             val copiedSubagentCount =
                 cloneReferencedSubagentTree(
                     sourceParentChatId = sourceChatId,
                     targetParentChatId = branch.id,
                     upToTimestampInclusive = upToTimestampInclusive,
                     copiedSourceChatIds = mutableSetOf(sourceChatId),
+                    copiedChatIds = copiedChatIds,
                 )
             chatDao.recalculateLastMessageAt(branch.id)
 
@@ -73,6 +77,7 @@ internal class ChatBranchRepository(
                 branch = requireNotNull(chatDao.getChatById(branch.id)),
                 copiedMessageCount = copiedMessageCount,
                 copiedSubagentCount = copiedSubagentCount,
+                copiedChatIds = copiedChatIds,
             )
         }
 
@@ -81,6 +86,7 @@ internal class ChatBranchRepository(
         targetParentChatId: String,
         upToTimestampInclusive: Long?,
         copiedSourceChatIds: MutableSet<String>,
+        copiedChatIds: MutableMap<String, String>,
     ): Int {
         val referencedCallIds =
             extractPersistedToolCallIds(
@@ -129,6 +135,7 @@ internal class ChatBranchRepository(
                         chatKind = ChatKind.SUBAGENT.name,
                     )
                 chatDao.insertChat(childCopy)
+                copiedChatIds[sourceChild.id] = childCopy.id
                 copyMessagesAndVariants(
                     sourceChatId = sourceChild.id,
                     targetChatId = childCopy.id,
@@ -151,6 +158,7 @@ internal class ChatBranchRepository(
                         targetParentChatId = childCopy.id,
                         upToTimestampInclusive = null,
                         copiedSourceChatIds = copiedSourceChatIds,
+                        copiedChatIds = copiedChatIds,
                     )
             }
         remapCopiedTaskIds(targetParentChatId, taskIdRemap)

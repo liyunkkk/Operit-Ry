@@ -17,6 +17,8 @@ enum class TokenStatCategory {
     PERMISSION_REVIEWER,
     /** The automatic review: the asynchronous classifier that scores one dispatched batch. */
     PERMISSION_RISK_SCORER,
+    /** Auxiliary next-user-message generation, never a foreground message total. */
+    COMPOSER_PREDICTION,
     OTHER;
 
     companion object {

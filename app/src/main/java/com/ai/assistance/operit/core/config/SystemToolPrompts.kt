@@ -347,17 +347,6 @@ object SystemToolPrompts {
                 )
             ),
             ToolPrompt(
-                name = "grep_context",
-                description = "Search for relevant content based on intent/context understanding. Supports two modes: 1) Directory mode: when path is a directory, finds most relevant files. 2) File mode: when path is a file, finds most relevant code segments within that file. Uses semantic relevance scoring.",
-                parametersStructured = listOf(
-                    ToolParameterSchema(name = "path", type = "string", description = "directory or file path", required = true),
-                    ToolParameterSchema(name = "environment", type = "string", description = "optional, same as read_file environment", required = false),
-                    ToolParameterSchema(name = "intent", type = "string", description = "intent or context description string", required = true),
-                    ToolParameterSchema(name = "file_pattern", type = "string", description = "file filter for directory mode", required = false, default = "\"*\""),
-                    ToolParameterSchema(name = "max_results", type = "integer", description = "maximum items to return", required = false, default = "10")
-                )
-            ),
-            ToolPrompt(
                 name = "download_file",
                 description = "Download a file from the internet. Two modes: (1) Provide `url` + `destination`. (2) Provide `visit_key` + (`link_number` or `image_number`) + `destination` to download an item by index from a previous `visit_web` result.",
                 parametersStructured = listOf(
@@ -485,17 +474,6 @@ object SystemToolPrompts {
                     ToolParameterSchema(name = "case_insensitive", type = "boolean", description = "布尔值", required = false, default = "false"),
                     ToolParameterSchema(name = "context_lines", type = "integer", description = "匹配行前后的上下文行数", required = false, default = "3"),
                     ToolParameterSchema(name = "max_results", type = "integer", description = "最大匹配数", required = false, default = "100")
-                )
-            ),
-            ToolPrompt(
-                name = "grep_context",
-                description = "基于意图/上下文理解搜索相关内容。支持两种模式：1) 目录模式：当path是目录时，找出最相关的文件。2) 文件模式：当path是文件时，找出该文件内最相关的代码段。使用语义相关性评分。",
-                parametersStructured = listOf(
-                    ToolParameterSchema(name = "path", type = "string", description = "目录或文件路径", required = true),
-                    ToolParameterSchema(name = "environment", type = "string", description = "可选，同 read_file 的 environment", required = false),
-                    ToolParameterSchema(name = "intent", type = "string", description = "意图或上下文描述字符串", required = true),
-                    ToolParameterSchema(name = "file_pattern", type = "string", description = "目录模式下的文件过滤", required = false, default = "\"*\""),
-                    ToolParameterSchema(name = "max_results", type = "integer", description = "返回的最大项数", required = false, default = "10")
                 )
             ),
             ToolPrompt(

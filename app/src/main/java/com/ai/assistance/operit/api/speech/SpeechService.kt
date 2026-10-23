@@ -3,9 +3,16 @@ package com.ai.assistance.operit.api.speech
 import android.media.MediaRecorder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 
 /** 语音识别服务接口 定义与不同语音识别引擎进行交互的标准方法 */
 interface SpeechService {
+    /** Only streaming engines can keep decoding across multiple endpoints. */
+    val supportsContinuousRecognition: Boolean get() = false
+    /** Explicit opt-in to keeping manual dictation open across recognition endpoints. */
+    val supportsContinuousDictation: Boolean get() = false
+    val speechActivityFlow: Flow<Boolean>
+        get() = recognitionResultFlow.map { it.text.isNotBlank() }
     /** 当前识别引擎状态枚举 */
     enum class RecognitionState {
         /** 未初始化 */
@@ -64,6 +71,12 @@ interface SpeechService {
      * @return 初始化是否成功
      */
     suspend fun initialize(): Boolean
+
+    /**
+     * Whether starting needs no download or confirmation first, so a capture opened at the tap is
+     * not left running while the user decides. A plain file check; never starts a download.
+     */
+    fun canStartWithoutPrompt(context: android.content.Context): Boolean = true
 
     /**
      * 开始语音识别

@@ -25,7 +25,10 @@ class BatchLogQueueTest {
         assertFalse(queue.submit(3, false))
         assertFalse(queue.flush(10))
         release.countDown()
-        assertTrue(queue.flush(3000))
+        val status = queue.flushResult(3000)
+        assertFalse(status.complete)
+        assertEquals(1L, status.droppedRecords)
+        assertEquals(0L, status.pendingRecords)
         assertEquals(listOf(0, 1, 2), received)
         assertEquals(1L, lost)
     }
@@ -53,5 +56,62 @@ class BatchLogQueueTest {
         val queue = BatchLogQueue<Int> { _, _ -> false }
         queue.submit(1, true)
         assertFalse(queue.flush(3000))
+    }
+
+    @Test fun `successful reset clears failures belonging to removed logs`() {
+        val queue = BatchLogQueue<Int> { batch, _ -> !batch.contains(1) }
+        queue.submit(1, true)
+        assertTrue(queue.flushResult(3000).writeFailed)
+        queue.reset(-1)
+        assertTrue(queue.flushResult(3000).complete)
+    }
+
+    @Test fun `failed reset cannot report complete logs`() {
+        val queue = BatchLogQueue<Int> { _, _ -> false }
+        queue.submit(1, true)
+        assertTrue(queue.flushResult(3000).writeFailed)
+        queue.reset(-1)
+        assertTrue(queue.flushResult(3000).writeFailed)
+        assertFalse(queue.flushResult(3000).complete)
+    }
+
+    @Test fun `export watermark does not wait for a later blocked batch`() {
+        val firstEntered = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val laterEntered = CountDownLatch(1)
+        val releaseLater = CountDownLatch(1)
+        val flushed = CountDownLatch(1)
+        val result = java.util.concurrent.atomic.AtomicReference<LogFlushResult>()
+        val queue = BatchLogQueue<Int>(batchSize = 1) { batch, _ ->
+            if (batch.contains(1)) {
+                firstEntered.countDown()
+                releaseFirst.await(5, TimeUnit.SECONDS)
+            } else {
+                laterEntered.countDown()
+                releaseLater.await(5, TimeUnit.SECONDS)
+            }
+            true
+        }
+        queue.submit(1, true)
+        assertTrue(firstEntered.await(3, TimeUnit.SECONDS))
+        val waiter = Thread {
+            result.set(queue.flushResult(3000))
+            flushed.countDown()
+        }
+        try {
+            waiter.start()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+            while (waiter.state != Thread.State.TIMED_WAITING && System.nanoTime() < deadline) Thread.yield()
+            assertEquals(Thread.State.TIMED_WAITING, waiter.state)
+            queue.submit(2, true)
+            releaseFirst.countDown()
+            assertTrue(laterEntered.await(3, TimeUnit.SECONDS))
+            assertTrue(flushed.await(1, TimeUnit.SECONDS))
+            assertTrue(result.get().complete)
+        } finally {
+            releaseFirst.countDown()
+            releaseLater.countDown()
+            waiter.join(3000)
+        }
     }
 }

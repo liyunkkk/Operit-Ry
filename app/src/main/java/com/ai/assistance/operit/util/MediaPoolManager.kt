@@ -135,8 +135,11 @@ object MediaPoolManager {
         val mimeType: String
     )
 
+    @Synchronized
     fun initialize(cacheDirPath: File, preloadNow: Boolean = true) {
-        cacheDir = OperitPaths.mediaPoolDir(cacheDirPath)
+        val target = OperitPaths.mediaPoolDir(cacheDirPath)
+        if (cacheDir?.absolutePath != target.absolutePath) mediaPool.clear()
+        cacheDir = target
         if (!cacheDir!!.exists()) {
             cacheDir!!.mkdirs()
             AppLogger.d(TAG, "创建媒体缓存目录: ${cacheDir!!.absolutePath}")
@@ -155,8 +158,7 @@ object MediaPoolManager {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MediaData>?): Boolean {
             val shouldRemove = size > maxPoolSize
             if (shouldRemove && eldest != null) {
-                AppLogger.d(TAG, "池子已满，移除最旧的媒体: ${eldest.key}")
-                deleteFromDisk(eldest.key)
+                AppLogger.d(TAG, "释放媒体内存，保留聊天附件: ${eldest.key}")
             }
             return shouldRemove
         }
@@ -372,7 +374,7 @@ object MediaPoolManager {
         val dir = cacheDir ?: return
         try {
             val metaFiles = dir.listFiles { file -> file.isFile && file.name.endsWith(".meta") } ?: return
-            metaFiles.forEach { metaFile ->
+            metaFiles.sortedByDescending { it.lastModified() }.take(maxPoolSize).forEach { metaFile ->
                 val id = metaFile.name.removeSuffix(".meta")
                 val loaded = loadOneFromDisk(id) ?: return@forEach
                 mediaPool[id] = loaded

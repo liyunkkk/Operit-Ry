@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ai.assistance.operit.api.chat.AIForegroundService
+import com.ai.assistance.operit.api.speech.EarlyCapture
 import com.ai.assistance.operit.api.speech.SpeechPrerollStore
 import com.ai.assistance.operit.api.speech.WakePhraseSnapshot
 import com.ai.assistance.operit.api.speech.SpeechServiceFactory
@@ -19,9 +20,15 @@ import com.ai.assistance.operit.api.voice.VoiceServiceFactory
 import com.ai.assistance.operit.util.TtsCleaner
 import com.ai.assistance.operit.util.WaifuMessageProcessor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private const val TAG = "SpeechInteractionManager"
 
@@ -33,15 +40,31 @@ class SpeechInteractionManager(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val onSpeechResult: (String, Boolean) -> Unit, // (text, isFinal)
-    private val onStateChange: (String) -> Unit // 更新状态提示文本
+    private val onStateChange: (String) -> Unit, // 更新状态提示文本
+    /** A session ended without any recognised words; the microphone is already stopping. */
+    private val onNothingHeard: () -> Unit = {},
 ) {
+    companion object {
+        private val captureOwnership = Mutex()
+        private var captureOwner: SpeechInteractionManager? = null
+    }
+    private var closed = false
     // ===== 状态 =====
     var isRecording by mutableStateOf(false)
+        private set
+    var isPreparing by mutableStateOf(false)
         private set
     var isProcessingSpeech by mutableStateOf(false)
         private set
     var hasFocus by mutableStateOf(false)
         private set
+    /**
+     * The microphone is already kept by [EarlyCapture] while the recognizer still loads. The
+     * session counts as recording: what is said now reaches the recognizer once it starts.
+     */
+    var isHearingEarly by mutableStateOf(false)
+        private set
+    private var finishOnStart = false
 
     // 文本累积
     var userMessage by mutableStateOf("")
@@ -54,6 +77,11 @@ class SpeechInteractionManager(
     // 任务控制
     private var timeoutJob: Job? = null
     private var silenceTimeoutJob: Job? = null
+    private var startJob: Job? = null
+    private var stopJob: Job? = null
+    private val lifecycleMutex get() = captureOwnership
+    private var generation = 0L
+    private var timing: com.ai.assistance.operit.api.speech.VoiceTiming? = null
 
     // ===== 服务 =====
     val speechService = SpeechServiceFactory.getInstance(context)
@@ -78,18 +106,32 @@ class SpeechInteractionManager(
     }
 
     fun cleanup() {
-        stopListening(isCancel = true)
-        coroutineScope.launch {
-            speechService.cancelRecognition()
-            voiceService.stop()
-        }
+        if (closed) return
+        closed = true
+        ++generation
+        startJob?.cancel()
         timeoutJob?.cancel()
         silenceTimeoutJob?.cancel()
+        isPreparing = false
+        isRecording = false
+        isProcessingSpeech = false
+        stopJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            lifecycleMutex.withLock {
+                if (captureOwner === this@SpeechInteractionManager) {
+                    try { speechService.cancelRecognition() }
+                    catch (e: Exception) { AppLogger.w(TAG, "Speech cleanup failed", e) }
+                    captureOwner = null
+                }
+            }
+        }
     }
 
     private fun resetState() {
+        isPreparing = false
         isRecording = false
         isProcessingSpeech = false
+        isHearingEarly = false
+        finishOnStart = false
         userMessage = ""
         accumulatedText = ""
         latestPartialText = ""
@@ -111,6 +153,20 @@ class SpeechInteractionManager(
         return true
     }
 
+    /**
+     * For composers inside the app window, which already has focus. The overlay trick above makes
+     * the keyboard pop up and drop again; here the keyboard only goes away.
+     */
+    fun claimFocusWithoutKeyboard(view: View?): Boolean {
+        if (view == null) {
+            hasFocus = false
+            return false
+        }
+        inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
+        hasFocus = true
+        return true
+    }
+
     fun releaseFocus(view: View?) {
         view?.let {
             inputMethodManager.hideSoftInputFromWindow(it.windowToken, 0)
@@ -120,7 +176,13 @@ class SpeechInteractionManager(
 
     // ===== 语音识别流程 =====
 
-    fun startListening(onStartFailure: ((String) -> Unit)? = null) {
+    fun startListening(
+        continuousMode: Boolean = speechService.supportsContinuousRecognition,
+        onStarted: (() -> Unit)? = null,
+        captureEarly: Boolean = false,
+        onStartFailure: ((String) -> Unit)? = null,
+    ) {
+        if (isPreparing || isRecording || isProcessingSpeech) return
         if (!hasFocus) {
             onStartFailure?.invoke(context.getString(R.string.floating_cannot_get_focus))
             return
@@ -130,16 +192,55 @@ class SpeechInteractionManager(
         timeoutJob?.cancel()
         
         // 重置文本状态
-        isRecording = true
+        val session = ++generation
+        timing = com.ai.assistance.operit.api.speech.VoiceTiming("recognition").also { it.mark("start_requested") }
+        isPreparing = true
+        isRecording = false
+        isHearingEarly = false
+        finishOnStart = false
         userMessage = ""
         accumulatedText = ""
         latestPartialText = ""
         wakePhraseSnapshot = SpeechPrerollStore.consumePendingWakePhrase()
-        onStateChange(context.getString(R.string.floating_listening))
+        onStateChange(context.getString(R.string.voice_preparing))
 
         // 启动监听
-        coroutineScope.launch {
+        startJob = coroutineScope.launch {
+          var stopAfterStart = false
+          stopJob?.join()
+          lifecycleMutex.withLock {
+            if (closed || session != generation) return@withLock
+            captureOwner?.takeIf { it !== this@SpeechInteractionManager }?.let { previous ->
+                ++previous.generation
+                previous.startJob?.cancel()
+                previous.resetState()
+                previous.speechService.cancelRecognition()
+            }
+            captureOwner = this@SpeechInteractionManager
+            // Wake sessions already hand over the audio around the wake word.
+            var earlyToken = 0L
             try {
+                // Not while a model download waits for the user: the microphone would stay open
+                // throughout, and keep the wrong audio.
+                if (captureEarly && wakePhraseSnapshot == null &&
+                    withContext(Dispatchers.IO) { speechService.canStartWithoutPrompt(context) }
+                ) {
+                    // Not cancellable: once the microphone opens, its token must reach `finally`.
+                    // Assigned inside: a cancel landing meanwhile still throws when withContext
+                    // returns, and would otherwise drop the token and leave the microphone open.
+                    withContext(NonCancellable + Dispatchers.IO) { earlyToken = EarlyCapture.start(context) }
+                    if (earlyToken != 0L && session == generation) {
+                        timing?.mark("capturing")
+                        isPreparing = false
+                        isRecording = true
+                        isHearingEarly = true
+                        onStateChange(context.getString(R.string.floating_listening))
+                    }
+                } else {
+                    // A capture left by another session must not be handed to this one.
+                    withContext(NonCancellable + Dispatchers.IO) { EarlyCapture.stop() }
+                }
+
                 try {
                     AIForegroundService.ensureMicrophoneForeground(context, forceStart = true)
                 } catch (e: Exception) {
@@ -165,7 +266,7 @@ class SpeechInteractionManager(
                     }
                     ok = speechService.startRecognition(
                         languageCode = "zh-CN",
-                        continuousMode = true,
+                        continuousMode = continuousMode,
                         partialResults = true
                     )
                     attempt++
@@ -174,9 +275,29 @@ class SpeechInteractionManager(
                     if (!ok && !speechService.isInitialized.value) break
                 }
 
+                if (session != generation) {
+                    speechService.cancelRecognition()
+                    return@withLock
+                }
+                isPreparing = false
+                isHearingEarly = false
+                if (ok && finishOnStart) {
+                    // Stopped while the recognizer was still loading: it has the audio, so finish now.
+                    // finishOnStart stays set until the stop below, so another stop tap stays a no-op.
+                    timing?.mark("recording")
+                    stopAfterStart = true
+                    return@withLock
+                }
+                isRecording = ok
+                if (ok) {
+                    timing?.mark("recording")
+                    onStateChange(context.getString(R.string.floating_listening))
+                    onStarted?.invoke()
+                }
                 if (!ok) {
                     isRecording = false
                     isProcessingSpeech = false
+                    finishOnStart = false
                     onStateChange(context.getString(R.string.floating_hold_microphone))
                     // Only the download layer produces a reason that is safe to show here: the
                     // provider's own error text is engine wording, sometimes not even translated.
@@ -185,12 +306,28 @@ class SpeechInteractionManager(
                         reason.ifBlank { context.getString(R.string.floating_start_recording_failed) }
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (session != generation) return@withLock
+                isPreparing = false
                 isRecording = false
                 isProcessingSpeech = false
+                isHearingEarly = false
+                finishOnStart = false
                 onStateChange(context.getString(R.string.floating_hold_microphone))
                 onStartFailure?.invoke(e.message ?: context.getString(R.string.floating_start_recording_failed))
+            } finally {
+                // Normally the recognizer has taken it already; otherwise the audio is dropped here.
+                if (earlyToken != 0L) withContext(NonCancellable + Dispatchers.IO) { EarlyCapture.stop(earlyToken) }
             }
+          }
+          if (stopAfterStart && session == generation && isProcessingSpeech) {
+              onStateChange(context.getString(R.string.floating_recognizing))
+              speechService.stopRecognition()
+              finishOnStart = false
+              if (session == generation && isProcessingSpeech) startFallbackTimeout()
+          }
         }
 
         // 监听结果流 (假设这是 ViewModel 或者外部调用者通过 collectLatest 连接到 handleRecognitionResult)
@@ -200,39 +337,70 @@ class SpeechInteractionManager(
     }
 
     fun stopListening(isCancel: Boolean) {
-        if (!isRecording) return
-        
+        timing?.mark(if (isCancel) "cancel_requested" else "recording_stopped")
+        if (!isRecording && !isPreparing && !isProcessingSpeech) return
+        // Already finishing once the recognizer is up; another stop must not throw the audio away.
+        if (!isCancel && finishOnStart) return
+        if (!isCancel && isHearingEarly) {
+            // The recognizer is still loading. It finishes as soon as it has taken the audio.
+            finishOnStart = true
+            isHearingEarly = false
+            isRecording = false
+            isProcessingSpeech = true
+            silenceTimeoutJob?.cancel()
+            onStateChange(context.getString(R.string.floating_recognizing))
+            return
+        }
+        val cancel = isCancel || isPreparing
+        val session = if (cancel) ++generation else generation
+        startJob?.cancel()
+        isPreparing = false
+        isHearingEarly = false
+        finishOnStart = false
+
         isRecording = false
+        isProcessingSpeech = !cancel
         silenceTimeoutJob?.cancel()
 
-        coroutineScope.launch {
-            if (isCancel) {
-                speechService.cancelRecognition()
-                isProcessingSpeech = false
-                resetState()
-                onStateChange(context.getString(R.string.floating_hold_microphone))
+        stopJob = coroutineScope.launch {
+            if (cancel) {
+                lifecycleMutex.withLock {
+                    if (captureOwner !== this@SpeechInteractionManager) return@withLock
+                    speechService.cancelRecognition()
+                    if (session == generation) {
+                        resetState()
+                        onStateChange(context.getString(R.string.floating_hold_microphone))
+                    }
+                }
             } else {
-                isProcessingSpeech = true
+                if (session != generation || captureOwner !== this@SpeechInteractionManager) return@launch
                 onStateChange(context.getString(R.string.floating_recognizing))
                 speechService.stopRecognition()
-                startFallbackTimeout()
+                if (session == generation && isProcessingSpeech) startFallbackTimeout()
             }
         }
     }
 
     // 处理识别结果
     fun handleRecognitionResult(resultText: String, isFinal: Boolean, autoSendSilence: Boolean = false) {
+        if (closed || captureOwner !== this) return
         val effectiveText = stripWakePhrasePrefixIfNeeded(resultText)
         if (isRecording) {
             if (effectiveText.isNotBlank()) {
-                // 处理增量
-                if (latestPartialText.isNotEmpty() && !effectiveText.startsWith(latestPartialText)) {
-                    accumulatedText += (if (accumulatedText.isNotEmpty()) "。" else "") + latestPartialText
-                }
+                // Partial hypotheses replace the current segment, including corrections.
                 latestPartialText = effectiveText
+                userMessage = accumulatedText + latestPartialText
+                if (isFinal) {
+                    accumulatedText = userMessage
+                    latestPartialText = ""
+                    if (autoSendSilence) {
+                        finalizeSpeechInput()
+                        return
+                    }
+                }
 
                 // 静默检测
-                if (autoSendSilence) {
+                if (autoSendSilence && !isFinal) {
                     silenceTimeoutJob?.cancel()
                     silenceTimeoutJob = coroutineScope.launch {
                         delay(2000)
@@ -245,7 +413,7 @@ class SpeechInteractionManager(
             
         } else if (isProcessingSpeech && isFinal) {
             timeoutJob?.cancel()
-            accumulatedText += (if (accumulatedText.isNotEmpty() && effectiveText.isNotBlank()) "。" else "") + effectiveText
+            userMessage = accumulatedText + effectiveText
             finalizeSpeechInput()
         }
     }
@@ -286,9 +454,11 @@ class SpeechInteractionManager(
     }
 
     private fun startFallbackTimeout() {
+        val session = generation
         timeoutJob = coroutineScope.launch {
             delay(3000)
-            if (isProcessingSpeech) {
+            if (!closed && captureOwner === this@SpeechInteractionManager &&
+                session == generation && isProcessingSpeech) {
                 AppLogger.w(TAG, "Fallback timeout")
                 finalizeSpeechInput()
             }
@@ -296,14 +466,27 @@ class SpeechInteractionManager(
     }
 
     private fun finalizeSpeechInput() {
+        timeoutJob?.cancel()
+        silenceTimeoutJob?.cancel()
+        isRecording = false
         isProcessingSpeech = false
+        val session = ++generation
+        stopJob = coroutineScope.launch {
+            lifecycleMutex.withLock {
+                if (captureOwner === this@SpeechInteractionManager) {
+                    speechService.cancelRecognition()
+                }
+            }
+        }
         val text = userMessage.ifBlank { accumulatedText }
+        timing?.mark("final_result")
         
         if (text.isNotBlank()) {
-            onSpeechResult(text, true)
             onStateChange(context.getString(R.string.floating_thinking_2))
+            onSpeechResult(text, true)
         } else {
             onStateChange(context.getString(R.string.floating_didnt_hear_clearly))
+            onNothingHeard()
         }
 
         // 如果不是静默超时触发的，重置文本（静默超时可能意味着这一句结束，准备下一句，或者直接发送）

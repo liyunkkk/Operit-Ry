@@ -36,7 +36,8 @@ class CodexModelsClient(
                 }
                 .build()
             val json = client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("Codex model catalog HTTP ${response.code}")
+                if (!response.isSuccessful) throw CodexHttpException(
+                    response.code, isCodexExpiredToken(response.code, response.peekBody(16_384).string()))
                 val source = response.body?.source() ?: throw IOException("Codex model catalog is empty")
                 if (source.request(MAX_BYTES + 1)) throw IOException("Codex model catalog is too large")
                 source.readUtf8()

@@ -1,8 +1,6 @@
 package com.ai.assistance.operit.ui.features.assistant.screens
 
 import android.Manifest
-import android.app.Activity
-import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,9 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,31 +22,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.WakeWordPreferences
 import com.ai.assistance.operit.api.speech.PersonalWakeEnrollment
-import com.ai.assistance.operit.ui.features.assistant.components.AvatarConfigSection
-import com.ai.assistance.operit.ui.features.assistant.components.AvatarPreviewSection
 import com.ai.assistance.operit.ui.features.assistant.components.CompactSwitchRow
 import com.ai.assistance.operit.ui.features.assistant.components.VoiceAutoAttachGrid
-import com.ai.assistance.operit.core.avatar.impl.factory.AvatarControllerFactoryImpl
-import com.ai.assistance.operit.ui.features.assistant.viewmodel.AssistantConfigViewModel
 import kotlinx.coroutines.launch
 
-/** 助手配置屏幕 提供DragonBones模型预览和相关配置 */
+/** 助手配置屏幕 提供桌宠与语音唤醒配置 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssistantConfigScreen() {
     val context = LocalContext.current
-    val viewModel: AssistantConfigViewModel =
-        viewModel(factory = AssistantConfigViewModel.Factory(context))
-    val uiState by viewModel.uiState.collectAsState()
-    val avatarControllerFactory = remember { AvatarControllerFactoryImpl() }
-    val sharedAvatarController =
-        uiState.currentAvatarModel?.let { model ->
-            avatarControllerFactory.createController(model)
-        }
 
     val wakePrefs = remember { WakeWordPreferences(context.applicationContext) }
     val wakeListeningEnabled by wakePrefs.alwaysListeningEnabledFlow.collectAsState(initial = WakeWordPreferences.DEFAULT_ALWAYS_LISTENING_ENABLED)
@@ -59,6 +41,7 @@ fun AssistantConfigScreen() {
     val wakePhraseRegexEnabled by wakePrefs.wakePhraseRegexEnabledFlow.collectAsState(initial = WakeWordPreferences.DEFAULT_WAKE_PHRASE_REGEX_ENABLED)
     val wakeRecognitionMode by wakePrefs.wakeRecognitionModeFlow.collectAsState(initial = WakeWordPreferences.WakeRecognitionMode.STT)
     val personalWakeTemplates by wakePrefs.personalWakeTemplatesFlow.collectAsState(initial = emptyList())
+    val voiceInterruptionEnabled by wakePrefs.voiceInterruptionEnabledFlow.collectAsState(initial = false)
     val inactivityTimeoutSeconds by wakePrefs.voiceCallInactivityTimeoutSecondsFlow.collectAsState(
         initial = WakeWordPreferences.DEFAULT_VOICE_CALL_INACTIVITY_TIMEOUT_SECONDS
     )
@@ -103,7 +86,6 @@ fun AssistantConfigScreen() {
 
     var selectedConfigTab by rememberSaveable { mutableStateOf(0) }
     val petScrollState = rememberScrollState()
-    var isAvatarPreviewCollapsed by rememberSaveable { mutableStateOf(false) }
 
     var personalWakeConfigDialogVisible by rememberSaveable { mutableStateOf(false) }
 
@@ -131,70 +113,9 @@ fun AssistantConfigScreen() {
         }
     }
 
-    // 启动文件选择器
-    val zipFileLauncher =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                result.data?.data?.let { uri ->
-                    // 导入选择的 zip / glb / gltf / mp4 文件
-                    viewModel.importAvatarFromZip(uri)
-                }
-            }
-        }
+    val scrollState = rememberScrollState()
 
-    // 打开文件选择器的函数
-    val openZipFilePicker = {
-        val intent =
-            Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "*/*"
-                putExtra(
-                    Intent.EXTRA_MIME_TYPES,
-                    arrayOf(
-                        "application/zip",
-                        "application/x-zip-compressed",
-                        "model/vnd.autodesk.fbx",
-                        "model/fbx",
-                        "application/fbx",
-                        "model/gltf-binary",
-                        "model/gltf+json",
-                        "video/mp4",
-                        "application/octet-stream"
-                    )
-                )
-            }
-        zipFileLauncher.launch(intent)
-    }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scrollState = rememberScrollState(initial = uiState.scrollPosition)
-
-    // 在 Composable 函数中获取字符串资源，以便在 LaunchedEffect 中使用
-    val operationSuccessString = context.getString(R.string.operation_success)
-    val errorOccurredString = context.getString(R.string.error_occurred_simple)
-
-    LaunchedEffect(scrollState) {
-        snapshotFlow { scrollState.value }.collect { position ->
-            viewModel.updateScrollPosition(position)
-        }
-    }
-
-    // 显示操作结果的 SnackBar
-    LaunchedEffect(uiState.operationSuccess, uiState.errorMessage) {
-        if (uiState.operationSuccess) {
-            snackbarHostState.showSnackbar(operationSuccessString)
-            viewModel.clearOperationSuccess()
-        } else if (uiState.errorMessage != null) {
-            snackbarHostState.showSnackbar(uiState.errorMessage ?: errorOccurredString)
-            viewModel.clearErrorMessage()
-        }
-    }
-
-    CustomScaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
+    CustomScaffold { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
             // 主要内容
             Column(
@@ -213,11 +134,6 @@ fun AssistantConfigScreen() {
                     Tab(
                         selected = selectedConfigTab == 1,
                         onClick = { selectedConfigTab = 1 },
-                        text = { Text(text = stringResource(R.string.avatar_config)) }
-                    )
-                    Tab(
-                        selected = selectedConfigTab == 2,
-                        onClick = { selectedConfigTab = 2 },
                         text = { Text(text = stringResource(R.string.voice_wakeup_section_title)) }
                     )
                 }
@@ -227,59 +143,6 @@ fun AssistantConfigScreen() {
                 if (selectedConfigTab == 0) {
                     Box(Modifier.fillMaxWidth().weight(1f).verticalScroll(petScrollState)) {
                         com.ai.assistance.operit.pet.PetSettingsSection()
-                    }
-                } else if (selectedConfigTab == 1) {
-                    // Avatar预览区域
-                    if (!isAvatarPreviewCollapsed) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                        ) {
-                            AvatarPreviewSection(
-                                modifier = Modifier.fillMaxSize(),
-                                uiState = uiState,
-                                avatarController = sharedAvatarController
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        IconButton(onClick = { isAvatarPreviewCollapsed = !isAvatarPreviewCollapsed }) {
-                            Icon(
-                                imageVector =
-                                    if (isAvatarPreviewCollapsed) Icons.Default.ExpandMore
-                                    else Icons.Default.ExpandLess,
-                                contentDescription = stringResource(
-                                    if (isAvatarPreviewCollapsed) R.string.model_config_expand
-                                    else R.string.model_config_collapse
-                                )
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .verticalScroll(scrollState)
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            AvatarConfigSection(
-                                viewModel = viewModel,
-                                uiState = uiState,
-                                avatarController = sharedAvatarController,
-                                onImportClick = { openZipFilePicker() }
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
                     }
                 } else {
                     // Voice Wake-up Section
@@ -319,7 +182,7 @@ fun AssistantConfigScreen() {
                                 }
                             OutlinedTextField(
                                 modifier = Modifier
-                                    .menuAnchor()
+                                    .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp),
                                 value = modeLabel,
@@ -457,6 +320,15 @@ fun AssistantConfigScreen() {
                                 }
                             )
                         }
+
+                        CompactSwitchRow(
+                            title = stringResource(R.string.voice_duplex),
+                            description = stringResource(R.string.voice_duplex_hint),
+                            checked = voiceInterruptionEnabled,
+                            onCheckedChange = { enabled ->
+                                coroutineScope.launch { wakePrefs.saveVoiceInterruptionEnabled(enabled) }
+                            }
+                        )
 
                         // Timeout Input
                         OutlinedTextField(
@@ -713,30 +585,6 @@ fun AssistantConfigScreen() {
                 )
             }
 
-            // 加载指示器覆盖层
-            if (uiState.isLoading || uiState.isImporting) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                MaterialTheme.colorScheme.surface
-                                    .copy(alpha = 0.7f)
-                            ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text =
-                                if (uiState.isImporting) stringResource(R.string.importing_model)
-                                else stringResource(R.string.processing),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
         }
     }
 }

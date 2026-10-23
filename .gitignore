@@ -90,3 +90,19 @@ tmp
 temp
 .tmp
 .temp
+
+# 运行与构建日志
+*.log
+*.err
+
+# 根目录的本地草稿：提交信息、PR 正文、发布说明
+/commit-msg-*.txt
+/pr-body-*.md
+/release-notes-*.md
+/.ry5-workdir.txt
+
+# 生成的产物与本机环境文件
+examples/reading_companion/dist/
+.worktrees/
+/app/objectbox-jni-windows-x64.dll
+*.bak

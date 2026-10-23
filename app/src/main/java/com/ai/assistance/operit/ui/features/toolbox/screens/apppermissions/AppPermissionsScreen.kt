@@ -218,10 +218,10 @@ fun AppPermissionsScreen(navController: NavController) {
                 targetState = selectedApp,
                 transitionSpec = {
                     if (targetState == null) {
-                        slideInHorizontally { -it } + fadeIn() with
+                        slideInHorizontally { -it } + fadeIn() togetherWith
                                 slideOutHorizontally { it } + fadeOut()
                     } else {
-                        slideInHorizontally { it } + fadeIn() with
+                        slideInHorizontally { it } + fadeIn() togetherWith
                                 slideOutHorizontally { -it } + fadeOut()
                     }
                 }

@@ -33,7 +33,7 @@
     <string name="memory_recall_previous">Previous section</string>
     <string name="system_prefix_updated">System prompt has updates</string>
     <string name="system_prefix_pending">This chat still uses its saved system prompt. You can refresh manually, but this invalidates the old prefix cache and may increase input token usage on the next request.\n\nOr keep the saved version until conversation compression, or start a new chat to use the latest prompt automatically. Refreshing affects only this chat.</string>
-    <string name="system_prefix_rebuild">Refresh now</string>
+    <string name="system_prefix_rebuild">Update system prompt</string>
     <string name="system_prefix_later">Not now</string>
     <string name="system_prefix_error">Could not read or rebuild this chat’s system prompt snapshot. Please retry.</string>
     <string name="system_prefix_protocol_changed">Tool calling mode changed. Tap the exclamation mark at the bottom left of the chat, then Refresh now before retrying the message.</string>
@@ -53,7 +53,7 @@
     <string name="memory_recall_continue">Continue reading this message</string>
     <string name="memory_review_ai_allowed">Allow AI to approve or reject changes in this space</string>
     <string name="memory_review_ai_denied">AI decisions are not authorized. Ask the user to enable authorization in Change review, or review the change manually.</string>
-    <string name="memory_notes_inject">Inject memory.md into new conversations</string>
+    <string name="memory_notes_inject">Use long-term notes in new conversations</string>
     <string name="chat_recall_title">Search chat history</string>
     <string name="chat_recall_hint">Search visible main conversations. Tap a result for nearby messages. Results may be truncated.</string>
     <string name="chat_recall_query">Search text</string>
@@ -110,7 +110,7 @@
     <string name="memory_extraction_source_deleted">Conversation deleted; this range will not be reviewed</string>
     <string name="memory_extraction_not_reviewable">Branch and hidden conversations are not reviewed</string>
     <string name="memory_extraction_window_too_small">The context window of the model used for memory extraction is too small. Raise it for the MEMORY model in the model settings.</string>
-    <string name="memory_extraction_export_blocked">The pending review limit was reached; resolve the review list before extraction continues</string>
+    <string name="memory_extraction_export_blocked">Changes could not be saved to review history and are retained for retry. See the reason below; if the pending review list is full, resolve it first.</string>
     <string name="memory_extraction_cancelled">Extraction cancelled</string>
     <string name="memory_extraction_interrupted">Interrupted by app exit</string>
     <string name="memory_extraction_source_unreadable">This conversation\'s messages can no longer be read, so this range will not be reviewed</string>

@@ -1,5 +1,6 @@
 package com.ai.assistance.operit.ui.features.settings.sections
 
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSwitchRow
 import android.content.Context
 import android.net.Uri
 import android.view.LayoutInflater
@@ -53,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.rememberAsyncImagePainter
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCardShape
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.features.settings.components.MediaTypeOption
@@ -97,44 +99,29 @@ internal fun ThemeSettingsBackgroundSection(
         icon = Icons.Default.Image,
     )
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = stringResource(id = R.string.theme_bg_media),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(id = R.string.theme_use_custom_bg),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(id = R.string.theme_custom_bg_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                Switch(
-                    checked = useBackgroundImageInput,
-                    onCheckedChange = {
-                        onUseBackgroundImageInputChange(it)
-                        saveThemeSettingsWithCharacterCard {
-                            preferencesManager.saveThemeSettings(useBackgroundImage = it)
-                        }
-                    },
-                )
-            }
+            SettingsSwitchRow(
+                title = stringResource(id = R.string.theme_use_custom_bg),
+                subtitle = stringResource(id = R.string.theme_custom_bg_desc),
+                checked = useBackgroundImageInput,
+                onCheckedChange = {
+                    onUseBackgroundImageInputChange(it)
+                    saveThemeSettingsWithCharacterCard {
+                        preferencesManager.saveThemeSettings(useBackgroundImage = it)
+                    }
+                },
+                horizontalPadding = 0.dp,
+            )
 
             if (useBackgroundImageInput) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 Text(
                     text = stringResource(id = R.string.theme_media_type),
@@ -493,34 +480,20 @@ internal fun ThemeSettingsBackgroundSection(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(id = R.string.theme_background_blur),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = stringResource(id = R.string.theme_background_blur_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = useBackgroundBlurInput,
-                        onCheckedChange = {
-                            onUseBackgroundBlurInputChange(it)
-                            saveThemeSettingsWithCharacterCard {
-                                preferencesManager.saveThemeSettings(useBackgroundBlur = it)
-                            }
-                        },
-                    )
-                }
+                SettingsSwitchRow(
+                    title = stringResource(id = R.string.theme_background_blur),
+                    subtitle = stringResource(id = R.string.theme_background_blur_desc),
+                    checked = useBackgroundBlurInput,
+                    onCheckedChange = {
+                        onUseBackgroundBlurInputChange(it)
+                        saveThemeSettingsWithCharacterCard {
+                            preferencesManager.saveThemeSettings(useBackgroundBlur = it)
+                        }
+                    },
+                    horizontalPadding = 0.dp,
+                )
 
                 if (useBackgroundBlurInput) {
                     Text(

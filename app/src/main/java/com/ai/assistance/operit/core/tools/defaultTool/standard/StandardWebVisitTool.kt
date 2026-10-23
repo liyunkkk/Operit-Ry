@@ -75,6 +75,7 @@ import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.data.model.ToolValidationResult
 import com.ai.assistance.operit.util.OperitPaths
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -379,6 +380,7 @@ class StandardWebVisitTool(private val context: Context) : ToolExecutor {
     private fun visitWebPage(url: String, headers: Map<String, String>, userAgent: String, includeImageLinks: Boolean): VisitWebResultData {
         // Use WebView to visit the page and extract content
         val extractedJson = runBlocking { loadWebPageAndExtractContent(url, headers, userAgent, includeImageLinks) }
+        webVisitFailure(extractedJson)?.let { throw IOException(it) }
 
         return try {
             val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
@@ -979,6 +981,7 @@ class StandardWebVisitTool(private val context: Context) : ToolExecutor {
         val currentUrl = remember { mutableStateOf(url) } // 当前URL
         val pageTitle = remember { mutableStateOf("") } // 页面标题
         val hasSslError = remember { mutableStateOf(false) }
+        val mainFrameFailed = remember { mutableStateOf(false) }
 
         // 内容状态
         val pageContent = remember { mutableStateOf("") } // 提取的页面内容
@@ -1182,6 +1185,7 @@ class StandardWebVisitTool(private val context: Context) : ToolExecutor {
                                                         super.onPageStarted(view, startedUrl, favicon)
                                                         currentUrl.value = startedUrl
                                                         hasSslError.value = false
+                                                        mainFrameFailed.value = false
                                                         isLoading.value = true
                                                         pageLoaded.value = false
                                                         loadToken.value = loadToken.value + 1
@@ -1192,6 +1196,7 @@ class StandardWebVisitTool(private val context: Context) : ToolExecutor {
                                                             loadedUrl: String
                                                     ) {
                                                         super.onPageFinished(view, loadedUrl)
+                                                        if (mainFrameFailed.value) return
                                                         AppLogger.d(TAG, "Loaded URL: $loadedUrl")
 
                                                         // 检查是否是重定向或新页面
@@ -1250,7 +1255,7 @@ class StandardWebVisitTool(private val context: Context) : ToolExecutor {
                                                                 return@postDelayed
                                                             }
 
-                                                            if (!hasExtractedContent.value && !extractionRequested.value && autoModeEnabled.value) {
+                                                            if (!mainFrameFailed.value && !hasExtractedContent.value && !extractionRequested.value && autoModeEnabled.value) {
                                                                 extractionRequested.value = true
                                                                 isLoading.value = true
                                                                 extractPageContent(view, includeImageLinks) { content ->
@@ -1298,20 +1303,23 @@ class StandardWebVisitTool(private val context: Context) : ToolExecutor {
 
                                                     override fun onReceivedError(
                                                             view: WebView,
-                                                            errorCode: Int,
-                                                            description: String,
-                                                            failingUrl: String
+                                                            request: WebResourceRequest,
+                                                            error: android.webkit.WebResourceError
                                                     ) {
-                                                        AppLogger.e(
-                                                                TAG,
-                                                                "WebView error: $errorCode - $description"
-                                                        )
-                                                        super.onReceivedError(
-                                                                view,
-                                                                errorCode,
-                                                                description,
-                                                                failingUrl
-                                                        )
+                                                        if (!request.isForMainFrame) {
+                                                            AppLogger.w(TAG, "WebView subresource error: ${error.errorCode}")
+                                                            return
+                                                        }
+                                                        if (mainFrameFailed.value) return
+                                                        mainFrameFailed.value = true
+                                                        isLoading.value = false
+                                                        pageLoaded.value = true
+                                                        autoModeEnabled.value = false
+                                                        autoCountdownActive.value = false
+                                                        AppLogger.e(TAG, "WebView main page failed: ${error.errorCode} - ${error.description}")
+                                                        onContentExtracted(JSONObject().put("error",
+                                                            "Page load failed (${error.errorCode}): ${error.description}. " +
+                                                                "Check the connection or try another source.").toString())
                                                     }
 
                                                     override fun onReceivedSslError(

@@ -8,14 +8,40 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A custom app bar colour is a fill the theme's own label tone was never measured against, so the
- * label is answered for it. The shipped app bar has no custom colour and must keep its own tone.
+ * Opaque toolbars protect text contrast; transparent toolbars preserve the chosen image overlay.
  */
 class AppBarContentColorTest {
     @Test
+    fun `forced text is rescued on the default opaque bar but retained on transparent bars`() {
+        for ((fill, mode, expected) in listOf(
+            Triple(Color(0xFFFFF1F5), UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_LIGHT, Color.Black),
+            Triple(Color(0xFF241A20), UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_DARK, Color.White),
+        )) {
+            val actual = resolveAppBarContentColor(
+                customAppBarFill = null,
+                forceContentColor = true,
+                contentColorMode = mode,
+                themeContentColor = expected,
+                defaultAppBarFill = fill,
+            )
+            assertEquals(expected, actual)
+            assertTrue(contrastRatio(actual, fill) >= 4.5)
+        }
+        assertEquals(
+            Color.White,
+            resolveAppBarContentColor(
+                customAppBarFill = null,
+                forceContentColor = true,
+                contentColorMode = UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_LIGHT,
+                themeContentColor = Color.Black,
+                defaultAppBarFill = null,
+            ),
+        )
+    }
+
+    @Test
     fun `without a custom fill the theme label tone is kept`() {
-        // The shipped light app bar is #FFF0F5 on #FF6B8E, 2.44:1: soft on purpose, so it survives.
-        val themeOnPrimary = Color(0xFFFFF0F5.toInt())
+        val themeOnPrimary = Color(0xFF392B33.toInt())
 
         assertEquals(
             themeOnPrimary,
@@ -102,7 +128,7 @@ class AppBarContentColorTest {
             customAppBarFill = fill,
             forceContentColor = force,
             contentColorMode = mode,
-            themeOnPrimary = themeOnPrimary,
+            themeContentColor = themeOnPrimary,
         )
 
     /** Independent WCAG contrast check, so the assertion does not reuse the production maths. */

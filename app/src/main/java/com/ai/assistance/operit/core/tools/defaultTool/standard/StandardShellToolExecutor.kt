@@ -10,6 +10,8 @@ import com.ai.assistance.operit.data.model.AITool
 import com.ai.assistance.operit.data.model.ToolResult
 import com.ai.assistance.operit.data.model.ToolValidationResult
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import com.ai.assistance.operit.core.tools.system.ShellTaskRegistry
 
 /**
  * Tool for executing ADB commands directly. This provides direct access to ADB shell commands for
@@ -19,10 +21,44 @@ open class StandardShellToolExecutor(private val context: Context) {
 
     companion object {
         private const val TAG = "ADBToolExecutor"
-        private const val DEFAULT_TIMEOUT = 15000L // 15 seconds
+        private val tasks = ShellTaskRegistry(CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    }
+
+    fun task(tool: AITool, action: String): ToolResult {
+        val owner = com.ai.assistance.operit.api.chat.enhance.ToolExecutionManager
+            .currentToolRuntimeContext()?.callerChatId
+        val inbox = owner?.let {
+            com.ai.assistance.operit.api.chat.ChatRuntimeHolder.getInstance(context)
+                .getCore(com.ai.assistance.operit.api.chat.ChatRuntimeSlot.MAIN)
+                .getMessageProcessingDelegate().turnInputInbox(it)
+        }
+        return runBlocking {
+            try {
+                fun param(name: String) = tool.parameters.find { it.name == name }?.value
+                fun number(name: String, default: Long, range: LongRange): Long =
+                    (param(name)?.let { it.toLongOrNull() ?: error("$name must be an integer.") } ?: default)
+                        .also { require(it in range) { "$name must be in $range." } }
+                val yieldMs = number("yield_ms", 10_000, 0L..30_000L)
+                val id = if (action == "start") {
+                    val validation = validateParameters(tool)
+                    require(validation.valid) { validation.errorMessage ?: "Invalid command." }
+                    val command = requireNotNull(param("command"))
+                    val timeoutMs = number("timeout_ms", 120_000, 1_000L..1_800_000L)
+                    tasks.start(owner, command, timeoutMs) { AndroidShellExecutor.managedShellLauncher() }
+                } else requireNotNull(param("run_id")) { "run_id is required." }
+                val result = if (action == "cancel") tasks.cancel(owner, id)
+                    else tasks.poll(owner, id, yieldMs, inbox?.let { { it.awaitInput() } })
+                ToolResult(tool.name, true, result)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ToolResult(tool.name, false, StringResultData(""), e.message)
+            }
+        }
     }
 
     fun invoke(tool: AITool): ToolResult {
+        if (tool.parameters.any { it.name == "managed" && it.value == "true" }) return task(tool, "start")
         // Validate parameters
         val validationResult = validateParameters(tool)
         if (!validationResult.valid) {

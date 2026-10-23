@@ -392,6 +392,7 @@ class MessageCoordinationDelegate(
         chatId: String,
         messageText: String,
         attachments: List<com.ai.assistance.operit.data.model.AttachmentInfo> = emptyList(),
+        turnOptions: ChatTurnOptions = ChatTurnOptions(),
     ): Boolean {
         if (chatId.isBlank()) return false
         return sendMessageInternal(
@@ -399,6 +400,7 @@ class MessageCoordinationDelegate(
             chatIdOverride = chatId,
             messageTextOverride = messageText,
             attachmentsOverride = attachments,
+            turnOptions = turnOptions,
         )
     }
 
@@ -449,7 +451,7 @@ class MessageCoordinationDelegate(
         val resolvedMemorySpaceIdOverride =
             resolveRoleCardMemoryProfileOverride(roleCardId)
         val chatContextSettings =
-            resolveChatContextSettingsForRequest(resolvedChatModelConfigIdOverride)
+            resolveChatContextSettingsForRequest(resolvedChatModelConfigIdOverride, chatId)
 
         chatHistoryDelegate.clearTodoSnapshot(chatId)
         try {
@@ -644,7 +646,7 @@ class MessageCoordinationDelegate(
                 val (resolvedChatModelConfigIdOverride, resolvedChatModelIndexOverride) =
                     when {
                         !chatModelConfigIdOverride.isNullOrBlank() -> {
-                            Pair(chatModelConfigIdOverride, (chatModelIndexOverride ?: 0).coerceAtLeast(0))
+                            Pair(chatModelConfigIdOverride, chatModelIndexOverride ?: 0)
                         }
                         isAutoContinuation -> {
                             Pair(currentChatModelConfigIdOverride, currentChatModelIndexOverride)
@@ -680,7 +682,7 @@ class MessageCoordinationDelegate(
         val resolvedMemorySpaceIdOverride = resolvedOverrides.third
         val chatContextSettings =
             runBlocking {
-                resolveChatContextSettingsForRequest(resolvedChatModelConfigIdOverride)
+                resolveChatContextSettingsForRequest(resolvedChatModelConfigIdOverride, chatId)
             }
 
         if (!isAutoContinuation && !turnOptions.isSubTask) {
@@ -1418,7 +1420,7 @@ class MessageCoordinationDelegate(
         promptFunctionType: PromptFunctionType
     ) {
         val chatContextSettings =
-            resolveChatContextSettingsForRequest(currentChatModelConfigIdOverride)
+            resolveChatContextSettingsForRequest(currentChatModelConfigIdOverride, chatId)
         if (!chatContextSettings.enableSummary) return
 
         val currentMessages = chatHistoryDelegate.getRuntimeChatHistory(chatId)
@@ -1515,9 +1517,10 @@ class MessageCoordinationDelegate(
     }
 
     private suspend fun resolveChatContextSettingsForRequest(
-        chatModelConfigIdOverride: String?
+        chatModelConfigIdOverride: String?,
+        chatId: String,
     ): ChatContextSettings {
-        return apiConfigDelegate.resolveChatContextSettings(chatModelConfigIdOverride)
+        return apiConfigDelegate.resolveChatContextSettings(chatModelConfigIdOverride, chatId)
     }
 
     /**
@@ -1664,13 +1667,13 @@ class MessageCoordinationDelegate(
     /**
      * 手动触发对话总结
      */
-    fun manuallySummarizeConversation() {
+    fun manuallySummarizeConversation(chatId: String? = chatHistoryDelegate.currentChatId.value, onSuccess: () -> Unit = {}) {
         if (_isSummarizing.value) {
             uiStateDelegate.showToast(context.getString(R.string.chat_summarizing_please_wait))
             return
         }
         coroutineScope.launch {
-            val currentChatId = chatHistoryDelegate.currentChatId.value
+            val currentChatId = chatId ?: return@launch
             val success =
                 summarizeHistory(
                     autoContinue = false,
@@ -1678,6 +1681,7 @@ class MessageCoordinationDelegate(
                     isGroupChat = isGroupChatSession(currentChatId)
                 )
             if (success) {
+                onSuccess()
                 uiStateDelegate.showToast(context.getString(R.string.chat_conversation_summary_generated))
             }
         }
@@ -1999,12 +2003,13 @@ class MessageCoordinationDelegate(
                 )
 
             if (summaryMessage != null) {
-                chatHistoryDelegate.addSummaryMessage(
+                val saved = chatHistoryDelegate.addSummaryMessage(
                     summaryMessage = summaryMessage,
                     beforeTimestamp = beforeTimestamp,
                     afterTimestamp = afterTimestamp,
                     chatIdOverride = currentChatId,
                 )
+                check(saved) { "Conversation changed before compaction could be saved" }
 
                 refreshStableContextWindow(
                     chatId = currentChatId,

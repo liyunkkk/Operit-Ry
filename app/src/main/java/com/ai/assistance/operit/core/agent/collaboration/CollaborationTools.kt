@@ -95,8 +95,8 @@ object CollaborationTools {
                 ToolPrompt(
                     name = "wait_agent",
                     description = text(
-                        "等待邮箱消息、完成通知或新的用户输入。消息通过上下文投递；此工具只报告等待结果。子代理的完成消息不会唤醒你：不调用此工具的时候，结果只留在邮箱里，要等到下一轮（通常是用户下一条消息）才会进入上下文。",
-                        "Wait for mailbox activity, completion notifications or new user input. Messages arrive through context; this tool only reports the wait outcome. A child's completion message does not wake you: without this tool the result stays in the mailbox and only enters context on a later turn (usually the user's next message).",
+                        "等待其它代理的邮箱消息或完成通知。消息通过上下文投递；此工具只报告等待结果。若此刻没有其它代理在运行、你的邮箱也为空，会立即返回「无事可等」——不要靠反复调用来空转：若刚创建的子代理仍在创建中，等它创建完成后再调用一次，否则直接结束本轮。子代理的完成消息不会唤醒你：不调用此工具的时候，结果只留在邮箱里，要等到下一轮（通常是用户下一条消息）才会进入上下文。",
+                        "Wait for mailbox messages or completion notices from other agents. Messages arrive through context; this tool only reports the wait outcome. When, at that moment, no other agent is running and your mailbox is empty it returns immediately as 'nothing to wait for': do not spin on it. If a child you just created is still being set up, call it once more after that finishes; otherwise end the turn. A child's completion message does not wake you: without this tool the result stays in the mailbox and only enters context on a later turn (usually the user's next message).",
                     ),
                     parametersStructured = listOf(parameter("timeout_ms",
                         "等待毫秒数，默认 ${limits.defaultWaitMs}，最少 ${limits.minWaitMs}，最多 ${limits.maxWaitMs}。",

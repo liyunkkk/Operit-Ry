@@ -3,6 +3,8 @@ package com.ai.assistance.operit.api.chat.enhance
 import android.content.Context
 import com.ai.assistance.operit.ui.permissions.ToolPermissionDecision
 import com.ai.assistance.operit.ui.permissions.permissionDeniedByAutomaticReview
+import com.ai.assistance.operit.ui.permissions.permissionBlockedByReviewFailure
+import com.ai.assistance.operit.ui.permissions.PermissionReviewFailureKind
 import com.ai.assistance.operit.util.AppLogger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -15,6 +17,25 @@ import org.junit.Test
 import org.mockito.Mockito
 
 class InputProcessorTest {
+    @Test
+    fun reviewFailuresNeitherAdvanceNorResetTheDenialCircuit() {
+        val chatId = "review-failure-${System.nanoTime()}"
+        val turnId = "turn"
+        val denied = permissionDeniedByAutomaticReview("denied")
+        repeat(2) {
+            val result = applyDeferredPermissionReviewCircuit(chatId, turnId, denied, true)
+                as ToolPermissionDecision.Denied
+            assertFalse(result.interruptTurn)
+        }
+        repeat(4) {
+            val failed = permissionBlockedByReviewFailure(PermissionReviewFailureKind.TIMED_OUT, "")
+            assertEquals(failed, applyDeferredPermissionReviewCircuit(chatId, turnId, failed, true))
+        }
+        val thirdDenial = applyDeferredPermissionReviewCircuit(chatId, turnId, denied, true)
+            as ToolPermissionDecision.Denied
+        assertTrue(thirdDenial.interruptTurn)
+    }
+
     @Test
     fun disabledPromptHooksReturnRawInputWithoutAccessingHookContext() = runBlocking {
         val rawInput = "review this exact tool call"

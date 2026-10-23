@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1626,9 +1628,9 @@ private fun PermissionReviewStatisticCard(
 }
 
 /**
- * The category bar: the two categories on the left, the status filter button on the right. The
- * categories share the width so the pair always fits, however long the status name is.
+ * Keep each category and its count together; wrap whole chips when the available width is tight.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SubagentFilterRow(
     selectedKind: SubagentTaskKind,
@@ -1638,10 +1640,10 @@ private fun SubagentFilterRow(
     onSelectKind: (SubagentTaskKind) -> Unit,
     onSelectStatus: (SubagentRunStatusFilter) -> Unit,
 ) {
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         SubagentTaskKind.entries.forEach { kind ->
             SubagentKindChip(
@@ -1649,7 +1651,6 @@ private fun SubagentFilterRow(
                 selected = kind == selectedKind,
                 count = kindCounts[kind] ?: 0,
                 onClick = { onSelectKind(kind) },
-                modifier = Modifier.weight(1f),
             )
         }
         SubagentStatusFilterButton(
@@ -1674,23 +1675,20 @@ private fun SubagentKindChip(
         selected = selected,
         onClick = onClick,
         label = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                // The two categories share the row, so their labels are centred in their own chip.
-                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-            ) {
-                Text(
-                    text = subagentKindLabel(kind),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = subagentKindLabel(kind),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        trailingIcon = {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+            )
         },
     )
 }
@@ -1719,28 +1717,30 @@ private fun SubagentStatusFilterButton(
                 )
             },
             label = {
+                Text(
+                    text = subagentStatusFilterLabel(selectedStatus),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            trailingIcon = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = subagentStatusFilterLabel(selectedStatus),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
                         text = (statusCounts[selectedStatus] ?: 0).toString(),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = stringResource(R.string.subagent_filter_menu),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
-            },
-            trailingIcon = {
-                Icon(
-                    imageVector = Icons.Default.ExpandMore,
-                    contentDescription = stringResource(R.string.subagent_filter_menu),
-                    modifier = Modifier.size(18.dp),
-                )
             },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

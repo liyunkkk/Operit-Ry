@@ -3161,51 +3161,9 @@
             "default": null
           },
           {
-            "name": "context_length",
-            "type": "number",
-            "description": "optional, base context length",
-            "required": false,
-            "default": null
-          },
-          {
             "name": "max_context_length",
             "type": "number",
             "description": "optional, max context length",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "enable_max_context_mode",
-            "type": "boolean",
-            "description": "optional, use max_context_length as active context",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "summary_token_threshold",
-            "type": "number",
-            "description": "optional, token-ratio threshold for context summary trigger (0~1)",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "enable_summary",
-            "type": "boolean",
-            "description": "optional, enable context summary",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "enable_summary_by_message_count",
-            "type": "boolean",
-            "description": "optional, enable summary trigger by message count",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "summary_message_count_threshold",
-            "type": "integer",
-            "description": "optional, message-count threshold for summary trigger",
             "required": false,
             "default": null
           },
@@ -3373,51 +3331,9 @@
             "default": null
           },
           {
-            "name": "context_length",
-            "type": "number",
-            "description": "optional, base context length",
-            "required": false,
-            "default": null
-          },
-          {
             "name": "max_context_length",
             "type": "number",
             "description": "optional, max context length",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "enable_max_context_mode",
-            "type": "boolean",
-            "description": "optional, use max_context_length as active context",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "summary_token_threshold",
-            "type": "number",
-            "description": "optional, token-ratio threshold for context summary trigger (0~1)",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "enable_summary",
-            "type": "boolean",
-            "description": "optional, enable context summary",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "enable_summary_by_message_count",
-            "type": "boolean",
-            "description": "optional, enable summary trigger by message count",
-            "required": false,
-            "default": null
-          },
-          {
-            "name": "summary_message_count_threshold",
-            "type": "integer",
-            "description": "optional, message-count threshold for summary trigger",
             "required": false,
             "default": null
           },
@@ -3562,7 +3478,7 @@
           {
             "name": "function_type",
             "type": "string",
-            "description": "function type enum name (CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
+            "description": "function type enum name (CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
             "required": true,
             "default": null
           }
@@ -3578,7 +3494,7 @@
           {
             "name": "function_type",
             "type": "string",
-            "description": "function type enum name (CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/GREP/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
+            "description": "function type enum name (CHAT/SUMMARY/MEMORY/UI_CONTROLLER/TRANSLATION/IMAGE_RECOGNITION/AUDIO_RECOGNITION/VIDEO_RECOGNITION)",
             "required": true,
             "default": null
           },

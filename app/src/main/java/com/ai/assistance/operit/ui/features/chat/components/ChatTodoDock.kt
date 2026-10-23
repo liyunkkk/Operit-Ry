@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -26,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,9 @@ import com.ai.assistance.operit.data.model.ChatTodo
 import com.ai.assistance.operit.data.model.ChatTodoStatus
 
 private const val TODO_DOCK_EXPANDED_ID = "chat-todo-dock"
+
+/** Keeps the row's content clear of whatever sits under it, and counts as part of the row's box. */
+private val TODO_DOCK_ROW_BOTTOM_GAP = 6.dp
 
 internal fun currentTodoStep(todos: List<ChatTodo>): Int {
     val inProgressIndex = todos.indexOfFirst { it.status == ChatTodoStatus.IN_PROGRESS }
@@ -51,9 +55,11 @@ fun ChatTodoDock(
     chatId: String?,
     todos: List<ChatTodo>,
     modifier: Modifier = Modifier,
+    onRowCenterOffsetPx: (Int) -> Unit = {},
     leadingContent: (@Composable () -> Unit)? = null,
 ) {
     val hasTodos = chatId != null && todos.isNotEmpty()
+    val rowBottomGapPx = if (hasTodos) with(LocalDensity.current) { TODO_DOCK_ROW_BOTTOM_GAP.roundToPx() } else 0
 
     val allTerminal =
         todos.all {
@@ -95,7 +101,16 @@ fun ChatTodoDock(
             }
         }
 
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // Reports where this row's content sits, counted from the row's bottom edge: the settings
+        // button beside the row has to share that centre, and the expandable panel above must not
+        // move it. This node measures what is inside it, so the bottom gap is added back by hand.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = TODO_DOCK_ROW_BOTTOM_GAP.takeIf { hasTodos } ?: 0.dp)
+                .onGloballyPositioned { onRowCenterOffsetPx(rowBottomGapPx + it.size.height / 2) },
+            contentAlignment = Alignment.Center,
+        ) {
             if (hasTodos) Surface(
                 modifier = Modifier.clickable { TranscriptExpansionState.toggle(chatId.orEmpty(), TODO_DOCK_EXPANDED_ID) },
                 shape = RoundedCornerShape(50),
@@ -126,7 +141,6 @@ fun ChatTodoDock(
                 Box(Modifier.align(Alignment.CenterStart)) { content() }
             }
         }
-        if (hasTodos) Spacer(Modifier.size(6.dp))
     }
 }
 

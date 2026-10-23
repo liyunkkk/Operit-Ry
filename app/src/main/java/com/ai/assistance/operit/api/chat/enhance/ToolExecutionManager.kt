@@ -172,6 +172,7 @@ object ToolExecutionManager {
         val permissionCheckedToolName: String? = null,
         val parameterObserver: ToolParameterObservation? = null,
         val resolvedMemorySpaceId: String? = null,
+        val dynamicUiRunId: String? = null,
     )
 
     internal class BoundedToolResultAccumulator(
@@ -869,6 +870,7 @@ object ToolExecutionManager {
         isSubagent: Boolean = false,
         subagentToolLoopGuard: SubagentToolLoopGuard? = null,
         resolvedMemorySpaceId: String? = null,
+        dynamicUiRunId: String? = null,
     ): List<ToolResult> = coroutineScope {
         // Bind proxy context parameters to host values before any permission review or execution
         // happens, so the reviewed parameter set is exactly the executed one. The model can never
@@ -943,6 +945,7 @@ object ToolExecutionManager {
                         isSubagent = true,
                         subagentToolLoopGuard = subagentToolLoopGuard,
                         resolvedMemorySpaceId = resolvedMemorySpaceId,
+                        dynamicUiRunId = dynamicUiRunId,
                     )
                 val reviewedSuffixResults =
                     executeInvocations(
@@ -967,6 +970,7 @@ object ToolExecutionManager {
                         isSubagent = true,
                         subagentToolLoopGuard = subagentToolLoopGuard,
                         resolvedMemorySpaceId = resolvedMemorySpaceId,
+                        dynamicUiRunId = dynamicUiRunId,
                     )
                 return@coroutineScope commonPrefixResults + reviewedSuffixResults
             }
@@ -1112,6 +1116,7 @@ object ToolExecutionManager {
                 timingScopeId = timingScopeId,
                 batchSize = boundInvocations.size.coerceAtLeast(1),
                 resolvedMemorySpaceId = resolvedMemorySpaceId,
+                dynamicUiRunId = dynamicUiRunId,
             )
 
         // 1. 顶层工具暴露模式拦截

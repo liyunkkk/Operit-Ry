@@ -17,6 +17,10 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,8 +64,13 @@ class DeepgramSttProvider(
 
     private val scope = CoroutineScope(Dispatchers.Default)
     private var recordingJob: Job? = null
+    private val requestEpoch = SpeechRequestEpoch()
+    override val speechActivityFlow = MutableStateFlow(false)
+    private val captureMutex = Mutex()
+    @Volatile private var closed = false
 
     private var audioRecord: AudioRecord? = null
+    private var effects: CaptureAudioEffects? = null
     private var outputFile: File? = null
     private var outputStream: FileOutputStream? = null
     private var pcmBytesWritten: Long = 0
@@ -130,21 +139,24 @@ class DeepgramSttProvider(
         continuousMode: Boolean,
         partialResults: Boolean,
         audioSource: Int,
-    ): Boolean {
+    ): Boolean = captureMutex.withLock {
+        if (closed) return@withLock false
         if (!isInitialized.value) {
             val ok = initialize()
-            if (!ok) return false
+            if (!ok) return@withLock false
         }
 
-        if (recordingJob?.isActive == true) return false
+        if (recordingJob?.isActive == true) return@withLock false
 
+        val epoch = requestEpoch.begin()
+        speechActivityFlow.value = false
         lastLanguageCode = languageCode
 
         _recognitionError.value = SpeechService.RecognitionError(0, "")
         _recognitionResult.value = SpeechService.RecognitionResult("")
         _recognitionState.value = SpeechService.RecognitionState.PREPARING
 
-        return try {
+        try {
             withContext(Dispatchers.IO) {
                 val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
                 if (minBufferSize == AudioRecord.ERROR || minBufferSize == AudioRecord.ERROR_BAD_VALUE) {
@@ -165,7 +177,7 @@ class DeepgramSttProvider(
 
                 pcmBytesWritten = 0
 
-                val pendingPcm = SpeechPrerollStore.consumePending()
+                val pendingPcm = SpeechPrerollStore.consumePending(audioSource)
                 if (pendingPcm != null && pendingPcm.isNotEmpty()) {
                     try {
                         writePcm16le(stream, pendingPcm, pendingPcm.size)
@@ -176,6 +188,8 @@ class DeepgramSttProvider(
                 }
 
                 audioRecord = record
+                effects?.close()
+                effects = CaptureAudioEffects(record.audioSessionId)
                 outputFile = file
                 outputStream = stream
 
@@ -257,6 +271,7 @@ class DeepgramSttProvider(
 
                                             if (vadFramePos == vadFrameSize) {
                                                 val isSpeech = vadInstance.isSpeech(vadFrame)
+                                                requestEpoch.publish(epoch) { speechActivityFlow.value = isSpeech }
                                                 if (!speechActive) {
                                                     if (isSpeech) {
                                                         speechActive = true
@@ -270,7 +285,7 @@ class DeepgramSttProvider(
                                                         writePcm16le(stream, vadFrame, vadFrameSize)
                                                     } else if (!autoStopTriggered) {
                                                         autoStopTriggered = true
-                                                        scope.launch { stopRecognition() }
+                                                        scope.launch { stopRecognition(epoch) }
                                                         return@launch
                                                     }
                                                 }
@@ -286,18 +301,26 @@ class DeepgramSttProvider(
                                     }
                                 }
                             }
+                        } catch (e: CancellationException) { throw e
                         } catch (e: Exception) {
-                            AppLogger.e(TAG, "Recording loop failed", e)
-                            withContext(Dispatchers.Main) {
-                                _recognitionState.value = SpeechService.RecognitionState.ERROR
-                                _recognitionError.value = SpeechService.RecognitionError(-1, e.message ?: "Recording failed")
+                            scope.launch {
+                                captureMutex.withLock {
+                                    if (epoch == requestEpoch.current()) {
+                                        stopRecordingInternal(deleteFile = true)
+                                        publishFailure(epoch, e.message ?: "Recording failed")
+                                    }
+                                }
                             }
                         }
                     }
 
                 true
             }
+        } catch (e: CancellationException) {
+            withContext(NonCancellable + Dispatchers.IO) { stopRecordingInternal(deleteFile = true) }
+            throw e
         } catch (e: Exception) {
+            withContext(NonCancellable + Dispatchers.IO) { stopRecordingInternal(deleteFile = true) }
             AppLogger.e(TAG, "Deepgram STT startRecognition failed", e)
             _recognitionState.value = SpeechService.RecognitionState.ERROR
             _recognitionError.value = SpeechService.RecognitionError(-1, e.message ?: "startRecognition failed")
@@ -305,71 +328,79 @@ class DeepgramSttProvider(
         }
     }
 
-    override suspend fun stopRecognition(): Boolean {
-        if (_recognitionState.value != SpeechService.RecognitionState.RECOGNIZING) return false
+    override suspend fun stopRecognition(): Boolean = stopRecognition(requestEpoch.current())
 
-        _recognitionState.value = SpeechService.RecognitionState.PROCESSING
-
-        return try {
-            val file = withContext(Dispatchers.IO) { stopRecordingInternal(deleteFile = false) }
-                ?: run {
-                    _recognitionState.value = SpeechService.RecognitionState.ERROR
-                    _recognitionError.value = SpeechService.RecognitionError(-1, "No audio recorded")
-                    return false
+    private suspend fun stopRecognition(epoch: Long): Boolean {
+        var audio: File? = null
+        var language: String? = null
+        try {
+            captureMutex.withLock {
+                if (closed || epoch != requestEpoch.current() ||
+                    _recognitionState.value != SpeechService.RecognitionState.RECOGNIZING) return false
+                requestEpoch.publish(epoch) { _recognitionState.value = SpeechService.RecognitionState.PROCESSING }
+                language = lastLanguageCode
+                audio = withContext(NonCancellable + Dispatchers.IO) {
+                    stopRecordingInternal(deleteFile = false)
                 }
-
-            if (file.length() > MAX_FILE_BYTES) {
-                file.delete()
-                val maxSizeMB = MAX_FILE_BYTES / 1024 / 1024
-                _recognitionState.value = SpeechService.RecognitionState.ERROR
-                _recognitionError.value = SpeechService.RecognitionError(-1, context.getString(R.string.deepgram_stt_file_too_large, maxSizeMB))
+            }
+            val file = audio ?: run {
+                publishFailure(epoch, "No audio recorded")
                 return false
             }
-
-            val text = withContext(Dispatchers.IO) {
-                transcribeWavFile(file, languageCode = lastLanguageCode)
+            if (file.length() > MAX_FILE_BYTES) {
+                publishFailure(epoch, "Recorded audio exceeds ${MAX_FILE_BYTES / 1024 / 1024} MiB")
+                return false
             }
-
-            file.delete()
-
-            _recognitionResult.value = SpeechService.RecognitionResult(text = text, isFinal = true, confidence = 0f)
-            _recognitionState.value = SpeechService.RecognitionState.IDLE
-            _volumeLevelFlow.value = 0f
-            true
+            val text = withContext(Dispatchers.IO) {
+                transcribeWavFile(file, languageCode = language, epoch = epoch)
+            }
+            return requestEpoch.publish(epoch) {
+                _recognitionResult.value = SpeechService.RecognitionResult(text = text, isFinal = true, confidence = 0f)
+                _recognitionState.value = SpeechService.RecognitionState.IDLE
+                _volumeLevelFlow.value = 0f
+            }
+        } catch (e: CancellationException) { throw e
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Deepgram STT stopRecognition failed", e)
+            publishFailure(epoch, e.message ?: "Transcription failed")
+            return false
+        } finally { audio?.delete() }
+    }
+
+    private fun publishFailure(epoch: Long, message: String) {
+        requestEpoch.publish(epoch) {
             _recognitionState.value = SpeechService.RecognitionState.ERROR
-            _recognitionError.value = SpeechService.RecognitionError(-1, e.message ?: "stopRecognition failed")
-            false
+            _recognitionError.value = SpeechService.RecognitionError(-1, message)
+            _volumeLevelFlow.value = 0f
         }
     }
 
     override suspend fun cancelRecognition() {
-        withContext(Dispatchers.IO) {
-            stopRecordingInternal(deleteFile = true)
-        }
-        _volumeLevelFlow.value = 0f
-        if (_recognitionState.value != SpeechService.RecognitionState.UNINITIALIZED) {
-            _recognitionState.value = SpeechService.RecognitionState.IDLE
+        val epoch = requestEpoch.begin()
+        captureMutex.withLock {
+            if (epoch != requestEpoch.current()) return
+            withContext(NonCancellable + Dispatchers.IO) { stopRecordingInternal(deleteFile = true) }
+            requestEpoch.publish(epoch) {
+                _volumeLevelFlow.value = 0f
+                _recognitionResult.value = SpeechService.RecognitionResult("")
+                if (!closed) _recognitionState.value = SpeechService.RecognitionState.IDLE
+            }
         }
     }
 
     override fun shutdown() {
-        try {
-            scope.cancel()
-        } catch (_: Exception) {
+        closed = true
+        requestEpoch.begin()
+        CoroutineScope(Dispatchers.IO).launch {
+            captureMutex.withLock {
+                stopRecordingInternal(deleteFile = true)
+                scope.cancel()
+                runCatching { vad?.close() }
+                vad = null
+                _isInitialized.value = false
+                _recognitionState.value = SpeechService.RecognitionState.UNINITIALIZED
+                _volumeLevelFlow.value = 0f
+            }
         }
-        runCatching { audioRecord?.release() }
-        audioRecord = null
-        runCatching { outputStream?.close() }
-        outputStream = null
-        outputFile?.delete()
-        outputFile = null
-        runCatching { vad?.close() }
-        vad = null
-        _isInitialized.value = false
-        _recognitionState.value = SpeechService.RecognitionState.UNINITIALIZED
-        _volumeLevelFlow.value = 0f
     }
 
     override suspend fun getSupportedLanguages(): List<String> =
@@ -378,6 +409,7 @@ class DeepgramSttProvider(
         }
 
     override suspend fun recognize(audioData: FloatArray) {
+        val epoch = requestEpoch.begin()
         if (!isInitialized.value) {
             val ok = initialize()
             if (!ok) return
@@ -406,24 +438,25 @@ class DeepgramSttProvider(
                 out
             }
 
-            val text = withContext(Dispatchers.IO) {
-                transcribeWavFile(file, languageCode = lastLanguageCode)
+            val text = try {
+                withContext(Dispatchers.IO) { transcribeWavFile(file, languageCode = lastLanguageCode, epoch = epoch) }
+            } finally { file.delete() }
+
+            requestEpoch.publish(epoch) {
+                _recognitionResult.value = SpeechService.RecognitionResult(text = text, isFinal = true, confidence = 0f)
+                _recognitionState.value = SpeechService.RecognitionState.IDLE
             }
-
-            file.delete()
-
-            _recognitionResult.value = SpeechService.RecognitionResult(text = text, isFinal = true, confidence = 0f)
-            _recognitionState.value = SpeechService.RecognitionState.IDLE
+        } catch (e: CancellationException) { throw e
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Deepgram STT recognize(audioData) failed", e)
-            _recognitionState.value = SpeechService.RecognitionState.ERROR
-            _recognitionError.value = SpeechService.RecognitionError(-1, e.message ?: "recognize failed")
+            publishFailure(epoch, e.message ?: "Transcription failed")
         }
     }
 
     private suspend fun stopRecordingInternal(deleteFile: Boolean): File? {
+        speechActivityFlow.value = false
         val job = recordingJob
         recordingJob = null
+        runCatching { audioRecord?.stop() }
         try {
             if (job != null) {
                 job.cancel()
@@ -434,6 +467,8 @@ class DeepgramSttProvider(
 
         val record = audioRecord
         audioRecord = null
+        effects?.close()
+        effects = null
         try {
             record?.stop()
         } catch (_: Exception) {
@@ -541,7 +576,7 @@ class DeepgramSttProvider(
         }
     }
 
-    private fun transcribeWavFile(file: File, languageCode: String?): String {
+    private fun transcribeWavFile(file: File, languageCode: String?, epoch: Long): String {
         val url = endpointUrl.toHttpUrl().newBuilder()
             .addQueryParameter("model", model)
             .addQueryParameter("smart_format", "true")
@@ -558,8 +593,10 @@ class DeepgramSttProvider(
             .addHeader("Authorization", "Token $apiKey")
             .build()
 
+        val call = httpClient.newCall(request)
+        requestEpoch.attach(epoch, call)
         val response = try {
-            httpClient.newCall(request).execute()
+            call.execute()
         } catch (e: IOException) {
             throw IOException(context.getString(R.string.deepgram_stt_request_failed), e)
         }

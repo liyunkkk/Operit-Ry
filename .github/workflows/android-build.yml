@@ -40,14 +40,11 @@ on:
       - ci/script/prepare_android_dependencies.py
       - ci/script/run_android_checks.sh
       - cmake/**
-      - dragonbones/**
       - examples/**
-      - fbx/**
       - gradle/**
       - gradle.properties
       - gradlew
       - gradlew.bat
-      - mmd/**
       - package.json
       - package-lock.json
       - npm-shrinkwrap.json
@@ -80,7 +77,7 @@ permissions:
 env:
   JAVA_VERSION: '21'
   NODE_VERSION: '22'
-  ANDROID_NDK_VERSION: '25.1.8937393'
+  ANDROID_NDK_VERSION: '27.0.12077973'
   ANDROID_CMAKE_VERSION: '3.31.6'
   MANUAL_DEPS_DIR: manual-deps
   OPERIT_RELEASE_CERT_SHA256: '40:F8:7A:4D:66:EB:70:D0:E2:D1:37:9C:6A:97:DD:DC:0C:ED:D3:BA:87:2E:02:74:50:CA:77:AF:42:EC:5E:74'
@@ -105,7 +102,7 @@ jobs:
         with:
           lane: full
           java-version: ${{ env.JAVA_VERSION }}
-          android-build-tools-version: '35.0.0'
+          android-build-tools-version: '37.0.0'
           android-ndk-version: ${{ env.ANDROID_NDK_VERSION }}
           android-cmake-version: ${{ env.ANDROID_CMAKE_VERSION }}
           manual-deps-dir: ${{ env.MANUAL_DEPS_DIR }}
@@ -231,12 +228,18 @@ jobs:
           # above, so this checks that they are signed at all rather than against the Operit Ry key.
           expected_apk_digest="$(tr -d ':' < "$RUNNER_TEMP/yunke-cert-sha256.txt")"
           expected_apk_digest="${expected_apk_digest,,}"
-          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          apksigner="$ANDROID_HOME/build-tools/37.0.0/apksigner"
           for artifact in "${artifacts[@]}"; do
             case "$artifact" in
               *.apk)
                 certificate="$("$apksigner" verify --print-certs "$artifact")"
-                grep -Fqi "Signer #1 certificate SHA-256 digest: $expected_apk_digest" <<< "$certificate"
+                # The signer label depends on the build-tools release ("Signer #1" in 35.x,
+                # "V2 Signer" in 37.x), so match the digest at the end of any signer line.
+                if ! grep -Eqi "certificate SHA-256 digest: ${expected_apk_digest}$" <<< "$certificate"; then
+                  echo "Unexpected signing certificate for $artifact" >&2
+                  echo "$certificate" >&2
+                  exit 1
+                fi
                 ;;
               *.aab)
                 jarsigner -verify "$artifact"

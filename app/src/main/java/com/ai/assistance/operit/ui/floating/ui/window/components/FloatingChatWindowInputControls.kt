@@ -2,7 +2,6 @@ package com.ai.assistance.operit.ui.floating.ui.window.components
 
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.ui.draw.shadow
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.chatComposerShape
@@ -39,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -220,7 +220,7 @@ private fun BottomInputBar(
             if (isProcessing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         )) {
             Icon(
-                if (isProcessing) Icons.Default.Close else if (hasContent) Icons.Default.Send else Icons.Default.Mic,
+                if (isProcessing) Icons.Default.Close else if (hasContent) Icons.Default.Send else Icons.Rounded.GraphicEq,
                 stringResource(if (isProcessing) R.string.floating_cancel else if (hasContent)
                     R.string.floating_send else R.string.floating_voice_mode),
                 tint = if (isProcessing) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,

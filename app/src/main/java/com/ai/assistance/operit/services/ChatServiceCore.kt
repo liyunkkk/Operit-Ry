@@ -140,6 +140,7 @@ class ChatServiceCore(
 
         coroutineScope.launch {
             chatHistoryDelegate.currentChatId.collect { chatId ->
+                apiConfigDelegate.setContextChatId(chatId)
                 tokenStatisticsDelegate.setActiveChatId(chatId)
                 if (::messageProcessingDelegate.isInitialized) {
                     messageProcessingDelegate.setActiveDraftChat(chatId)

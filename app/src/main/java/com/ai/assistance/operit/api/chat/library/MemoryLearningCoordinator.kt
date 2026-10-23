@@ -399,7 +399,9 @@ object MemoryLearningCoordinator {
         paths: List<String>, reason: String, technical: String = "") {
         MemoryExtractionLogRepository(context,profileId).save(MemoryExtractionLog(
             sourceChatId=chatId,graph=false,notes="notes" in paths,skills="skills" in paths,
-            status="failed",detail=reason,finishedAt=System.currentTimeMillis(),reviewable=false))
+            status="failed",detail=reason + technical.takeIf { it.isNotBlank() }
+                ?.let { "\n${it.take(500)}" }.orEmpty(),
+            finishedAt=System.currentTimeMillis(),reviewable=false))
         AppLogger.w("MemoryLearning","Unreviewable source range for $chatId: $reason" +
             technical.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty())
     }
@@ -444,7 +446,7 @@ object MemoryLearningCoordinator {
                 // Leave room for the scoped tool schema, model output and protocol overhead.
                 session.evidenceBudget = MemoryLearningSnapshot.evidenceBudget(contextWindow).toLong()
                 session.evidenceBytes.set((batch.text + instructions).toByteArray(Charsets.UTF_8).size.toLong())
-                val result = SubagentCoordinator.getInstance(context).runTask(SubagentTaskRequest(
+                val request = SubagentTaskRequest(
                     parentChatId=chatId,parentToolCallId=null,parentAgentName=null,
                     title=context.getString(R.string.memory_learning_run),prompt="SOURCE BATCH:\n${batch.text}",
                     subagentType="memory-learning",functionType=FunctionType.MEMORY,
@@ -470,8 +472,15 @@ object MemoryLearningCoordinator {
                         sessions[run.childChatId]=session
                         AgentRunObservers.register(run.childChatId,session)
                     }
-                ))
-                check(result is SubagentTaskResult.Completed) { "Learning task did not complete" }
+                )
+                runLearningWithFinishRecovery(isFinished = { session.finished }) { recovery ->
+                    val next = if (recovery) request.copy(taskId = runId, prompt =
+                        "Your changes are still staged, not saved. Continue this same review; do not repeat " +
+                        "changes already staged. Resolve any remaining work, then call $FINISH now. " +
+                        "A text summary does not commit the batch.") else request
+                    val result = SubagentCoordinator.getInstance(context).runTask(next)
+                    check(result is SubagentTaskResult.Completed) { "Learning task did not complete" }
+                }
                 check(session.finished) { "Learning review did not confirm batch completion; source progress was retained" }
             }
             currentCoroutineContext().ensureActive()
@@ -565,6 +574,15 @@ object MemoryLearningCoordinator {
         )),
         ToolPrompt(name=FINISH,description="Finish this learning review.",parametersStructured=emptyList())
     )
+}
+
+/** One continuation in the same session; exceptions and cancellation never trigger a retry. */
+internal suspend fun runLearningWithFinishRecovery(
+    isFinished: () -> Boolean,
+    run: suspend (recovery: Boolean) -> Unit,
+) {
+    run(false)
+    if (!isFinished()) run(true)
 }
 
 internal fun memoryLearningFinalStatus(error: Throwable?, proposals: Int, toolErrors: Int): String = when {

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -49,15 +48,15 @@ fun OverviewCard(
     totalLinkCount: Int,
     activeProfileName: String
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = stringResource(R.string.backup_data_overview),
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(
                     text = stringResource(R.string.backup_current_profile, activeProfileName),
@@ -106,9 +105,9 @@ fun BackupFilesStatisticsCard(
     isScanning: Boolean,
     onRefresh: () -> Unit
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
@@ -187,18 +186,10 @@ fun BackupFilesStatisticsCard(
             }
 
             if (!isScanning) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Text(
-                        text = "💡 " + stringResource(R.string.backup_files_location_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(12.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                SettingsInfoBanner(
+                    text = stringResource(R.string.backup_files_location_hint),
+                    backgroundColor = rememberSettingsCardColor()
+                )
             }
         }
     }
@@ -215,6 +206,7 @@ fun BackupFileStatItem(
         colors = CardDefaults.cardColors(
             containerColor = color.copy(alpha = 0.1f)
         ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
     ) {
         Row(
@@ -289,25 +281,16 @@ fun SectionHeader(
     icon: ImageVector
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().settingsSearchTarget(title),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(10.dp)
-            )
-        }
+        SettingsIconBadge(icon = icon, size = 40)
         Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
             )
             Text(
                 text = subtitle,

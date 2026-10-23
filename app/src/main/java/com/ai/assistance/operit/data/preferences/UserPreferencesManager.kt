@@ -96,6 +96,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
         private val CUSTOM_PRIMARY_COLOR = intPreferencesKey("custom_primary_color")
         private val CUSTOM_SECONDARY_COLOR = intPreferencesKey("custom_secondary_color")
         private val USE_CUSTOM_COLORS = booleanPreferencesKey("use_custom_colors")
+        private val ENFORCE_COLOR_CONTRAST = booleanPreferencesKey("enforce_color_contrast")
         private val USE_BACKGROUND_IMAGE = booleanPreferencesKey("use_background_image")
         private val BACKGROUND_IMAGE_URI = stringPreferencesKey("background_image_uri")
         private val BACKGROUND_IMAGE_OPACITY = floatPreferencesKey("background_image_opacity")
@@ -266,10 +267,6 @@ class UserPreferencesManager private constructor(private val context: Context) {
         // 默认语言
         const val DEFAULT_LANGUAGE = LanguageCodes.AUTO
 
-        // Sidebar software identity (drawer header brand text)
-        const val SOFTWARE_IDENTITY_OPERIT = "operit_ai"
-        const val SOFTWARE_IDENTITY_LINGSHU = "lingshu_ai"
-
         const val CHAT_STYLE_CURSOR = "cursor"
         const val CHAT_STYLE_BUBBLE = "bubble"
 
@@ -437,8 +434,6 @@ class UserPreferencesManager private constructor(private val context: Context) {
         private val KEY_SHOW_CHAT_FLOATING_DOTS_ANIMATION = booleanPreferencesKey("show_chat_floating_dots_animation")
         private val KEY_UI_ACCESSIBILITY_MODE = booleanPreferencesKey("ui_accessibility_mode")
         private val KEY_BETA_PLAN_ENABLED = booleanPreferencesKey("beta_plan_enabled")
-        private val KEY_SOFTWARE_IDENTITY = stringPreferencesKey("software_identity")
-
 
         // 布局调整设置
         private val CHAT_SETTINGS_BUTTON_END_PADDING = floatPreferencesKey("chat_settings_button_end_padding")
@@ -449,6 +444,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
             floatPreferencesKey("global_text_letter_spacing")
         private val AI_MARKDOWN_PARAGRAPH_SPACING =
             floatPreferencesKey("ai_markdown_paragraph_spacing")
+        private val AI_MARKDOWN_TONED_ICON_STYLE =
+            stringPreferencesKey("ai_markdown_toned_icon_style")
 
         // 最近使用颜色
         private val RECENT_COLORS = stringPreferencesKey("recent_colors")
@@ -504,12 +501,6 @@ class UserPreferencesManager private constructor(private val context: Context) {
     suspend fun saveBetaPlanEnabled(enabled: Boolean) {
         context.userPreferencesDataStore.edit { preferences ->
             preferences[KEY_BETA_PLAN_ENABLED] = enabled
-        }
-    }
-
-    suspend fun saveSoftwareIdentity(identity: String) {
-        context.userPreferencesDataStore.edit { preferences ->
-            preferences[KEY_SOFTWARE_IDENTITY] = identity
         }
     }
 
@@ -733,6 +724,12 @@ class UserPreferencesManager private constructor(private val context: Context) {
     val useCustomColors: Flow<Boolean> =
             context.userPreferencesDataStore.data.map { preferences ->
                 preferences[USE_CUSTOM_COLORS] ?: false
+            }
+
+    /** Off by default: the palette keeps its soft tones until the user asks for stronger contrast. */
+    val enforceColorContrast: Flow<Boolean> =
+            context.userPreferencesDataStore.data.map { preferences ->
+                preferences[ENFORCE_COLOR_CONTRAST] ?: false
             }
 
     // 背景图片相关Flow
@@ -1257,11 +1254,6 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences[KEY_BETA_PLAN_ENABLED] ?: false
         }
 
-    val softwareIdentity: Flow<String> =
-        context.userPreferencesDataStore.data.map { preferences ->
-            preferences[KEY_SOFTWARE_IDENTITY] ?: SOFTWARE_IDENTITY_OPERIT
-        }
-
     // 字体设置相关Flow
     val useCustomFont: Flow<Boolean> =
         context.userPreferencesDataStore.data.map { preferences ->
@@ -1312,6 +1304,11 @@ class UserPreferencesManager private constructor(private val context: Context) {
     val aiMarkdownParagraphSpacing: Flow<Float> =
         context.userPreferencesDataStore.data.map { preferences ->
             preferences[AI_MARKDOWN_PARAGRAPH_SPACING] ?: 12f
+        }
+
+    val aiMarkdownTonedIconStyle: Flow<com.ai.assistance.operit.ui.theme.TonedIconStyle> =
+        context.userPreferencesDataStore.data.map { preferences ->
+            com.ai.assistance.operit.ui.theme.TonedIconStyle.fromKey(preferences[AI_MARKDOWN_TONED_ICON_STYLE])
         }
 
     // 获取最近使用颜色
@@ -1380,6 +1377,12 @@ class UserPreferencesManager private constructor(private val context: Context) {
         }
     }
 
+    suspend fun saveAiMarkdownTonedIconStyle(value: com.ai.assistance.operit.ui.theme.TonedIconStyle) {
+        context.userPreferencesDataStore.edit { preferences ->
+            preferences[AI_MARKDOWN_TONED_ICON_STYLE] = value.key
+        }
+    }
+
     // 重置布局设置
     suspend fun resetLayoutSettings() {
         context.userPreferencesDataStore.edit { preferences ->
@@ -1388,6 +1391,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences.remove(AI_MARKDOWN_LINE_HEIGHT_MULTIPLIER)
             preferences.remove(AI_MARKDOWN_LETTER_SPACING)
             preferences.remove(AI_MARKDOWN_PARAGRAPH_SPACING)
+            preferences.remove(AI_MARKDOWN_TONED_ICON_STYLE)
         }
     }
 
@@ -1528,6 +1532,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
             customPrimaryColor: Int? = null,
             customSecondaryColor: Int? = null,
             useCustomColors: Boolean? = null,
+            enforceColorContrast: Boolean? = null,
             useBackgroundImage: Boolean? = null,
             backgroundImageUri: String? = null,
             backgroundImageOpacity: Float? = null,
@@ -1641,6 +1646,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
             customPrimaryColor?.let { preferences[CUSTOM_PRIMARY_COLOR] = it }
             customSecondaryColor?.let { preferences[CUSTOM_SECONDARY_COLOR] = it }
             useCustomColors?.let { preferences[USE_CUSTOM_COLORS] = it }
+            enforceColorContrast?.let { preferences[ENFORCE_COLOR_CONTRAST] = it }
             useBackgroundImage?.let { preferences[USE_BACKGROUND_IMAGE] = it }
             backgroundImageUri?.let {
                 // Simply store the URI as a string in preferences
@@ -1817,6 +1823,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
             preferences.remove(CUSTOM_PRIMARY_COLOR)
             preferences.remove(CUSTOM_SECONDARY_COLOR)
             preferences[USE_CUSTOM_COLORS] = false
+            preferences.remove(ENFORCE_COLOR_CONTRAST)
             preferences.remove(USE_BACKGROUND_IMAGE)
             preferences.remove(BACKGROUND_IMAGE_URI)
             preferences.remove(BACKGROUND_IMAGE_OPACITY)
@@ -1950,7 +1957,8 @@ class UserPreferencesManager private constructor(private val context: Context) {
 
     private fun getAllBooleanThemeKeys(): List<Preferences.Key<Boolean>> {
         return listOf(
-            USE_SYSTEM_THEME, USE_CUSTOM_COLORS, USE_BACKGROUND_IMAGE, VIDEO_BACKGROUND_MUTED,
+            USE_SYSTEM_THEME, USE_CUSTOM_COLORS, ENFORCE_COLOR_CONTRAST, USE_BACKGROUND_IMAGE,
+            VIDEO_BACKGROUND_MUTED,
             VIDEO_BACKGROUND_LOOP, TOOLBAR_TRANSPARENT, NAVIGATION_DRAWER_WATER_GLASS,
             NAVIGATION_DRAWER_BUTTON_LIQUID_GLASS,
             USE_CUSTOM_NAVIGATION_DRAWER_BACKGROUND_COLOR,
@@ -2319,6 +2327,7 @@ class UserPreferencesManager private constructor(private val context: Context) {
             themeMode = stringValue(THEME_MODE, THEME_MODE_LIGHT) ?: THEME_MODE_LIGHT,
             useSystemTheme = booleanValue(USE_SYSTEM_THEME, true),
             useCustomColors = booleanValue(USE_CUSTOM_COLORS, false),
+            enforceColorContrast = booleanValue(ENFORCE_COLOR_CONTRAST, false),
             customPrimaryColor = intValue(CUSTOM_PRIMARY_COLOR),
             customSecondaryColor = intValue(CUSTOM_SECONDARY_COLOR),
             onColorMode = stringValue(KEY_ON_COLOR_MODE, ON_COLOR_MODE_AUTO) ?: ON_COLOR_MODE_AUTO,

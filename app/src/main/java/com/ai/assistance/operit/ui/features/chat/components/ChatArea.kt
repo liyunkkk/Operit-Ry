@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -80,7 +80,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.model.AiReference
 import com.ai.assistance.operit.data.model.ChatMessage
@@ -623,9 +622,9 @@ private fun MessageItem(
         DropdownMenu(
             expanded = showContextMenu,
             onDismissRequest = { showContextMenu = false },
-            modifier = Modifier
-                .width(180.dp)
-                .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(6.dp)),
+            modifier = Modifier.widthIn(min = 200.dp),
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             properties = PopupProperties(
                 focusable = true,
                 dismissOnBackPress = true,
@@ -637,8 +636,7 @@ private fun MessageItem(
                     text = {
                         Text(
                             stringResource(id = R.string.copy_message),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     onClick = {
@@ -652,10 +650,10 @@ private fun MessageItem(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = stringResource(id = R.string.copy_message),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
 
                 // 朗读消息选项
@@ -663,8 +661,7 @@ private fun MessageItem(
                     text = {
                         Text(
                             stringResource(R.string.read_message),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     onClick = {
@@ -676,10 +673,10 @@ private fun MessageItem(
                             imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
                             contentDescription = stringResource(R.string.read_message),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
 
@@ -689,8 +686,7 @@ private fun MessageItem(
                         text = {
                             Text(
                                 pluginMenuItem.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontSize = 13.sp
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         },
                         onClick = {
@@ -726,10 +722,10 @@ private fun MessageItem(
                                     ),
                                 contentDescription = pluginMenuItem.title,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         },
-                        modifier = Modifier.height(36.dp)
+                        modifier = Modifier.heightIn(min = 44.dp)
                     )
                 }
             }
@@ -743,8 +739,7 @@ private fun MessageItem(
                         text = {
                             Text(
                                 stringResource(id = R.string.edit_and_resend),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontSize = 13.sp
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         },
                         onClick = {
@@ -756,10 +751,10 @@ private fun MessageItem(
                                 imageVector = Icons.Default.Edit,
                                 contentDescription = stringResource(id = R.string.edit_and_resend),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         },
-                        modifier = Modifier.height(36.dp)
+                        modifier = Modifier.heightIn(min = 44.dp)
                     )
                 }
                 // 回滚到此处
@@ -767,8 +762,7 @@ private fun MessageItem(
                     text = {
                         Text(
                             stringResource(id = R.string.rollback_to_here),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     onClick = {
@@ -780,18 +774,17 @@ private fun MessageItem(
                             imageVector = Icons.Default.DeleteSweep,
                             contentDescription = stringResource(id = R.string.rollback_to_here),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
                 } else if (message.sender == "ai") {
                 DropdownMenuItem(
                     text = {
                         Text(
                             stringResource(id = R.string.chat_regenerate_single),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     onClick = {
@@ -803,18 +796,17 @@ private fun MessageItem(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = stringResource(id = R.string.chat_regenerate_single),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
                 // 修改记忆选项
                 DropdownMenuItem(
                     text = {
                         Text(
                             stringResource(id = R.string.modify_memory),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     onClick = {
@@ -826,10 +818,10 @@ private fun MessageItem(
                             imageVector = Icons.Default.AutoFixHigh,
                             contentDescription = stringResource(id = R.string.modify_memory),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
 
@@ -839,7 +831,7 @@ private fun MessageItem(
                         Text(
                             stringResource(id = R.string.chat_delete_single_variant),
                             style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.error,
                         )
                     },
                     onClick = {
@@ -850,11 +842,11 @@ private fun MessageItem(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = stringResource(id = R.string.chat_delete_single_variant),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
                         )
                     },
-                    modifier = Modifier.height(36.dp),
+                    modifier = Modifier.heightIn(min = 44.dp),
                 )
             }
 
@@ -864,7 +856,7 @@ private fun MessageItem(
                     Text(
                         stringResource(id = R.string.delete),
                         style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp
+                        color = MaterialTheme.colorScheme.error
                     )
                 },
                 onClick = {
@@ -875,11 +867,11 @@ private fun MessageItem(
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = stringResource(id = R.string.delete),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
                     )
                 },
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.heightIn(min = 44.dp)
             )
 
                 // 回复选项
@@ -888,8 +880,7 @@ private fun MessageItem(
                 text = {
                         Text(
                             stringResource(R.string.reply_message),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                        )
                 },
                 onClick = {
@@ -901,10 +892,10 @@ private fun MessageItem(
                             imageVector = Icons.Default.Reply,
                             contentDescription = stringResource(R.string.reply_message),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
 
@@ -913,8 +904,7 @@ private fun MessageItem(
                     text = {
                         Text(
                             stringResource(id = R.string.insert_summary),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     onClick = {
@@ -926,10 +916,10 @@ private fun MessageItem(
                             imageVector = Icons.Default.Summarize,
                             contentDescription = stringResource(id = R.string.insert_summary),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     },
-                    modifier = Modifier.height(36.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
 
@@ -938,8 +928,7 @@ private fun MessageItem(
                 text = {
                     Text(
                         stringResource(id = R.string.create_branch),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 },
                 onClick = {
@@ -951,10 +940,10 @@ private fun MessageItem(
                         imageVector = Icons.Default.AccountTree,
                         contentDescription = stringResource(id = R.string.create_branch),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 },
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
 
@@ -963,8 +952,7 @@ private fun MessageItem(
                 text = {
                     Text(
                         stringResource(id = R.string.info),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 },
                 onClick = {
@@ -976,10 +964,10 @@ private fun MessageItem(
                         imageVector = Icons.Default.Info,
                         contentDescription = stringResource(id = R.string.info),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 },
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.heightIn(min = 44.dp)
             )
 
             if (allowTranscriptMutation) {
@@ -987,8 +975,7 @@ private fun MessageItem(
                 text = {
                     Text(
                         stringResource(id = R.string.multi_select),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 13.sp
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 },
                 onClick = {
@@ -1000,10 +987,10 @@ private fun MessageItem(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = stringResource(id = R.string.multi_select),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 },
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.heightIn(min = 44.dp)
                 )
             }
         }

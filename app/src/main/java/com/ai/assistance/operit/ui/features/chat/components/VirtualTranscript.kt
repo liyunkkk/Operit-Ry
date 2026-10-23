@@ -438,6 +438,12 @@ internal fun VirtualTranscript(
                 Column(Modifier.semantics { isTraversalGroup = true }) {
                     // Keep the paging sentinel key without cutting a transparent hole in the reply.
                     CompositionLocalProvider(
+                        com.ai.assistance.operit.ui.common.dynamicui.LocalDynamicUiOwner provides
+                            messages.getOrNull(row.messageIndex)?.takeIf { it.sender == "ai" && !it.isVariantPreview }?.let {
+                                com.ai.assistance.operit.ui.common.dynamicui.DynamicUiOwner(
+                                    chatId, it.timestamp, it.selectedVariantIndex, it.content,
+                                )
+                            },
                         LocalResponseMessageSection provides row.section,
                         LocalResponseProcessExpanded provides row.group?.let { process.isExpanded(it.key) },
                         LocalTranscriptMarkdownSlice provides row.markdownSlice,

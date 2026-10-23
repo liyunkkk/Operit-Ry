@@ -88,7 +88,7 @@ class ChatHiddenV33MigrationTest {
     private fun openV33Database(tempDir: File): AppDatabase =
         Room.databaseBuilder(mockContext(tempDir), AppDatabase::class.java, "app_database")
             .setDriver(JdbcSQLiteDriver())
-            .addMigrations(AppDatabase.MIGRATION_32_33, AppDatabase.MIGRATION_33_34)
+            .addMigrations(AppDatabase.MIGRATION_32_33, AppDatabase.MIGRATION_33_34, AppDatabase.MIGRATION_34_35)
             .allowMainThreadQueries()
             .build()
 
@@ -109,6 +109,10 @@ class ChatHiddenV33MigrationTest {
                 assertEquals(listOf("legacy-chat"), database.chatContentDao()
                     .searchRecallIndex("\"searchable\"","","","",0,Long.MAX_VALUE,20,0).map { it.chatId })
                 assertNull(legacy.hiddenReason)
+                assertNull(legacy.contextPolicyJson)
+                val policy = com.ai.assistance.operit.data.model.ChatContextPolicy(windowK = 300f).encode()
+                dao.updateContextPolicy("legacy-chat", policy)
+                assertEquals(policy, dao.observeContextPolicy("legacy-chat").first())
                 assertTrue(dao.getVisibleChats().first().any { it.id == "legacy-chat" })
                 assertTrue(dao.getRecentChats().first().any { it.id == "legacy-chat" })
                 assertTrue(dao.getMainChats().any { it.id == "legacy-chat" })

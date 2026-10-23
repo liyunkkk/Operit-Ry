@@ -41,7 +41,7 @@ object LocaleUtils {
     private val supportedLanguages =
             listOf(
                     Language(LanguageCodes.AUTO, "Follow system", "跟随系统"),
-                    Language(LanguageCodes.CHINESE, "Chinese", "中文"),
+                    Language(LanguageCodes.CHINESE, "Simplified Chinese", "简体中文"),
                     Language(LanguageCodes.ENGLISH, "English", "English"),
                     Language(LanguageCodes.KOREAN, "Korean", "한국어"),
                     Language(LanguageCodes.SPANISH, "Spanish", "Español"),

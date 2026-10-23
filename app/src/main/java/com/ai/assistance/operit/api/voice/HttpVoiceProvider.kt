@@ -60,6 +60,7 @@ open class HttpVoiceProvider(
     }
 
     // OkHttpClient实例
+    private val activeCalls = java.util.concurrent.ConcurrentHashMap<Request, Call>()
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(DEFAULT_TIMEOUT.toLong(), TimeUnit.SECONDS)
@@ -80,6 +81,7 @@ open class HttpVoiceProvider(
 
     override val isSpeaking: Boolean
         get() = playbackQueue.isSpeaking
+    override val isPlayingThroughHeadphones get() = playbackQueue.isPlayingThroughHeadphones
 
     override val speakingStateFlow: Flow<Boolean>
         get() = playbackQueue.speakingStateFlow
@@ -262,6 +264,7 @@ open class HttpVoiceProvider(
 
     /** 停止当前正在播放的语音 */
     override suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
+        activeCalls.values.forEach { it.cancel() }
         if (!isInitialized) return@withContext false
         playbackQueue.stop()
     }
@@ -280,6 +283,7 @@ open class HttpVoiceProvider(
 
     /** 释放TTS引擎资源 */
     override fun shutdown() {
+        activeCalls.values.forEach { it.cancel() }
         try {
             playbackQueue.shutdown()
             _isInitialized.value = false
@@ -561,14 +565,18 @@ open class HttpVoiceProvider(
     }
 
     private suspend fun executeRequest(request: Request): Response =
-        suspendCoroutine { continuation ->
-            httpClient.newCall(request).enqueue(object : Callback {
+        kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            val requestCall = httpClient.newCall(request)
+            activeCalls[request] = requestCall
+            continuation.invokeOnCancellation { requestCall.cancel() }
+            requestCall.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    activeCalls.remove(request, call)
                     continuation.resumeWithException(e)
                 }
 
                 override fun onResponse(call: Call, response: Response) {
-                    continuation.resume(response)
+                    continuation.resume(response) { response.close() }
                 }
             })
         }
@@ -577,8 +585,9 @@ open class HttpVoiceProvider(
         request: Request,
         requestLabel: String
     ): BinaryPayload = withContext(Dispatchers.IO) {
-        val response = executeRequest(request)
-        response.use { safeResponse ->
+        try {
+          val response = executeRequest(request)
+          response.use { safeResponse ->
             val responseBody = safeResponse.body
                 ?: throw TtsException("$requestLabel returned an empty response body")
 
@@ -598,7 +607,8 @@ open class HttpVoiceProvider(
                 contentType = mediaType?.toString(),
                 charset = mediaType?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
             )
-        }
+          }
+        } finally { activeCalls.remove(request) }
     }
 
     private suspend fun resolvePipelineAudio(

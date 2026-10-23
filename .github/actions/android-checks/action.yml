@@ -11,11 +11,11 @@ inputs:
   android-build-tools-version:
     description: 'Android build-tools version'
     required: false
-    default: '35.0.0'
+    default: '37.0.0'
   android-ndk-version:
     description: 'Android NDK version (full lane only)'
     required: false
-    default: '25.1.8937393'
+    default: '27.0.12077973'
   android-cmake-version:
     description: 'Android CMake version (full lane only)'
     required: false
@@ -87,7 +87,7 @@ runs:
         ADDITIONAL_SDK_PACKAGES: ${{ inputs.additional-sdk-packages }}
       run: |
         set -euo pipefail
-        packages=("build-tools;$ANDROID_BUILD_TOOLS_VERSION" "platform-tools" "platforms;android-34" "platforms;android-36")
+        packages=("build-tools;$ANDROID_BUILD_TOOLS_VERSION" "platform-tools" "platforms;android-34" "platforms;android-36" "platforms;android-37.1")
         if [[ "${{ inputs.lane }}" == "full" ]]; then
           packages+=("ndk;$ANDROID_NDK_VERSION" "cmake;$ANDROID_CMAKE_VERSION")
         fi

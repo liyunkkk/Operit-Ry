@@ -1,17 +1,11 @@
 package com.ai.assistance.operit.api.voice
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.net.Uri
 import android.util.Base64
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.SpeechServicesPreferences
 import com.ai.assistance.operit.util.AppLogger
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.FileOutputStream
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -77,16 +71,14 @@ class OpenAIRealtimeVoiceProvider(
     private val _isSpeaking = MutableStateFlow(false)
     override val isSpeaking: Boolean
         get() = _isSpeaking.value
+    override val isPlayingThroughHeadphones get() = pcmPlayer?.isPlayingThroughHeadphones ?: false
 
     override val speakingStateFlow: Flow<Boolean> = _isSpeaking.asStateFlow()
 
     private val playbackMutex = Mutex()
     private val stateLock = Any()
 
-    private var mediaPlayer: MediaPlayer? = null
-    private var currentPlaybackDone: CompletableDeferred<Boolean>? = null
-    private var currentPlaybackFile: File? = null
-    private var currentResponseDeferred: CompletableDeferred<ByteArray>? = null
+    private var currentResponseDeferred: CompletableDeferred<Unit>? = null
     private var currentWebSocket: WebSocket? = null
 
     override suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
@@ -117,6 +109,9 @@ class OpenAIRealtimeVoiceProvider(
         }
     }
 
+    @Volatile private var pcmPlayer: PcmSpeechPlayer? = null
+    private val generation = java.util.concurrent.atomic.AtomicLong()
+
     override suspend fun speak(
         text: String,
         interrupt: Boolean,
@@ -124,16 +119,16 @@ class OpenAIRealtimeVoiceProvider(
         pitch: Float?,
         extraParams: Map<String, String>
     ): Boolean = withContext(Dispatchers.IO) {
+        if (interrupt) stop()
+        val epoch = generation.get()
         playbackMutex.withLock {
+            if (epoch != generation.get()) return@withLock false
             if (!isInitialized) {
                 val initOk = initialize()
                 if (!initOk) return@withLock false
             }
 
             try {
-                if (interrupt) {
-                    stop()
-                }
 
                 val profile = com.ai.assistance.operit.data.preferences.SpeechServiceProfilesPreferences(context.applicationContext).getCurrentTtsProfile()
                 val effectiveRate = rate ?: profile.speechRate
@@ -141,24 +136,24 @@ class OpenAIRealtimeVoiceProvider(
                 val requestVoice = extraParams["voice"]?.takeIf { it.isNotBlank() } ?: voiceId
                 val speed = effectiveRate.coerceIn(0.25f, 1.5f)
 
-                val pcmAudio = requestAudio(
-                    text = text,
-                    requestModel = requestModel,
-                    requestVoice = requestVoice,
-                    speed = speed
-                )
-
-                if (pcmAudio.isEmpty()) {
-                    return@withLock false
+                val timing = com.ai.assistance.operit.api.speech.VoiceTiming("realtime_synthesis")
+                timing.mark("request_started")
+                val player = PcmSpeechPlayer(24000) {
+                    _isSpeaking.value = it
+                    if (it) timing.mark("first_playback")
                 }
-
-                val tempFile = File(context.cacheDir, "openai_realtime_tts_${UUID.randomUUID()}.wav")
-                FileOutputStream(tempFile).use { output ->
-                    output.write(wrapPcm16AsWav(pcmAudio))
+                pcmPlayer = player
+                try {
+                    requestAudio(text, requestModel, requestVoice, speed, player, epoch)
+                    return@withLock epoch == generation.get() && player.drain()
+                } finally {
+                    player.close()
+                    timing.mark("playback_ended")
+                    if (pcmPlayer === player) pcmPlayer = null
                 }
-
-                return@withLock playAudioFileAndAwait(tempFile)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (epoch != generation.get()) return@withLock false
                 AppLogger.e(TAG, "OpenAI Realtime TTS speak failed", e)
                 if (e is TtsException) throw e
                 throw TtsException(context.getString(R.string.openai_realtime_tts_error_request_failed), cause = e)
@@ -170,10 +165,12 @@ class OpenAIRealtimeVoiceProvider(
         text: String,
         requestModel: String,
         requestVoice: String,
-        speed: Float
-    ): ByteArray = withContext(Dispatchers.IO) {
-        val deferred = CompletableDeferred<ByteArray>()
-        val audioBuffer = ByteArrayOutputStream()
+        speed: Float,
+        player: PcmSpeechPlayer,
+        epoch: Long
+    ): Unit = withContext(Dispatchers.IO) {
+        val deferred = CompletableDeferred<Unit>()
+        val received = java.util.concurrent.atomic.AtomicBoolean(false)
         val realtimeUrl = buildRealtimeUrl(endpointUrl, requestModel)
 
         synchronized(stateLock) {
@@ -182,6 +179,7 @@ class OpenAIRealtimeVoiceProvider(
 
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (epoch != generation.get()) { webSocket.cancel(); return }
                 synchronized(stateLock) {
                     currentWebSocket = webSocket
                 }
@@ -199,6 +197,7 @@ class OpenAIRealtimeVoiceProvider(
             }
 
             override fun onMessage(webSocket: WebSocket, textMessage: String) {
+                if (deferred.isCompleted || epoch != generation.get()) return
                 val json = runCatching { JSONObject(textMessage) }.getOrNull() ?: return
                 val type = json.optString("type")
 
@@ -215,11 +214,9 @@ class OpenAIRealtimeVoiceProvider(
                         val delta = json.optString("delta")
                         if (delta.isNotBlank()) {
                             runCatching {
-                                Base64.decode(delta, Base64.DEFAULT)
-                            }.onSuccess { chunk ->
-                                synchronized(audioBuffer) {
-                                    audioBuffer.write(chunk)
-                                }
+                                val chunk = Base64.decode(delta, Base64.DEFAULT)
+                                player.write(chunk)
+                                if (chunk.isNotEmpty()) received.set(true)
                             }.onFailure {
                                 failResponse(
                                     deferred,
@@ -230,7 +227,7 @@ class OpenAIRealtimeVoiceProvider(
                         }
                     }
                     "response.output_audio.done", "response.audio.done" -> {
-                        completeAudioResponse(deferred, audioBuffer)
+                        completeAudioResponse(deferred, received.get())
                         webSocket.close(1000, "audio_complete")
                     }
                     "response.done" -> {
@@ -243,7 +240,7 @@ class OpenAIRealtimeVoiceProvider(
                             failResponse(deferred, errorMessage)
                             webSocket.cancel()
                         } else if (!deferred.isCompleted) {
-                            completeAudioResponse(deferred, audioBuffer)
+                            completeAudioResponse(deferred, received.get())
                             webSocket.close(1000, "response_complete")
                         }
                     }
@@ -291,7 +288,7 @@ class OpenAIRealtimeVoiceProvider(
                 }
 
                 if (!deferred.isCompleted) {
-                    completeAudioResponse(deferred, audioBuffer)
+                    failResponse(deferred, "Audio connection closed before completion")
                 }
             }
         }
@@ -307,8 +304,9 @@ class OpenAIRealtimeVoiceProvider(
         }
 
         try {
-            deferred.await()
+            kotlinx.coroutines.withTimeout(180_000) { deferred.await() }
         } finally {
+            webSocket.cancel()
             synchronized(stateLock) {
                 if (currentWebSocket === webSocket) {
                     currentWebSocket = null
@@ -321,13 +319,12 @@ class OpenAIRealtimeVoiceProvider(
     }
 
     private fun completeAudioResponse(
-        deferred: CompletableDeferred<ByteArray>,
-        audioBuffer: ByteArrayOutputStream
+        deferred: CompletableDeferred<Unit>,
+        received: Boolean
     ) {
         if (deferred.isCompleted) return
-        val audioBytes = synchronized(audioBuffer) { audioBuffer.toByteArray() }
-        if (audioBytes.isNotEmpty()) {
-            deferred.complete(audioBytes)
+        if (received) {
+            deferred.complete(Unit)
         } else {
             deferred.completeExceptionally(
                 TtsException(context.getString(R.string.openai_realtime_tts_error_empty_audio))
@@ -336,7 +333,7 @@ class OpenAIRealtimeVoiceProvider(
     }
 
     private fun failResponse(
-        deferred: CompletableDeferred<ByteArray>,
+        deferred: CompletableDeferred<Unit>,
         message: String
     ) {
         if (!deferred.isCompleted) {
@@ -414,221 +411,31 @@ class OpenAIRealtimeVoiceProvider(
         }
     }
 
-    private fun wrapPcm16AsWav(pcmData: ByteArray): ByteArray {
-        val bitsPerSample = 16
-        val byteRate = OUTPUT_SAMPLE_RATE * OUTPUT_CHANNEL_COUNT * bitsPerSample / 8
-        val blockAlign = OUTPUT_CHANNEL_COUNT * bitsPerSample / 8
-        val totalDataLen = pcmData.size + 36
-
-        return ByteArrayOutputStream(44 + pcmData.size).use { output ->
-            output.write(byteArrayOf('R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'F'.code.toByte()))
-            writeIntLE(output, totalDataLen)
-            output.write(byteArrayOf('W'.code.toByte(), 'A'.code.toByte(), 'V'.code.toByte(), 'E'.code.toByte()))
-            output.write(byteArrayOf('f'.code.toByte(), 'm'.code.toByte(), 't'.code.toByte(), ' '.code.toByte()))
-            writeIntLE(output, 16)
-            writeShortLE(output, 1)
-            writeShortLE(output, OUTPUT_CHANNEL_COUNT)
-            writeIntLE(output, OUTPUT_SAMPLE_RATE)
-            writeIntLE(output, byteRate)
-            writeShortLE(output, blockAlign)
-            writeShortLE(output, bitsPerSample)
-            output.write(byteArrayOf('d'.code.toByte(), 'a'.code.toByte(), 't'.code.toByte(), 'a'.code.toByte()))
-            writeIntLE(output, pcmData.size)
-            output.write(pcmData)
-            output.toByteArray()
-        }
-    }
-
-    private fun writeIntLE(output: ByteArrayOutputStream, value: Int) {
-        output.write(value and 0xFF)
-        output.write(value shr 8 and 0xFF)
-        output.write(value shr 16 and 0xFF)
-        output.write(value shr 24 and 0xFF)
-    }
-
-    private fun writeShortLE(output: ByteArrayOutputStream, value: Int) {
-        output.write(value and 0xFF)
-        output.write(value shr 8 and 0xFF)
-    }
-
-    private suspend fun playAudioFileAndAwait(file: File): Boolean {
-        val done = CompletableDeferred<Boolean>()
+    override suspend fun stop(): Boolean {
+        generation.incrementAndGet()
+        pcmPlayer?.close()
         synchronized(stateLock) {
-            currentPlaybackDone = done
-            currentPlaybackFile = file
-        }
-
-        try {
-            withContext(Dispatchers.Main) {
-                try {
-                    synchronized(stateLock) {
-                        mediaPlayer?.release()
-                        mediaPlayer = null
-                    }
-
-                    val mp = MediaPlayer().apply {
-                        setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                                .build()
-                        )
-                        setDataSource(file.absolutePath)
-                        setOnCompletionListener {
-                            finishPlayback(true, done, file)
-                        }
-                        setOnErrorListener { _, what, extra ->
-                            AppLogger.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
-                            finishPlayback(false, done, file)
-                            true
-                        }
-                        prepare()
-                        start()
-                    }
-
-                    synchronized(stateLock) {
-                        mediaPlayer = mp
-                    }
-                    _isSpeaking.value = true
-                } catch (e: Exception) {
-                    AppLogger.e(TAG, "Play audio failed", e)
-                    finishPlayback(false, done, file)
-                }
-            }
-
-            return done.await()
-        } finally {
-            if (!done.isCompleted) {
-                finishPlayback(false, done, file)
-            }
-        }
-    }
-
-    private fun finishPlayback(success: Boolean, done: CompletableDeferred<Boolean>, file: File) {
-        synchronized(stateLock) {
-            if (currentPlaybackDone === done) {
-                currentPlaybackDone = null
-            }
-            if (currentPlaybackFile == file) {
-                currentPlaybackFile = null
-            }
-            mediaPlayer?.apply {
-                try {
-                    if (isPlaying) {
-                        stop()
-                    }
-                } catch (_: Exception) {
-                }
-                try {
-                    release()
-                } catch (_: Exception) {
-                }
-            }
-            mediaPlayer = null
-        }
-        _isSpeaking.value = false
-        runCatching { file.delete() }
-        if (!done.isCompleted) {
-            done.complete(success)
-        }
-    }
-
-    override suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val responseDeferred: CompletableDeferred<ByteArray>?
-            val webSocket: WebSocket?
-            val playbackDeferred: CompletableDeferred<Boolean>?
-            val playbackFile: File?
-
-            synchronized(stateLock) {
-                responseDeferred = currentResponseDeferred
-                webSocket = currentWebSocket
-                currentResponseDeferred = null
-                currentWebSocket = null
-
-                playbackDeferred = currentPlaybackDone
-                playbackFile = currentPlaybackFile
-                currentPlaybackDone = null
-                currentPlaybackFile = null
-
-                mediaPlayer?.apply {
-                    if (isPlaying) {
-                        stop()
-                    }
-                    release()
-                }
-                mediaPlayer = null
-            }
-
-            webSocket?.cancel()
-            if (responseDeferred != null && !responseDeferred.isCompleted) {
-                responseDeferred.complete(ByteArray(0))
-            }
-            if (playbackDeferred != null && !playbackDeferred.isCompleted) {
-                playbackDeferred.complete(false)
-            }
-            runCatching { playbackFile?.delete() }
-
-            _isSpeaking.value = false
-            true
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Stop failed", e)
-            false
-        }
-    }
-
-    override suspend fun pause(): Boolean = withContext(Dispatchers.IO) {
-        return@withContext try {
-            synchronized(stateLock) {
-                mediaPlayer?.pause()
-            }
-            _isSpeaking.value = false
-            true
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Pause failed", e)
-            false
-        }
-    }
-
-    override suspend fun resume(): Boolean = withContext(Dispatchers.IO) {
-        return@withContext try {
-            synchronized(stateLock) {
-                mediaPlayer?.start()
-            }
-            _isSpeaking.value = true
-            true
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Resume failed", e)
-            false
-        }
-    }
-
-    override fun shutdown() {
-        val responseDeferred: CompletableDeferred<ByteArray>?
-        val playbackDeferred: CompletableDeferred<Boolean>?
-        val playbackFile: File?
-
-        synchronized(stateLock) {
-            responseDeferred = currentResponseDeferred
-            currentResponseDeferred = null
             currentWebSocket?.cancel()
             currentWebSocket = null
+            currentResponseDeferred?.cancel()
+            currentResponseDeferred = null
+        }
+        _isSpeaking.value = false
+        return true
+    }
 
-            playbackDeferred = currentPlaybackDone
-            currentPlaybackDone = null
-            playbackFile = currentPlaybackFile
-            currentPlaybackFile = null
+    override suspend fun pause(): Boolean = pcmPlayer?.pause() ?: false
+    override suspend fun resume(): Boolean = pcmPlayer?.resume() ?: false
 
-            mediaPlayer?.release()
-            mediaPlayer = null
+    override fun shutdown() {
+        generation.incrementAndGet()
+        pcmPlayer?.close()
+        synchronized(stateLock) {
+            currentWebSocket?.cancel()
+            currentWebSocket = null
+            currentResponseDeferred?.cancel()
+            currentResponseDeferred = null
         }
-        if (responseDeferred != null && !responseDeferred.isCompleted) {
-            responseDeferred.complete(ByteArray(0))
-        }
-        if (playbackDeferred != null && !playbackDeferred.isCompleted) {
-            playbackDeferred.complete(false)
-        }
-        runCatching { playbackFile?.delete() }
         _isSpeaking.value = false
         _isInitialized.value = false
     }

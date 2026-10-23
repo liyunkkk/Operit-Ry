@@ -33,7 +33,7 @@
     <string name="memory_recall_previous">上一段</string>
     <string name="system_prefix_updated">系统提示有更新</string>
     <string name="system_prefix_pending">当前对话仍使用旧系统提示。你可以手动刷新，但会使原有前缀缓存失效，下一次请求可能消耗更多输入 token。\n\n也可以继续使用旧版本，等对话压缩或开启新对话时自动使用最新版。刷新仅影响当前对话。</string>
-    <string name="system_prefix_rebuild">立即刷新</string>
+    <string name="system_prefix_rebuild">更新系统提示</string>
     <string name="system_prefix_later">暂不刷新</string>
     <string name="system_prefix_error">无法读取或重建当前对话的系统提示快照，请重试。</string>
     <string name="system_prefix_protocol_changed">工具调用方式已改变，请点击聊天左下角的感叹号，再点「立即刷新」后重试发送。</string>
@@ -53,7 +53,7 @@
     <string name="memory_recall_continue">继续读取此消息</string>
     <string name="memory_review_ai_allowed">允许 AI 通过或拒绝当前空间的改动</string>
     <string name="memory_review_ai_denied">尚未授权 AI 审批。请用户在记忆库「改动审批」开启授权，或由用户直接审批。</string>
-    <string name="memory_notes_inject">向新对话注入 memory.md</string>
+    <string name="memory_notes_inject">新对话使用长期笔记</string>
     <string name="chat_recall_title">对话历史搜索</string>
     <string name="chat_recall_hint">搜索可见主对话的文字，点击结果查看附近消息。结果可能截断。</string>
     <string name="chat_recall_query">搜索文字</string>
@@ -110,7 +110,7 @@
     <string name="memory_extraction_source_deleted">对话已删除，这段内容不会再提取</string>
     <string name="memory_extraction_not_reviewable">分支或隐藏对话不做记忆提取</string>
     <string name="memory_extraction_window_too_small">记忆提取的模型上下文窗口过小，请在「模型配置」里把 MEMORY（记忆）用的模型上下文调大</string>
-    <string name="memory_extraction_export_blocked">待审批的改动已达上限，先处理审批列表再继续提取</string>
+    <string name="memory_extraction_export_blocked">改动尚未存入审批记录，已保留等待重试。请查看下方原因；若待审批已满，请先处理审批列表。</string>
     <string name="memory_extraction_cancelled">提取已取消</string>
     <string name="memory_extraction_interrupted">被应用退出中断</string>
     <string name="memory_extraction_source_unreadable">这段对话的消息已无法读取，不会再提取</string>

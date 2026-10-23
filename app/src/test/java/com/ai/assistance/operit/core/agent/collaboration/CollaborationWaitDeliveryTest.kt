@@ -6,6 +6,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CollaborationWaitDeliveryTest {
+    @Test(timeout = 5_000) fun eventSubscriptionCannotMissInputArrivingAfterReadinessCheck() = runBlocking {
+        val inbox = TurnInputInbox()
+        var acknowledged = false
+        val result = awaitCollaborationInput(
+            timeoutMs = 2_000,
+            deliverToCurrentTurn = {},
+            pendingInput = { pending(inbox) },
+            awaitActivity = {
+                inbox.offer(TurnInputInbox.Input("late input", consumed = { acknowledged = true }))
+                inbox.awaitInput()
+            },
+        )
+        assertEquals(CollaborationWaitOutcome.STEERED, result)
+        assertFalse(acknowledged)
+        assertEquals("late input", inbox.drain().single().text)
+    }
     private fun pending(inbox: TurnInputInbox) = when (inbox.pendingInputKind()) {
         TurnInputInbox.PendingInputKind.USER -> CollaborationWaitOutcome.STEERED
         TurnInputInbox.PendingInputKind.AGENT -> CollaborationWaitOutcome.MAILBOX
@@ -83,5 +99,23 @@ class CollaborationWaitDeliveryTest {
         started.await()
         waiter.cancelAndJoin()
         assertTrue(waiter.isCancelled)
+    }
+
+    @Test(timeout = 5_000) fun anEmptyTreeReturnsIdleInsteadOfWaitingOutTheTimeout() = runBlocking {
+        var deliveries = 0
+        val startedAt = System.currentTimeMillis()
+        val outcome = awaitCollaborationInput(5_000, { deliveries++ }, { null }, { false })
+        assertEquals(CollaborationWaitOutcome.IDLE, outcome)
+        // The queued-mailbox step still runs once before the wait can give up.
+        assertEquals(1, deliveries)
+        assertTrue(System.currentTimeMillis() - startedAt < 2_000)
+    }
+
+    @Test(timeout = 10_000) fun historyReconciliationIsThrottledWhileInputKeepsPolling() = runBlocking {
+        var deliveries = 0
+        val outcome = awaitCollaborationInput(1_500, { deliveries++ }, { null }, { true })
+        assertEquals(CollaborationWaitOutcome.TIMED_OUT, outcome)
+        // Immediate pass plus at most one per second; the unthrottled loop reaches ~15 here.
+        assertTrue("deliveries=$deliveries", deliveries in 1..3)
     }
 }

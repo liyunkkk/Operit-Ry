@@ -78,7 +78,22 @@ object SpeechPrerollStore {
         }
     }
 
-    fun consumePending(maxAgeMs: Long = 10_000L): ShortArray? {
+    /**
+     * Audio heard before the recognizer opened its microphone: the wake word window, followed by
+     * whatever [EarlyCapture] kept since the tap. Call it right before starting the recognizer's
+     * own recording.
+     */
+    fun consumePending(audioSource: Int? = null, maxAgeMs: Long = 10_000L): ShortArray? {
+        val early = EarlyCapture.handOff(audioSource)
+        val wake = consumeWakePending(maxAgeMs)
+        return when {
+            wake == null -> early
+            early == null -> wake
+            else -> wake + early
+        }
+    }
+
+    private fun consumeWakePending(maxAgeMs: Long): ShortArray? {
         val now = System.currentTimeMillis()
         synchronized(lock) {
             if (!pendingArmed) return null

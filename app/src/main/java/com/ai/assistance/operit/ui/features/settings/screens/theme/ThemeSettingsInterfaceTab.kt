@@ -66,10 +66,6 @@ private fun ThemeSettingsInterfaceColorPanel(
     val customNavigationDrawerAccentColor by preferencesManager.customNavigationDrawerAccentColor.collectAsState(initial = null)
     val chatHeaderTransparent by preferencesManager.chatHeaderTransparent.collectAsState(initial = false)
     val chatHeaderOverlayMode by preferencesManager.chatHeaderOverlayMode.collectAsState(initial = false)
-    val chatInputTransparent by preferencesManager.chatInputTransparent.collectAsState(initial = false)
-    val chatInputFloating by preferencesManager.chatInputFloating.collectAsState(initial = true)
-    val chatInputLiquidGlass by preferencesManager.chatInputLiquidGlass.collectAsState(initial = false)
-    val chatInputWaterGlass by preferencesManager.chatInputWaterGlass.collectAsState(initial = false)
     val forceAppBarContentColor by preferencesManager.forceAppBarContentColor.collectAsState(initial = false)
     val appBarContentColorMode by preferencesManager.appBarContentColorMode.collectAsState(
         initial = UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_LIGHT,
@@ -106,10 +102,6 @@ private fun ThemeSettingsInterfaceColorPanel(
     }
     var chatHeaderTransparentInput by remember { mutableStateOf(chatHeaderTransparent) }
     var chatHeaderOverlayModeInput by remember { mutableStateOf(chatHeaderOverlayMode) }
-    var chatInputTransparentInput by remember { mutableStateOf(chatInputTransparent) }
-    var chatInputFloatingInput by remember { mutableStateOf(chatInputFloating) }
-    var chatInputLiquidGlassInput by remember { mutableStateOf(chatInputLiquidGlass) }
-    var chatInputWaterGlassInput by remember { mutableStateOf(chatInputWaterGlass) }
     var forceAppBarContentColorInput by remember { mutableStateOf(forceAppBarContentColor) }
     var appBarContentColorModeInput by remember { mutableStateOf(appBarContentColorMode) }
     var historyIconColorInput by remember { mutableStateOf(historyIconColor ?: defaultHeaderIconColor) }
@@ -138,10 +130,6 @@ private fun ThemeSettingsInterfaceColorPanel(
         customNavigationDrawerAccentColor,
         chatHeaderTransparent,
         chatHeaderOverlayMode,
-        chatInputTransparent,
-        chatInputFloating,
-        chatInputLiquidGlass,
-        chatInputWaterGlass,
         forceAppBarContentColor,
         appBarContentColorMode,
         historyIconColor,
@@ -167,10 +155,6 @@ private fun ThemeSettingsInterfaceColorPanel(
         navigationDrawerAccentColorInput = customNavigationDrawerAccentColor ?: defaultNavigationDrawerAccentColor
         chatHeaderTransparentInput = chatHeaderTransparent
         chatHeaderOverlayModeInput = chatHeaderOverlayMode
-        chatInputTransparentInput = chatInputTransparent
-        chatInputFloatingInput = chatInputFloating
-        chatInputLiquidGlassInput = chatInputLiquidGlass
-        chatInputWaterGlassInput = chatInputWaterGlass
         forceAppBarContentColorInput = forceAppBarContentColor
         appBarContentColorModeInput = appBarContentColorMode
         historyIconColorInput = historyIconColor ?: defaultHeaderIconColor
@@ -209,14 +193,6 @@ private fun ThemeSettingsInterfaceColorPanel(
         onChatHeaderTransparentInputChange = { chatHeaderTransparentInput = it },
         chatHeaderOverlayModeInput = chatHeaderOverlayModeInput,
         onChatHeaderOverlayModeInputChange = { chatHeaderOverlayModeInput = it },
-        chatInputTransparentInput = chatInputTransparentInput,
-        onChatInputTransparentInputChange = { chatInputTransparentInput = it },
-        chatInputFloatingInput = chatInputFloatingInput,
-        onChatInputFloatingInputChange = { chatInputFloatingInput = it },
-        chatInputLiquidGlassInput = chatInputLiquidGlassInput,
-        onChatInputLiquidGlassInputChange = { chatInputLiquidGlassInput = it },
-        chatInputWaterGlassInput = chatInputWaterGlassInput,
-        onChatInputWaterGlassInputChange = { chatInputWaterGlassInput = it },
         forceAppBarContentColorInput = forceAppBarContentColorInput,
         onForceAppBarContentColorInputChange = { forceAppBarContentColorInput = it },
         appBarContentColorModeInput = appBarContentColorModeInput,

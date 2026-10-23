@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.ui.features.chat.components
 
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -8,6 +9,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -94,6 +98,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -101,6 +109,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -114,6 +124,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Dialog
 import com.ai.assistance.operit.R
@@ -187,7 +198,6 @@ private data class ChatDragTarget(
 
 private data class PendingHistoryMoveAck(
     val expectedSiblingsByParent: Map<String?, List<HistorySiblingSnapshot>>,
-    val previousSiblingsByParent: Map<String?, List<HistorySiblingSnapshot>>,
     val repositoryCallCompleted: Boolean = false,
 )
 
@@ -344,26 +354,26 @@ private fun currentLocalDateContext(): CurrentLocalDateContext {
     return CurrentLocalDateContext(LocalDate.now(zoneId), zoneId)
 }
 
+/** Reserves room at the row start for the line drawn by [historyGuideLine]. */
 @Composable
-private fun HistoryHierarchyGuide(modifier: Modifier = Modifier) {
-    Box(
-        modifier =
-            Modifier
-                .width(16.dp)
-                .padding(end = 8.dp),
-    ) {
-        Box(
-            modifier =
-                modifier
-                    .width(2.dp)
-                    .align(Alignment.Center)
-                    .background(
-                        color =
-                            MaterialTheme.colorScheme.primaryContainer.copy(
-                                alpha = 0.6f
-                            ),
-                        shape = RoundedCornerShape(1.dp),
-                    ),
+private fun HistoryHierarchyGuide() {
+    Spacer(modifier = Modifier.width(12.dp))
+}
+
+/** Draws the hierarchy line over the whole row height, so taller rows never leave a gap. */
+@Composable
+private fun Modifier.historyGuideLine(enabled: Boolean): Modifier {
+    if (!enabled) return this
+    val color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+    return drawBehind {
+        val lineWidth = 2.dp.toPx()
+        val inset = 2.dp.toPx()
+        val x = if (layoutDirection == LayoutDirection.Rtl) size.width - inset - lineWidth else inset
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(x, 0f),
+            size = Size(lineWidth, size.height),
+            cornerRadius = CornerRadius(1.dp.toPx()),
         )
     }
 }
@@ -1338,6 +1348,17 @@ fun ChatHistorySelector(
             mutableStateListOf<HistoryListItem>().apply { addAll(flatItems) }
         }
     var dragInProgress by remember { mutableStateOf(false) }
+    val hapticFeedback = LocalHapticFeedback.current
+    // Neighbours slide out of the way while dragging; other list updates keep snapping as before.
+    val dragPlacementSpec =
+        if (dragInProgress) {
+            spring(
+                stiffness = Spring.StiffnessMediumLow,
+                visibilityThreshold = IntOffset.VisibilityThreshold,
+            )
+        } else {
+            null
+        }
     var suppressedFolderDragDescendantKeys by
         remember { mutableStateOf<Set<String>>(emptySet()) }
     var suppressedFolderDragRootId by remember { mutableStateOf<String?>(null) }
@@ -1581,15 +1602,16 @@ fun ChatHistorySelector(
                 historySiblingSnapshot(parentFolderId).map { it.structure() } ==
                     expected.map { it.structure() }
             }
-        val stillAtPreviousState =
-            pending.previousSiblingsByParent.all { (parentFolderId, previous) ->
-                historySiblingSnapshot(parentFolderId).map { it.structure() } ==
-                    previous.map { it.structure() }
-            }
-        if (matchesExpected || !stillAtPreviousState) {
-            pendingHistoryMoveAck = null
-            historyMoveInFlight = false
+        if (!matchesExpected) {
+            // Folders and chats refresh separately, so the list can sit half updated for a
+            // moment. Unlock only after it has settled; a drag started from that half-updated
+            // order is rejected by the repository as "order changed" and snaps back.
+            // Any new list update restarts this effect, so the expected order unlocks at once;
+            // the wait only matters when the saved order never matches what we expected.
+            delay(1_500L)
         }
+        pendingHistoryMoveAck = null
+        historyMoveInFlight = false
     }
 
     val reorderableState =
@@ -1702,6 +1724,7 @@ fun ChatHistorySelector(
                     activeChatDragId = activeChatDragId ?: moved.history.id
                     pendingChatDragTarget = updatedTarget
                     applyOptimisticMove(from.index, to.index)
+                    hapticFeedback.performHapticFeedback(DragMoveHaptic)
                 }
                 is HistoryListItem.Header -> {
                     if (
@@ -1787,6 +1810,7 @@ fun ChatHistorySelector(
                     if (!applyOptimisticFolderMove(from.index, to.index)) {
                         return@rememberReorderableLazyListState
                     }
+                    hapticFeedback.performHapticFeedback(DragMoveHaptic)
                     pendingFolderDragTarget = updatedTarget
                     if (activeFolderDragId == null) {
                         activeFolderDragId = movedFolderId
@@ -1800,6 +1824,7 @@ fun ChatHistorySelector(
         val chatId = activeChatDragId
         val target = pendingChatDragTarget
         val expectedSnapshots = chatDragSnapshots
+        if (chatId != null && target != null) hapticFeedback.performHapticFeedback(DragDropHaptic)
         activeChatDragId = null
         pendingChatDragTarget = null
         chatDragSnapshots = emptyMap()
@@ -1869,8 +1894,6 @@ fun ChatHistorySelector(
         pendingHistoryMoveAck =
             PendingHistoryMoveAck(
                 expectedSiblingsByParent = expectedAfterMove,
-                previousSiblingsByParent =
-                    expectedAfterMove.keys.associateWith(expectedSnapshots::getValue),
             )
         coroutineScope.launch {
             val result = runCatching {
@@ -1926,6 +1949,7 @@ fun ChatHistorySelector(
         val folderId = activeFolderDragId
         val target = pendingFolderDragTarget
         val expectedSnapshots = folderDragSnapshots
+        if (folderId != null && target != null) hapticFeedback.performHapticFeedback(DragDropHaptic)
         activeFolderDragId = null
         pendingFolderDragTarget = null
         folderDragSnapshots = emptyMap()
@@ -1978,8 +2002,6 @@ fun ChatHistorySelector(
         pendingHistoryMoveAck =
             PendingHistoryMoveAck(
                 expectedSiblingsByParent = expectedAfterMove,
-                previousSiblingsByParent =
-                    expectedAfterMove.keys.associateWith(expectedSnapshots::getValue),
             )
         coroutineScope.launch {
             val result = runCatching {
@@ -2037,8 +2059,6 @@ fun ChatHistorySelector(
             PendingHistoryMoveAck(
                 expectedSiblingsByParent =
                     mapOf(targetChat.folderId to expectedAfterMove),
-                previousSiblingsByParent =
-                    mapOf(targetChat.folderId to sourceSnapshot),
             )
         coroutineScope.launch {
             val result = runCatching {
@@ -2709,150 +2729,139 @@ fun ChatHistorySelector(
         }
     }
 
+    // The picker closes as soon as a folder is chosen, so confirm where the item went.
+    fun showMovedToast(options: List<FolderPickerOption>, targetId: String?) {
+        val name = options.firstOrNull { it.id == targetId }?.name ?: return
+        Toast.makeText(context, context.getString(R.string.moved_to_folder, name), Toast.LENGTH_SHORT).show()
+    }
     if (chatToMove != null) {
         val targetChat = chatToMove!!
-        AlertDialog(
-            onDismissRequest = { chatToMove = null },
-            title = { Text(stringResource(R.string.move_to_folder)) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(
-                        rememberScrollState()
+        val chatMoveOptions =
+            buildList {
+                add(
+                    FolderPickerOption(
+                        id = null,
+                        name = stringResource(R.string.ungrouped),
+                        isCurrent = targetChat.folderId == null,
+                        isTopLevel = true,
                     )
-                ) {
-                    fun moveTo(folderId: String?) {
-                        if (folderId == targetChat.folderId) {
-                            chatToMove = null
-                            return
-                        }
-                        coroutineScope.launch {
-                            runCatching {
-                                chatHistoryManager.moveChat(
-                                    chatId = targetChat.id,
-                                    targetFolderId = folderId,
-                                    expectedSourceSiblings =
-                                        historySiblingSnapshot(targetChat.folderId),
-                                    expectedTargetSiblings =
-                                        historySiblingSnapshot(folderId),
-                                )
-                            }.onFailure { error ->
-                                Toast.makeText(
-                                    context,
-                                    error.message ?: operationFailedText,
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        }
-                        chatToMove = null
-                    }
-                    TextButton(
-                        onClick = { moveTo(null) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.ungrouped), modifier = Modifier.fillMaxWidth())
-                    }
-                    chatFolders
-                        .asSequence()
-                        .filterNot { it.id == SYSTEM_UNGROUPED_FOLDER_ID }
-                        .sortedWith(
-                            compareBy<ChatFolderEntity> { folderChoiceLabels[it.id] }
-                                .thenBy { it.id }
+                )
+                chatFolders
+                    .asSequence()
+                    .filterNot { it.id == SYSTEM_UNGROUPED_FOLDER_ID }
+                    .sortedWith(
+                        compareBy<ChatFolderEntity> { folderChoiceLabels[it.id] }
+                            .thenBy { it.id }
+                    )
+                    .forEach { folder ->
+                        add(
+                            FolderPickerOption(
+                                id = folder.id,
+                                name = folder.name,
+                                parentPath = folder.parentFolderId?.let { folderChoiceLabels[it] },
+                                isCurrent = folder.id == targetChat.folderId,
+                            )
                         )
-                        .forEach { folder ->
-                            TextButton(
-                                onClick = { moveTo(folder.id) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    folderChoiceLabels.getValue(folder.id),
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
+                    }
+            }
+        FolderPickerDialog(
+            title = stringResource(R.string.move_to_folder_title),
+            subtitle = targetChat.title,
+            options = chatMoveOptions,
+            onDismiss = { chatToMove = null },
+            onSelect = { folderId ->
+                if (folderId != targetChat.folderId) {
+                    coroutineScope.launch {
+                        runCatching {
+                            chatHistoryManager.moveChat(
+                                chatId = targetChat.id,
+                                targetFolderId = folderId,
+                                expectedSourceSiblings =
+                                    historySiblingSnapshot(targetChat.folderId),
+                                expectedTargetSiblings =
+                                    historySiblingSnapshot(folderId),
+                            )
+                        }.onSuccess {
+                            showMovedToast(chatMoveOptions, folderId)
+                        }.onFailure { error ->
+                            Toast.makeText(
+                                context,
+                                error.message ?: operationFailedText,
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
+                    }
                 }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { chatToMove = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
+                chatToMove = null
             },
         )
     }
 
     if (groupToMove != null) {
         val targetFolder = groupToMove!!
-        AlertDialog(
-            onDismissRequest = { groupToMove = null },
-            title = { Text(stringResource(R.string.move_to_folder)) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(
-                        rememberScrollState()
+        val currentParentFolderId =
+            chatFolders.firstOrNull { it.id == targetFolder.folderId }?.parentFolderId
+        val groupMoveOptions =
+            buildList {
+                add(
+                    FolderPickerOption(
+                        id = null,
+                        name = stringResource(R.string.folder_root),
+                        isCurrent = currentParentFolderId == null,
+                        isTopLevel = true,
                     )
-                ) {
-                    val currentParentFolderId =
-                        chatFolders.firstOrNull { it.id == targetFolder.folderId }?.parentFolderId
-                    fun moveTo(parentFolderId: String?) {
-                        if (parentFolderId == currentParentFolderId) {
-                            groupToMove = null
-                            return
-                        }
-                        coroutineScope.launch {
-                            runCatching {
-                                chatHistoryManager.moveFolder(
-                                    folderId = targetFolder.folderId,
-                                    targetParentFolderId = parentFolderId,
-                                    expectedSourceSiblings =
-                                        historySiblingSnapshot(currentParentFolderId),
-                                    expectedTargetSiblings =
-                                        historySiblingSnapshot(parentFolderId),
-                                )
-                            }.onFailure { error ->
-                                Toast.makeText(
-                                    context,
-                                    error.message ?: operationFailedText,
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        }
-                        groupToMove = null
+                )
+                chatFolders
+                    .asSequence()
+                    .filter {
+                        it.id != targetFolder.folderId &&
+                            it.id != SYSTEM_UNGROUPED_FOLDER_ID &&
+                            canMoveFolderToParent(targetFolder.folderId, it.id)
                     }
-                    TextButton(
-                        onClick = { moveTo(null) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.folder_root), modifier = Modifier.fillMaxWidth())
-                    }
-                    chatFolders
-                        .asSequence()
-                        .filter {
-                            it.id != targetFolder.folderId &&
-                                it.id != SYSTEM_UNGROUPED_FOLDER_ID &&
-                                canMoveFolderToParent(targetFolder.folderId, it.id)
-                        }
-                        .sortedWith(
-                            compareBy<ChatFolderEntity> { folderChoiceLabels[it.id] }
-                                .thenBy { it.id }
+                    .sortedWith(
+                        compareBy<ChatFolderEntity> { folderChoiceLabels[it.id] }
+                            .thenBy { it.id }
+                    )
+                    .forEach { folder ->
+                        add(
+                            FolderPickerOption(
+                                id = folder.id,
+                                name = folder.name,
+                                parentPath = folder.parentFolderId?.let { folderChoiceLabels[it] },
+                                isCurrent = folder.id == currentParentFolderId,
+                            )
                         )
-                        .forEach { folder ->
-                            TextButton(
-                                onClick = { moveTo(folder.id) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    folderChoiceLabels.getValue(folder.id),
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
+                    }
+            }
+        FolderPickerDialog(
+            title = stringResource(R.string.move_to_folder_title),
+            subtitle = targetFolder.groupName,
+            options = groupMoveOptions,
+            onDismiss = { groupToMove = null },
+            onSelect = { parentFolderId ->
+                if (parentFolderId != currentParentFolderId) {
+                    coroutineScope.launch {
+                        runCatching {
+                            chatHistoryManager.moveFolder(
+                                folderId = targetFolder.folderId,
+                                targetParentFolderId = parentFolderId,
+                                expectedSourceSiblings =
+                                    historySiblingSnapshot(currentParentFolderId),
+                                expectedTargetSiblings =
+                                    historySiblingSnapshot(parentFolderId),
+                            )
+                        }.onSuccess {
+                            showMovedToast(groupMoveOptions, parentFolderId)
+                        }.onFailure { error ->
+                            Toast.makeText(
+                                context,
+                                error.message ?: operationFailedText,
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
+                    }
                 }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { groupToMove = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
+                groupToMove = null
             },
         )
     }
@@ -3566,7 +3575,7 @@ fun ChatHistorySelector(
                 state = actualLazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 10.dp, end = 22.dp)
+                    .padding(start = 6.dp, end = 22.dp)
             ) {
                 itemsIndexed(
                     items = reorderItems,
@@ -3688,7 +3697,12 @@ fun ChatHistorySelector(
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.clearAndSetSemantics {}
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        // Capped so a long name never pushes the fold arrow off the row.
+                                        .widthIn(max = 160.dp)
+                                        .clearAndSetSemantics {}
                                 )
                             }
                             
@@ -3746,23 +3760,25 @@ fun ChatHistorySelector(
                         ReorderableItem(
                             reorderableState,
                             key = item.key,
-                            animateItemModifier = Modifier.animateItem(placementSpec = null),
+                            animateItemModifier = Modifier.animateItem(placementSpec = dragPlacementSpec),
                         ) { isDragging ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(
-                                        start = ((item.depth - 1).coerceAtLeast(0) * 12).dp,
-                                        top = 4.dp,
-                                        bottom = 4.dp,
-                                    ),
+                                    .padding(start = ((item.depth - 1).coerceAtLeast(0) * 8).dp)
+                                    .historyGuideLine(
+                                        historyDisplayMode == ChatHistoryDisplayMode.BY_CHARACTER_CARD ||
+                                            historyDisplayMode == ChatHistoryDisplayMode.BY_FOLDER
+                                    )
+                                    // Vertical padding sits inside the line so rows join up without gaps.
+                                    .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                             if (
                                 historyDisplayMode == ChatHistoryDisplayMode.BY_CHARACTER_CARD ||
                                     historyDisplayMode == ChatHistoryDisplayMode.BY_FOLDER
                             ) {
-                                HistoryHierarchyGuide(modifier = Modifier.height(40.dp))
+                                HistoryHierarchyGuide()
                             }
                             if (
                                 canManageFolders &&
@@ -3783,6 +3799,9 @@ fun ChatHistorySelector(
                                             onDragStarted = {
                                                 if (!historyMoveInFlight) {
                                                     dragInProgress = true
+                                                    hapticFeedback.performHapticFeedback(
+                                                        DragPickUpHaptic
+                                                    )
                                                     activeFolderDragId = item.folderId
                                                     pendingFolderDragTarget = null
                                                     folderDragSnapshots =
@@ -3800,19 +3819,21 @@ fun ChatHistorySelector(
                                             onDragStopped = ::commitFolderDrag,
                                         )
                                     }
-                                IconButton(
+                                // A plain 32dp handle: the old IconButton kept a 48dp slot that squeezed the title.
+                                Box(
                                     modifier =
                                         folderDragHandleModifier
+                                            .size(32.dp)
                                             .semantics {
                                                 contentDescription = folderDragDescription
                                             },
-                                    enabled = !historyMoveInFlight,
-                                    onClick = {},
+                                    contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DragHandle,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (historyMoveInFlight) 0.38f else 1f),
+                                        modifier = Modifier.size(22.dp),
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -3820,7 +3841,7 @@ fun ChatHistorySelector(
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(MaterialTheme.shapes.medium)
+                                    .clip(RoundedCornerShape(14.dp))
                                     .semantics {
                                         contentDescription = "${item.name}, $stateDescription"
                                     }
@@ -3859,11 +3880,11 @@ fun ChatHistorySelector(
                                         )
                                     },
                                 color = MaterialTheme.colorScheme.surfaceContainer,
-                                shadowElevation = if (isDragging) 8.dp else 2.dp,
-                                shape = MaterialTheme.shapes.medium
+                                shadowElevation = if (isDragging) 8.dp else 0.dp,
+                                shape = RoundedCornerShape(14.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
@@ -3881,28 +3902,29 @@ fun ChatHistorySelector(
                                     Column(
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically
+                                        Text(
+                                            text = item.name,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.clearAndSetSemantics {}
+                                        )
+                                        // The hint sits on its own line so it never squeezes the folder name.
+                                        if (
+                                            canManageFolders &&
+                                                !isUngroupedFolder &&
+                                                !hasLongPressedGroup
                                         ) {
                                             Text(
-                                                text = item.name,
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface,
+                                                text = stringResource(R.string.long_press_manage),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
                                                 modifier = Modifier.clearAndSetSemantics {}
                                             )
-                                            if (
-                                                canManageFolders &&
-                                                    !isUngroupedFolder &&
-                                                    !hasLongPressedGroup
-                                            ) {
-                                                Text(
-                                                    text = " (" + stringResource(R.string.long_press_manage) + ")",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                    modifier = Modifier.clearAndSetSemantics {}
-                                                )
-                                            }
                                         }
                                     }
                                     Icon(
@@ -3970,7 +3992,7 @@ fun ChatHistorySelector(
                         ReorderableItem(
                             reorderableState,
                             key = "chat:${item.history.id}",
-                            animateItemModifier = Modifier.animateItem(placementSpec = null)
+                            animateItemModifier = Modifier.animateItem(placementSpec = dragPlacementSpec)
                         ) { isDragging ->
                             val isDeleting = deletingChatIds.contains(item.history.id)
                             val isSelected = item.history.id == currentId
@@ -3993,26 +4015,24 @@ fun ChatHistorySelector(
                                         shrinkTowards = Alignment.Top
                                     ) + fadeOut(animationSpec = tween(deleteAnimationDurationMs.toInt()))
                             ) {
+                                val showHierarchyGuide =
+                                    selectedCategory != ChatHistoryCategory.RECENT &&
+                                        (
+                                            historyDisplayMode ==
+                                                ChatHistoryDisplayMode.BY_CHARACTER_CARD ||
+                                                historyDisplayMode ==
+                                                    ChatHistoryDisplayMode.BY_FOLDER
+                                        )
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(
-                                            start = (item.depth.coerceAtLeast(0) * 12).dp,
-                                            top = 2.dp,
-                                            bottom = 2.dp,
-                                        ),
+                                        .padding(start = (item.depth.coerceAtLeast(0) * 8).dp)
+                                        .historyGuideLine(showHierarchyGuide)
+                                        .padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    if (
-                                        selectedCategory != ChatHistoryCategory.RECENT &&
-                                            (
-                                                historyDisplayMode ==
-                                                    ChatHistoryDisplayMode.BY_CHARACTER_CARD ||
-                                                    historyDisplayMode ==
-                                                        ChatHistoryDisplayMode.BY_FOLDER
-                                            )
-                                    ) {
-                                        HistoryHierarchyGuide(modifier = Modifier.height(50.dp))
+                                    if (showHierarchyGuide) {
+                                        HistoryHierarchyGuide()
                                     }
                                     if (canReorder) {
                                         val dragDescription =
@@ -4028,6 +4048,9 @@ fun ChatHistorySelector(
                                                     onDragStarted = {
                                                         if (!historyMoveInFlight) {
                                                             dragInProgress = true
+                                                            hapticFeedback.performHapticFeedback(
+                                                                DragPickUpHaptic
+                                                            )
                                                             activeChatDragId =
                                                                 item.history.id
                                                             pendingChatDragTarget = null
@@ -4038,19 +4061,21 @@ fun ChatHistorySelector(
                                                     onDragStopped = ::commitChatDrag,
                                                 )
                                             }
-                                        IconButton(
+                                        // A plain 32dp handle: the old IconButton kept a 48dp slot that squeezed the title.
+                                        Box(
                                             modifier =
                                                 dragHandleModifier
+                                                    .size(32.dp)
                                                     .semantics {
                                                         contentDescription = dragDescription
                                                     },
-                                            enabled = !historyMoveInFlight,
-                                            onClick = {},
+                                            contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.DragHandle,
                                                 contentDescription = null,
-                                                tint = contentColor,
+                                                tint = contentColor.copy(alpha = if (historyMoveInFlight) 0.38f else 1f),
+                                                modifier = Modifier.size(22.dp),
                                             )
                                         }
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -4105,7 +4130,7 @@ fun ChatHistorySelector(
                                                                 text = item.history.title,
                                                                 style = MaterialTheme.typography.bodyMedium,
                                                                 color = contentColor,
-                                                                maxLines = 1,
+                                                                maxLines = 2,
                                                                 overflow = TextOverflow.Ellipsis
                                                             )
 
@@ -4200,3 +4225,14 @@ fun ChatHistorySelector(
         }
     }
 }
+
+// The gesture haptic types need Android 11; older phones get the closest classic ones.
+private val DragPickUpHaptic =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackType.GestureThresholdActivate
+    else HapticFeedbackType.LongPress
+private val DragMoveHaptic =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackType.SegmentFrequentTick
+    else HapticFeedbackType.TextHandleMove
+private val DragDropHaptic =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackType.GestureEnd
+    else HapticFeedbackType.TextHandleMove

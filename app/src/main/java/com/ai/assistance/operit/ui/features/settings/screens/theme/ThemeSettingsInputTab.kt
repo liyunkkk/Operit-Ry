@@ -9,7 +9,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,13 +17,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCardShape
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.features.settings.components.ChatStyleOption
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSwitchRow
+import com.ai.assistance.operit.ui.features.settings.sections.ThemeSettingsSectionTitle
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Opacity
 
 @Composable
 internal fun ThemeSettingsInputTab(
@@ -60,13 +64,12 @@ internal fun ThemeSettingsInputTab(
         chatInputWaterGlassInput = chatInputWaterGlass
     }
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
+    ThemeSettingsSectionTitle(
+        title = stringResource(id = R.string.input_style_title),
+        icon = Icons.Default.Keyboard,
+    )
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(id = R.string.input_style_title),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
             Text(
                 text = stringResource(id = R.string.input_style_desc),
                 style = MaterialTheme.typography.bodySmall,
@@ -109,16 +112,15 @@ internal fun ThemeSettingsInputTab(
         }
     }
 
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(id = R.string.theme_chat_input_transparent_title),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            ThemeSettingsInputSwitch(
+    ThemeSettingsSectionTitle(
+        title = stringResource(id = R.string.theme_chat_input_transparent_title),
+        icon = Icons.Default.Opacity,
+    )
+    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), colors = cardColors, shape = SettingsCardShape) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+            SettingsSwitchRow(
                 title = stringResource(id = R.string.theme_chat_input_transparent),
-                description = stringResource(id = R.string.theme_chat_input_transparent_desc),
+                subtitle = stringResource(id = R.string.theme_chat_input_transparent_desc),
                 checked = chatInputTransparentInput,
                 onCheckedChange = {
                     chatInputTransparentInput = it
@@ -127,11 +129,12 @@ internal fun ThemeSettingsInputTab(
                     }
                     onShowSaveSuccessMessage()
                 },
+                horizontalPadding = 0.dp,
             )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            ThemeSettingsInputSwitch(
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            SettingsSwitchRow(
                 title = stringResource(id = R.string.theme_chat_input_floating),
-                description = stringResource(id = R.string.theme_chat_input_floating_desc),
+                subtitle = stringResource(id = R.string.theme_chat_input_floating_desc),
                 checked = chatInputFloatingInput,
                 onCheckedChange = {
                     chatInputFloatingInput = it
@@ -140,13 +143,14 @@ internal fun ThemeSettingsInputTab(
                     }
                     onShowSaveSuccessMessage()
                 },
+                horizontalPadding = 0.dp,
             )
 
             if (chatInputTransparentInput) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                ThemeSettingsInputSwitch(
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SettingsSwitchRow(
                     title = stringResource(id = R.string.theme_chat_input_liquid_glass),
-                    description = stringResource(id = R.string.theme_chat_input_liquid_glass_desc),
+                    subtitle = stringResource(id = R.string.theme_chat_input_liquid_glass_desc),
                     checked = chatInputLiquidGlassInput,
                     onCheckedChange = {
                         chatInputLiquidGlassInput = it
@@ -161,11 +165,12 @@ internal fun ThemeSettingsInputTab(
                         }
                         onShowSaveSuccessMessage()
                     },
+                    horizontalPadding = 0.dp,
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                ThemeSettingsInputSwitch(
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                SettingsSwitchRow(
                     title = stringResource(id = R.string.theme_chat_input_water_glass),
-                    description = stringResource(id = R.string.theme_chat_input_water_glass_desc),
+                    subtitle = stringResource(id = R.string.theme_chat_input_water_glass_desc),
                     checked = chatInputWaterGlassInput,
                     onCheckedChange = {
                         chatInputWaterGlassInput = it
@@ -180,33 +185,9 @@ internal fun ThemeSettingsInputTab(
                         }
                         onShowSaveSuccessMessage()
                     },
+                    horizontalPadding = 0.dp,
                 )
             }
         }
     }
 }
-
-@Composable
-private fun ThemeSettingsInputSwitch(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-

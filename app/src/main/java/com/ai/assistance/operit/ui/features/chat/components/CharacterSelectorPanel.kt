@@ -243,13 +243,13 @@ fun CharacterSelectorPanel(
                                     modifier = Modifier
                                         .shadow(elevation = 12.dp, shape = RoundedCornerShape(12.dp))
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(Color.White)
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                                 ) {
                                     DropdownMenuItem(
                                         text = {
                                             Text(
                                                 text = context.getString(R.string.character_card_sort_default),
-                                                color = Color(0xFF1F1F1F)
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         },
                                         onClick = {
@@ -261,7 +261,7 @@ fun CharacterSelectorPanel(
                                         text = {
                                             Text(
                                                 text = context.getString(R.string.character_card_sort_by_name),
-                                                color = Color(0xFF1F1F1F)
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         },
                                         onClick = {
@@ -273,7 +273,7 @@ fun CharacterSelectorPanel(
                                         text = {
                                             Text(
                                                 text = context.getString(R.string.character_card_sort_by_created),
-                                                color = Color(0xFF1F1F1F)
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         },
                                         onClick = {

@@ -56,7 +56,7 @@ import com.ai.assistance.operit.util.ChatMarkupRegex
         TokenStatCleanupOperationEntity::class,
         TokenStatCleanupItemEntity::class,
     ],
-    version = 34,
+    version = 35,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -81,6 +81,14 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun tokenStatsDao(): TokenStatsDao
 
     companion object {
+        val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chats ADD COLUMN contextPolicyJson TEXT")
+            }
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE chats ADD COLUMN contextPolicyJson TEXT")
+            }
+        }
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -1140,6 +1148,7 @@ abstract class AppDatabase : RoomDatabase() {
                                 MIGRATION_31_32,
                                 MIGRATION_32_33,
                                 MIGRATION_33_34,
+                                MIGRATION_34_35,
                             ) // 添加新的迁移
                             // personal/dev briefly shipped experimental schemas 21-23. Only those
                             // development inputs are intentionally rebuilt; stable v20 is migrated.

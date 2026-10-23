@@ -134,13 +134,7 @@ export namespace SoftwareSettings {
         frequency_penalty?: number;
         repetition_penalty_enabled?: boolean;
         repetition_penalty?: number;
-        context_length?: number;
         max_context_length?: number;
-        enable_max_context_mode?: boolean;
-        summary_token_threshold?: number;
-        enable_summary?: boolean;
-        enable_summary_by_message_count?: boolean;
-        summary_message_count_threshold?: number;
         custom_parameters?: string | Record<string, unknown>;
         custom_headers?: string | Record<string, string>;
         enable_direct_image_processing?: boolean;

@@ -2,7 +2,6 @@ package com.ai.assistance.operit.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,10 +26,8 @@ class StoppedAttentionToneTest {
     fun aStoppedRunNeverWearsTheToneOfAFailedOne() {
         val light = rainyBaseColorScheme(darkTheme = false)
         val dark = rainyBaseColorScheme(darkTheme = true)
-        // This palette paints the light theme's tertiary with the very rose it paints error, which
-        // is why "stopped" cannot borrow either role. If this ever stops being true the custom tone
-        // can go back to being tertiary.
-        assertEquals(light.error, light.tertiary)
+        // Warning amber, error red and decorative rose communicate different states.
+        assertNotEquals(light.error, light.tertiary)
         assertNotEquals(light.error, light.stoppedAttention)
         assertNotEquals(light.tertiary, light.stoppedAttention)
         assertNotEquals(dark.error, dark.stoppedAttention)

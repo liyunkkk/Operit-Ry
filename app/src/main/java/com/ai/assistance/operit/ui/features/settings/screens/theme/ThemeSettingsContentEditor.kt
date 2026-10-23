@@ -2,6 +2,11 @@ package com.ai.assistance.operit.ui.features.settings.screens.theme
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.ai.assistance.operit.R
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +28,8 @@ import com.ai.assistance.operit.data.preferences.CharacterCardManager
 import com.ai.assistance.operit.data.preferences.CharacterGroupCardManager
 import com.ai.assistance.operit.data.preferences.DisplayPreferencesManager
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSearchFocus
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
 import com.ai.assistance.operit.ui.features.settings.sections.SaveThemeSettingsAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.flowOf
@@ -98,11 +105,14 @@ internal fun ThemeSettingsContentEditor(
         activeCharacterGroup?.id?.let { preferencesManager.getAiAvatarForCharacterGroupFlow(it) }
             ?: flowOf(null)
     }.collectAsState(initial = null)
+    val hasBackgroundImage by preferencesManager.useBackgroundImage.collectAsState(initial = false)
     val cardColors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        containerColor = settingsCardColor(hasBackgroundImage),
     )
-    var selectedThemeTab by remember { mutableStateOf(ThemeSettingsTab.BASIC) }
-    var showSaveSuccessMessage by remember { mutableStateOf(false) }
+    // A settings search result opens the tab that holds the option.
+    val searchTab = remember { themeSettingsTabForSearch(context, SettingsSearchFocus.peek()) }
+    var selectedThemeTab by remember { mutableStateOf(searchTab ?: ThemeSettingsTab.BASIC) }
+    var saveToast by remember { mutableStateOf<ThemeSettingsToast?>(null) }
     val scrollState = rememberScrollState()
     val activeThemeTargetName = activeCharacterGroup?.name ?: activeCharacterCard?.name
     val activeThemeTargetAvatarUri = activeGroupAvatarUri ?: activeCardAvatarUri
@@ -146,62 +156,68 @@ internal fun ThemeSettingsContentEditor(
         saveThemeSettingsWithCharacterCard = ::saveThemeSettingsWithCharacterCard,
     )
 
-    ThemeSettingsTabbedContent(
-        selectedTab = selectedThemeTab,
-        onSelectedTabChange = { selectedThemeTab = it },
-        scrollState = scrollState,
-        modifier = Modifier.fillMaxSize(),
-        basicContent = {
-            ThemeSettingsBasicTab(
-                shared = shared,
-                cardColors = cardColors,
-                onShowSaveSuccessMessage = { showSaveSuccessMessage = true },
-            )
-        },
-        backgroundContent = {
-            ThemeSettingsBackgroundTab(
-                shared = shared,
-                cardColors = cardColors,
-                scrollState = scrollState,
-                onShowSaveSuccessMessage = { showSaveSuccessMessage = true },
-            )
-        },
-        chatContent = {
-            ThemeSettingsChatTab(
-                shared = shared,
-                cardColors = cardColors,
-            )
-        },
-        inputContent = {
-            ThemeSettingsInputTab(
-                shared = shared,
-                cardColors = cardColors,
-                onShowSaveSuccessMessage = { showSaveSuccessMessage = true },
-            )
-        },
-        interfaceContent = {
-            ThemeSettingsInterfaceTab(
-                shared = shared,
-                cardColors = cardColors,
-                onShowSaveSuccessMessage = { showSaveSuccessMessage = true },
-            )
-        },
-        footerContent = {
-            ThemeSettingsFooter(
-                showSaveSuccessMessage = showSaveSuccessMessage,
-                onShowSaveSuccessMessageChange = { showSaveSuccessMessage = it },
-                onReset = {
-                    scope.launch {
-                        preferencesManager.resetThemeSettings()
-                        if (isGroupThemeTarget) {
-                            activeCharacterGroup?.id?.let { preferencesManager.deleteCharacterGroupTheme(it) }
-                        } else {
-                            activeCharacterCard?.id?.let { preferencesManager.deleteCharacterCardTheme(it) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        ThemeSettingsTabbedContent(
+            selectedTab = selectedThemeTab,
+            onSelectedTabChange = { selectedThemeTab = it },
+            scrollState = scrollState,
+            modifier = Modifier.fillMaxSize(),
+            basicContent = {
+                ThemeSettingsBasicTab(
+                    shared = shared,
+                    cardColors = cardColors,
+                    onShowSaveSuccessMessage = { saveToast = ThemeSettingsToast(R.string.theme_saved) },
+                )
+            },
+            backgroundContent = {
+                ThemeSettingsBackgroundTab(
+                    shared = shared,
+                    cardColors = cardColors,
+                    scrollState = scrollState,
+                    onShowSaveSuccessMessage = { saveToast = ThemeSettingsToast(R.string.theme_saved) },
+                )
+            },
+            chatContent = {
+                ThemeSettingsChatTab(
+                    shared = shared,
+                    cardColors = cardColors,
+                )
+            },
+            inputContent = {
+                ThemeSettingsInputTab(
+                    shared = shared,
+                    cardColors = cardColors,
+                    onShowSaveSuccessMessage = { saveToast = ThemeSettingsToast(R.string.theme_saved) },
+                )
+            },
+            interfaceContent = {
+                ThemeSettingsInterfaceTab(
+                    shared = shared,
+                    cardColors = cardColors,
+                    onShowSaveSuccessMessage = { saveToast = ThemeSettingsToast(R.string.theme_saved) },
+                )
+            },
+            footerContent = {
+                ThemeSettingsFooter(
+                    onReset = {
+                        scope.launch {
+                            preferencesManager.resetThemeSettings()
+                            if (isGroupThemeTarget) {
+                                activeCharacterGroup?.id?.let { preferencesManager.deleteCharacterGroupTheme(it) }
+                            } else {
+                                activeCharacterCard?.id?.let { preferencesManager.deleteCharacterCardTheme(it) }
+                            }
+                            saveToast = ThemeSettingsToast(R.string.theme_reset_done)
                         }
-                        showSaveSuccessMessage = true
-                    }
-                },
-            )
-        },
-    )
+                    },
+                )
+            },
+        )
+
+        ThemeSettingsToastHost(
+            toast = saveToast,
+            onDismiss = { saveToast = null },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+        )
+    }
 }

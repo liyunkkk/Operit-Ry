@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -112,6 +113,10 @@ fun MentionSuggestionPanel(
     val currentChatId by viewModel.currentChatId.collectAsState()
     val searchQuery by viewModel.mentionSearchQuery.collectAsState()
     val suggestionTriggerChar by viewModel.mentionSuggestionTriggerChar.collectAsState()
+    val draft by viewModel.userMessage.collectAsState()
+    val shortcuts = if (draft.composition == null && draft.selection.collapsed &&
+        draft.selection.end == draft.text.length)
+        com.ai.assistance.operit.ui.features.chat.util.chatShortcutSuggestions(draft.text) else emptyList()
     val showFileSuggestions = suggestionTriggerChar != '/'
     val currentChat = chatHistories.find { it.id == currentChatId }
     val workspacePath = currentChat?.workspace
@@ -242,6 +247,30 @@ fun MentionSuggestionPanel(
                     .padding(horizontal = 8.dp, vertical = 8.dp)
                     .heightIn(max = 280.dp)
         ) {
+            if (shortcuts.isNotEmpty()) {
+                item { MentionSuggestionSectionHeader(context.getString(R.string.chat_shortcuts)) }
+                items(shortcuts.size) { index ->
+                    val shortcut = shortcuts[index]
+                    val argument = com.ai.assistance.operit.ui.features.chat.util.chatShortcutArgument(draft.text, shortcut)
+                    val valid = com.ai.assistance.operit.ui.features.chat.util.isValidShortcutArgument(shortcut, argument)
+                    val description = when (shortcut) {
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.COMPACT -> R.string.chat_shortcut_compact
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.AUTO_COMPACT -> R.string.chat_shortcut_autocompact
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.CONTEXT -> R.string.chat_shortcut_context
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.MAX -> R.string.chat_shortcut_max
+                    }
+                    Column(
+                        Modifier.fillMaxWidth().clickable(enabled = valid) {
+                            viewModel.executeChatShortcut(shortcut, draft.text)
+                        }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text("/${shortcut.command}", color = MaterialTheme.colorScheme.primary)
+                        Text(context.getString(description), style = MaterialTheme.typography.bodySmall)
+                        if (!valid) Text(context.getString(R.string.chat_shortcut_invalid),
+                            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
             item {
                 MentionSuggestionSectionHeader(
                     title = context.getString(R.string.mention_selector_packages_section),
@@ -300,7 +329,7 @@ fun MentionSuggestionPanel(
                     workspaceDir == null || !workspaceDir.exists() || !workspaceDir.isDirectory -> {
                         item {
                             MentionSuggestionEmptyRow(
-                                text = context.getString(R.string.workspace_directory_invalid),
+                                text = stringResource(R.string.workspace_directory_invalid),
                             )
                         }
                     }
@@ -316,9 +345,9 @@ fun MentionSuggestionPanel(
                                         MentionSuggestionEmptyRow(
                                             text =
                                                 if (searchQuery.isBlank()) {
-                                                    context.getString(R.string.mention_selector_files_idle)
+                                                    stringResource(R.string.mention_selector_files_idle)
                                                 } else {
-                                                    context.getString(R.string.mention_selector_files_empty)
+                                                    stringResource(R.string.mention_selector_files_empty)
                                                 },
                                         )
                                     }

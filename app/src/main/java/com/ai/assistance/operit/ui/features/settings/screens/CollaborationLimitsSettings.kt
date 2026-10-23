@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,11 +15,17 @@ import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.agent.AgentProfileRepository
 import com.ai.assistance.operit.core.agent.collaboration.CollaborationLimits
+import com.ai.assistance.operit.ui.features.settings.components.SettingsNavRow
 
 @Composable
 internal fun CollaborationLimitsSettings(repository: AgentProfileRepository) {
     var open by remember { mutableStateOf(false) }
-    TextButton(onClick = { open = true }) { Text(stringResource(R.string.subagent_v2_limits)) }
+    SettingsNavRow(
+        title = stringResource(R.string.subagent_v2_limits),
+        subtitle = stringResource(R.string.subagent_v2_limits_help),
+        icon = Icons.Outlined.Tune,
+        onClick = { open = true }
+    )
     if (!open) return
     val current by repository.collaborationLimits.collectAsState()
     var entries by remember {

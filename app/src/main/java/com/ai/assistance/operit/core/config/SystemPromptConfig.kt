@@ -26,6 +26,22 @@ internal fun skillIndexDescription(description: String): String {
 
 object SystemPromptConfig {
 
+    // Shared by XML, native tool calling, and CLI mode; independent of permission settings.
+    private const val TOOL_EXECUTION_GUIDELINES_EN = """
+TEMPORARY FILES AND TOOL PERMISSION REVIEW:
+- Put temporary scripts, intermediate results, and debugging output you create under `tmp/` in the latest workspace, in a separate subdirectory for each task. If no workspace is attached, use a writable temporary directory in the execution environment. Respect paths explicitly required by the user or a tool; save final deliverables where the user requested.
+- Resolve temporary paths to absolute paths in the target tool's environment. Do not assume Android file tools and the Linux terminal share the same `/tmp`. When cleaning up, remove only your own task's temporary files; never clear the entire temporary directory.
+- Operit handles tool permission review according to the user's settings, including automatic review when enabled. For actions within the user's authorized task, submit the required tool calls without repeatedly asking for the same permission; the system handles any required review or confirmation.
+- Automatic review is not blanket authorization. If a call is denied, follow the returned reason, adjust the plan, or explain what authorization is missing. Do not bypass the denial by changing tools, paths, or command forms.
+"""
+    private const val TOOL_EXECUTION_GUIDELINES_CN = """
+临时文件与工具权限审核：
+- 你创建的临时脚本、中间结果和调试输出，统一放入最新工作区的 `tmp/`，按任务建立独立子目录。没有附加工作区时，使用执行环境中可写的临时目录。用户或工具明确要求的路径优先；正式交付文件保存到用户指定位置。
+- 临时路径应解析为目标工具所在环境的绝对路径，不要假设 Android 文件工具和 Linux 终端共用同一个 `/tmp`。清理时只删除自己当前任务的临时文件，不要清空整个临时目录。
+- Operit 会按用户设置处理工具权限审核，启用自动审核时由系统处理。对用户已授权任务范围内的操作，直接提交所需工具调用，不要反复索要同一许可；所需审核或确认由系统处理。
+- 自动审核不代表所有操作都已获授权。工具调用被拒绝时，依据返回原因调整方案，或说明缺少的授权；不得通过更换工具、路径或命令形式绕过拒绝。
+"""
+
     private const val TOOL_USAGE_GUIDELINES_EN = """
 When calling a tool, the user will see your response, and then will automatically send the tool results back to you in a follow-up message.
 
@@ -450,9 +466,11 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
 
     // Handle tools disable/enable
     if (enableTools) {
+        val executionGuidelines =
+            if (useEnglish) TOOL_EXECUTION_GUIDELINES_EN else TOOL_EXECUTION_GUIDELINES_CN
         if (toolExposureMode == ToolExposureMode.CLI) {
             prompt = prompt
-                .replace("TOOL_USAGE_GUIDELINES_SECTION", CliToolModeSupport.buildCliModePrompt(useEnglish))
+                .replace("TOOL_USAGE_GUIDELINES_SECTION", executionGuidelines + "\n" + CliToolModeSupport.buildCliModePrompt(useEnglish))
                 .replace("PACKAGE_SYSTEM_GUIDELINES_SECTION", "")
                 .replace("ACTIVE_PACKAGES_SECTION", "")
                 .replace("AVAILABLE_TOOLS_SECTION", "")
@@ -465,12 +483,12 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
                     PACKAGE_SYSTEM_GUIDELINES_TOOL_CALL_CN
                 }
             prompt = prompt
-                .replace("TOOL_USAGE_GUIDELINES_SECTION", "")
+                .replace("TOOL_USAGE_GUIDELINES_SECTION", executionGuidelines)
                 .replace("PACKAGE_SYSTEM_GUIDELINES_SECTION", if (packageSystemVisible) packageGuidelines else "")
                 .replace("AVAILABLE_TOOLS_SECTION", "")
         } else {
             prompt = prompt
-                .replace("TOOL_USAGE_GUIDELINES_SECTION", if (useEnglish) TOOL_USAGE_GUIDELINES_EN else TOOL_USAGE_GUIDELINES_CN)
+                .replace("TOOL_USAGE_GUIDELINES_SECTION", executionGuidelines + "\n" + if (useEnglish) TOOL_USAGE_GUIDELINES_EN else TOOL_USAGE_GUIDELINES_CN)
                 .replace(
                     "PACKAGE_SYSTEM_GUIDELINES_SECTION",
                     if (packageSystemVisible) {
@@ -551,25 +569,27 @@ AVAILABLE_TOOLS_SECTION""".trimIndent()
               """
               WORKSPACE GUIDELINES:
               - The current workspace root is `$workspacePath`${if (shouldShowEnv) " (environment=$envLabel)" else ""}.
-              - Treat this exact path as the base path for all workspace file operations.
-              - When using tools to read, write, search, list, move, or delete workspace files, do not use relative paths; always use absolute paths rooted at `$workspacePath`.
-              ${if (shouldShowEnv) "- When operating on workspace files via tools, always pass `environment=\"$envLabel\"` together with the workspace path." else ""}
+              - The workspace is the default base directory, not a filesystem permission boundary. Operations outside it are subject to user authorization, tool permission review, and actual filesystem access; do not refuse solely because a target is outside the workspace.
+              - When a later user message includes a workspace attachment, use its latest path and environment instead of the workspace path and environment recorded here. A workspace switch alone does not require a new conversation or a system prompt refresh.
+              - Use absolute target paths for file tools. Resolve project-relative targets against the latest workspace root; use the actual absolute path for targets outside it.
+              ${if (shouldShowEnv) "- For workspace file tools that accept an environment parameter, pass the latest workspace environment (initially \"$envLabel\"). For other targets, select the environment where that target actually resides." else ""}
               - Relative paths are only for file contents or project-internal references, not for tool parameters.
               - Terminal mount note: common mounts include `$externalStoragePath -> /sdcard`, `$externalStoragePath -> $externalStoragePath`, and app sandbox `$appFilesPath -> same path`.
               - If the workspace is under mounted paths, execute workspace files directly in the Linux terminal environment; do not copy files before execution.
-              - **Best Practice for Code Modifications**: Before modifying any file, use `grep_code` and `grep_context` to locate and understand relevant code with surrounding context. This ensures you understand the codebase structure before making changes.
+              - **Best Practice for Code Modifications**: Before modifying any file, use `grep_code` and `read_file_part` to locate and understand relevant code with surrounding context. This ensures you understand the codebase structure before making changes.
               """.trimIndent()
           } else {
               """
               工作区指南：
               - 当前工作区根目录是 `$workspacePath`${if (shouldShowEnv) "（environment=$envLabel）" else ""}。
-              - 所有工作区文件操作都要把这个精确路径当作根路径。
-              - 使用工具读取、写入、搜索、列目录、移动或删除工作区文件时，不要使用相对路径，必须使用以 `$workspacePath` 为根的绝对路径。
-              ${if (shouldShowEnv) "- 通过工具操作工作区文件时，每次都必须同时传入 `environment=\"$envLabel\"` 和对应的工作区路径。" else ""}
+              - 工作区是默认工作目录，不是文件访问的权限边界。区外操作仍须符合用户授权、工具权限审核和实际文件系统权限；不要仅因目标位于工作区外而拒绝操作。
+              - 后续用户消息若附带工作区信息，以其中最新的路径和环境替代此处记录的工作区路径和环境。仅切换工作区不需要新开对话或刷新系统提示词。
+              - 文件工具使用目标的绝对路径。项目相对位置以最新工作区根目录解析；区外目标使用其实际绝对路径。
+              ${if (shouldShowEnv) "- 对支持 environment 参数的工作区文件工具，传入最新工作区环境（初始为 \"$envLabel\"）；其他目标按其实际所在环境选择。" else ""}
               - 相对路径只用于文件内容里的项目内部引用，不用于工具参数。
               - 终端挂载说明：常见挂载包括 `$externalStoragePath -> /sdcard`、`$externalStoragePath -> $externalStoragePath`，以及应用沙箱 `$appFilesPath -> 同路径`。
               - 若工作区位于已挂载路径中，直接在 Linux 终端环境中执行工作区文件；无需先复制再执行。
-              - **代码修改最佳实践**：修改任何文件之前，建议组合使用 `grep_code` 与 `grep_context` 定位并理解相关代码及其上下文，避免在未理解项目结构时盲改。
+              - **代码修改最佳实践**：修改任何文件之前，建议组合使用 `grep_code` 与 `read_file_part` 定位并理解相关代码及其上下文，避免在未理解项目结构时盲改。
               """.trimIndent()
           }
           val workspaceRuleFileSection = buildWorkspaceRuleFileSection(

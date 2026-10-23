@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="components_title">Components and downloads</string>
+    <string name="components_subtitle">Manage terminal archives, local voice models, and export templates</string>
+    <string name="components_intro">Download components when needed and remove unused ones to free space. Downloads continue after leaving this page. Downloading a voice model does not change your active voice profile.</string>
+    <string name="component_terminal_detail">Ubuntu installer cache. Open the terminal to install it. Removing this cache keeps your terminal environment, installed software, and personal files.</string>
+    <string name="component_terminal_installed">Terminal environment installed. Its installer cache can be removed separately.</string>
+    <string name="component_export_detail">Used to export a web page as a standalone app. Removing this template does not affect previously exported apps.</string>
+    <string name="component_download_size">Full download size: %1$s</string>
+    <string name="component_loading">Checking local resources…</string>
+    <string name="component_ready">Downloaded</string>
+    <string name="component_partial">Partially downloaded</string>
+    <string name="component_missing">Not downloaded</string>
+    <string name="component_download">Download</string>
+    <string name="component_delete_detail">Remove this component and its partial downloads. You can download it again later. Chat history, voice profiles, and personal terminal files are kept.</string>
+    <string name="component_in_use">This component is in use. Try removing it later.</string>
+</resources>

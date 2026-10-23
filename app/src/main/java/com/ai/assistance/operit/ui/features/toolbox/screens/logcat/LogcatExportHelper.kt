@@ -7,6 +7,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.util.AppLogger
+import com.ai.assistance.operit.util.LogFlushResult
 import com.ai.assistance.operit.util.MemoryDiagnostics
 import java.io.BufferedOutputStream
 import java.io.BufferedWriter
@@ -32,7 +33,7 @@ object LogcatExportHelper {
 
     suspend fun exportLogs(context: Context): LogcatExportResult = withContext(Dispatchers.IO) {
         try {
-            val fullyFlushed = AppLogger.flushFileLogs()
+            val flush = AppLogger.flushFileLogsWithResult()
             val logFile = AppLogger.getLogFile()?.takeIf { it.isFile && it.length() > 0 }
             val logLineCount = logFile?.let(::countExportableLogLines) ?: 0L
             if (logLineCount == 0L && !MemoryDiagnostics.hasRecords(context)) {
@@ -48,14 +49,22 @@ object LogcatExportHelper {
             val entryName = "operit_log_$timestamp.txt"
             val fileName = "$entryName.zip"
             val filePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                saveUsingMediaStore(context, fileName, entryName, logFile, logLineCount)
+                saveUsingMediaStore(context, fileName, entryName, logFile, logLineCount, flush)
             } else {
-                saveUsingFileSystem(context, fileName, entryName, logFile, logLineCount)
+                saveUsingFileSystem(context, fileName, entryName, logFile, logLineCount, flush)
             }
 
             LogcatExportResult(
-                message = if (fullyFlushed) context.getString(R.string.logcat_saved_to, filePath)
-                    else context.getString(R.string.logcat_flush_incomplete, filePath),
+                message = if (flush.complete) context.getString(R.string.logcat_saved_to, filePath)
+                    else {
+                        val reasons = buildList {
+                            if (flush.pendingRecords > 0) add(context.getString(R.string.logcat_export_pending, flush.pendingRecords))
+                            if (flush.droppedRecords > 0) add(context.getString(R.string.logcat_export_dropped, flush.droppedRecords))
+                            if (flush.writeFailed) add(context.getString(R.string.logcat_export_write_failed))
+                            if (flush.interrupted) add(context.getString(R.string.logcat_export_interrupted))
+                        }
+                        context.getString(R.string.logcat_flush_incomplete, filePath) + "\n" + reasons.joinToString("\n")
+                    },
                 success = true
             )
         } catch (e: Exception) {
@@ -115,13 +124,22 @@ object LogcatExportHelper {
         outputStream: OutputStream,
         entryName: String,
         logFile: File?,
-        logLineCount: Long
+        logLineCount: Long,
+        flush: LogFlushResult,
     ) {
         ZipOutputStream(BufferedOutputStream(outputStream)).use { zip ->
             zip.putNextEntry(ZipEntry(entryName))
             val writer = BufferedWriter(OutputStreamWriter(zip, Charsets.UTF_8))
             writeLogContent(context, writer, logFile, logLineCount)
             writer.flush()
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("export-status.txt"))
+            zip.write(
+                ("scope=records submitted before export started\n" +
+                    "complete=${flush.complete}\npending_records=${flush.pendingRecords}\n" +
+                    "dropped_records=${flush.droppedRecords}\nwrite_failed=${flush.writeFailed}\n" +
+                    "interrupted=${flush.interrupted}\n").toByteArray(Charsets.UTF_8)
+            )
             zip.closeEntry()
             MemoryDiagnostics.exportTo(context, zip)
         }
@@ -133,7 +151,8 @@ object LogcatExportHelper {
         fileName: String,
         entryName: String,
         logFile: File?,
-        logLineCount: Long
+        logLineCount: Long,
+        flush: LogFlushResult,
     ): String {
         try {
             val contentValues = ContentValues().apply {
@@ -147,7 +166,7 @@ object LogcatExportHelper {
             ) ?: throw Exception(context.getString(R.string.logcat_cannot_create_file))
 
             context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                writeZipLog(context, outputStream, entryName, logFile, logLineCount)
+                writeZipLog(context, outputStream, entryName, logFile, logLineCount, flush)
             } ?: throw Exception(context.getString(R.string.logcat_cannot_open_output_stream))
 
             val downloadsDir =
@@ -163,7 +182,8 @@ object LogcatExportHelper {
         fileName: String,
         entryName: String,
         logFile: File?,
-        logLineCount: Long
+        logLineCount: Long,
+        flush: LogFlushResult,
     ): String {
         try {
             val downloadsDir =
@@ -177,7 +197,7 @@ object LogcatExportHelper {
             }
             val file = File(operitDir, fileName)
             FileOutputStream(file).use { outputStream ->
-                writeZipLog(context, outputStream, entryName, logFile, logLineCount)
+                writeZipLog(context, outputStream, entryName, logFile, logLineCount, flush)
             }
             if (!file.exists() || file.length() == 0L) {
                 throw Exception(context.getString(R.string.logcat_file_create_failed))

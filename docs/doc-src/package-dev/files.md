@@ -146,10 +146,6 @@ grep(path, pattern, {
 
 做正则级内容检索，返回 `GrepResultData`。
 
-#### `grepContext(path, intent, options?)`
-
-按意图做语义相关内容检索，返回 `GrepResultData`。
-
 ### 压缩、打开、分享、下载
 
 #### `zip(source, destination, environment?, include_root_directory?)`

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import com.ai.assistance.operit.data.preferences.ActivePromptManager
 import com.ai.assistance.operit.data.repository.CustomEmojiRepository
+import com.ai.assistance.operit.util.markdown.InlineDirectives
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
 import com.ai.assistance.operit.util.stream.Stream
 import com.ai.assistance.operit.util.stream.stream
@@ -716,7 +717,7 @@ object WaifuMessageProcessor {
                 )
             )
 
-        return sanitizedContent
+        return InlineDirectives.toPlainText(sanitizedContent)
             .replace(FENCED_CODE_BLOCK_REGEX, " ")
             .replace(UNCLOSED_FENCED_CODE_BLOCK_REGEX, " ")
             // 移除状态标签

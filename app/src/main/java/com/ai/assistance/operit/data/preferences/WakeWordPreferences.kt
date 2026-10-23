@@ -23,6 +23,11 @@ private val Context.wakeWordPreferencesDataStore: DataStore<Preferences> by
 class WakeWordPreferences(private val context: Context) {
 
     private val dataStore = context.wakeWordPreferencesDataStore
+    private val voiceInterruptionKey = booleanPreferencesKey("voice_interruption_enabled")
+    val voiceInterruptionEnabledFlow: Flow<Boolean> = dataStore.data.map { it[voiceInterruptionKey] ?: false }
+    suspend fun saveVoiceInterruptionEnabled(enabled: Boolean) {
+        dataStore.edit { it[voiceInterruptionKey] = enabled }
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true

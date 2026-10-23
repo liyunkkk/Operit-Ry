@@ -4,6 +4,10 @@ import kotlinx.coroutines.flow.Flow
 
 /** 语音服务接口，定义与不同语音引擎进行交互的标准方法 */
 interface VoiceService {
+    /** Provider bounds and pipelines long text internally. */
+    val supportsLongText: Boolean get() = false
+    /** True only when the active player reports a private output, never just a connected device. */
+    val isPlayingThroughHeadphones: Boolean get() = false
     /** 当前语音引擎是否初始化完成 */
     val isInitialized: Boolean
 

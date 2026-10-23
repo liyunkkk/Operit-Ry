@@ -1571,7 +1571,12 @@ export function useChatViewModel(): ChatViewModel {
     }
 
     try {
-      const nextSettings = await updateInputSettingsOnServer(token, payload);
+      const chatId = selectedChatIdRef.current;
+      const nextSettings = await updateInputSettingsOnServer(token, {
+        ...payload,
+        ...(chatId ? { chat_id: chatId } : {}),
+      });
+      if (selectedChatIdRef.current !== chatId) return;
       setInputSettings(nextSettings);
       setError(null);
     } catch (actionError: unknown) {

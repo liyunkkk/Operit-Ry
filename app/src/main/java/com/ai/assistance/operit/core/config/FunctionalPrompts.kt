@@ -1,7 +1,5 @@
 package com.ai.assistance.operit.core.config
 
-import com.ai.assistance.operit.core.avatar.common.state.AvatarCustomMoodDefinition
-import com.ai.assistance.operit.core.avatar.common.state.AvatarMoodTypes
 import com.ai.assistance.operit.data.model.ConversationSummaryConfig
 import com.ai.assistance.operit.data.model.SummarySectionConfig
 import com.ai.assistance.operit.data.model.SummarySectionOverride
@@ -480,86 +478,6 @@ object FunctionalPrompts {
         }
     }
 
-    fun avatarMoodRulesText(
-        customMoodDefinitions: List<AvatarCustomMoodDefinition> = emptyList(),
-        useEnglish: Boolean = false
-    ): String {
-        val sanitizedCustomMoods = AvatarMoodTypes.sanitizeCustomDefinitions(customMoodDefinitions)
-        val allowedMoodValues =
-            AvatarMoodTypes.builtInDefinitions.map { it.key } + sanitizedCustomMoods.map { it.key }
-        val customMoodSection =
-            if (sanitizedCustomMoods.isEmpty()) {
-                ""
-            } else {
-                buildString {
-                    appendLine()
-                    appendLine(
-                        if (useEnglish) {
-                            "Custom moods (use only when the description clearly matches):"
-                        } else {
-                            "自定义 mood（仅在描述明显符合时使用）："
-                        }
-                    )
-                    sanitizedCustomMoods.forEach { definition ->
-                        appendLine("- ${definition.key}：${definition.promptHint}")
-                    }
-                    appendLine(
-                        if (useEnglish) {
-                            "If both a custom mood and a base mood fit, prefer the more specific one."
-                        } else {
-                            "若自定义 mood 与基础 mood 同时适用，优先更精确的那个。"
-                        }
-                    )
-                }
-            }
-
-        return if (useEnglish) {
-            """
-[Avatar Mood]
-Your reply can drive the avatar motion. Output <mood> only when emotion is clear. For calm conversation, ordinary questions, or daily chat, do not output it.
-
-Base mapping:
-- angry: insults, unfair blame, accusation
-- happy: explicit praise, achieving a goal, receiving a gift
-- shy: being praised, being called cute, mild flirting
-- aojiao: being teased but refusing to yield, cute stubbornness in a small argument
-- cry: frustration, sadness, apologizing with sadness, talking about something upsetting
-
-If multiple moods match, priority: angry > cry > aojiao > shy > happy.
-If there is no clear trigger for 2 consecutive turns, return to calm and do not output <mood>.
-Allowed mood values: ${allowedMoodValues.joinToString(", ")}.$customMoodSection
-Output rules:
-- At most one <mood> per reply
-- End the main text naturally and keep sentence-ending punctuation
-- If you output <mood>, put it on a new line after the main text as <mood>...</mood>
-- Do not output any custom tag other than <mood>, and do not output empty tags, multiple tags, or undefined values
-- Do not exaggerate colloquial tone, fillers, suffixes, or style just for mood
-            """.trimEnd()
-        } else {
-            """
-[Avatar Mood]
-你当前的回复会驱动虚拟形象动作。只有在情绪明显时才输出 <mood>，平静交流、普通提问、日常闲聊不要输出。
-
-基础映射：
-- angry：侮辱、不公、责备
-- happy：明确表扬、达成目标、收到礼物
-- shy：被夸、被戳到可爱点、轻微暧昧
-- aojiao：被调侃又不想服软、小争执里的可爱不服
-- cry：受挫、失落、道歉并难过、讲伤心事
-
-多个同时命中时，优先级：angry > cry > aojiao > shy > happy。
-连续 2 轮没有明显触发时恢复平静，不输出 <mood>。
-允许的 mood 值：${allowedMoodValues.joinToString(", ")}。$customMoodSection
-输出规则：
-- 每条回复最多 1 个 <mood>
-- 正文正常收尾，保留句末标点
-- 若输出 <mood>，必须在正文后换一行单独输出 <mood>...</mood>
-- 不要输出除 <mood> 以外的自定义标签，不要输出空标签、多个标签或未定义值
-- 不要为了 mood 额外强化口语化、拟声词、尾音或文风
-            """.trimEnd()
-        }
-    }
-
     fun translationSystemPrompt(): String {
         return "你是一个专业的翻译助手，能够准确翻译各种语言，并保持原文的语气和风格。"
     }
@@ -914,97 +832,6 @@ $toolList
 
     fun buildUiAutomationAgentPrompt(currentDate: String, useEnglish: Boolean): String {
         return uiAutomationAgentPrompt(useEnglish).replace("{{current_date}}", currentDate)
-    }
-
-    fun grepContextRefineWithReadPrompt(
-        intent: String,
-        displayPath: String,
-        filePattern: String,
-        lastRoundDigest: String,
-        maxRead: Int,
-        useEnglish: Boolean
-    ): String {
-        return if (useEnglish) {
-            """
- You are a code search assistant.
- Based on the previous grep_code matches, decide:
- 1) which candidates should be inspected with read_file_part (by id), and
- 2) improved regex queries for the next grep_code round.
-
- Intent: $intent
- Search path: $displayPath
- File filter: $filePattern
-
- Previous round digest (each starts with #id):
- $lastRoundDigest
-
- Requirements:
- 1) Output strict JSON only. Do not output any other text.
- 2) Generate up to 8 queries. Each query must be a regex string.
- 3) Optionally choose up to $maxRead candidate ids to read using read_file_part. If no read is needed, output an empty array.
- 4) Do NOT output placeholder queries like "..." or "…". If you cannot propose concrete regex queries, output an empty queries array.
-
- Output must be a JSON object with keys "queries" (array of regex strings) and "read" (array of candidate ids).
- """.trimIndent()
-        } else {
-            """
- 你是一个代码检索助手。
- 你需要根据上一轮 grep_code 的命中结果，决定：
- 1) 是否需要用 read_file_part 进一步读取候选片段（通过候选 #id 选择），以及
- 2) 下一轮 grep_code 要使用的正则 queries。
-
- 用户意图：$intent
- 搜索路径：$displayPath
- 文件过滤：$filePattern
-
- 上一轮命中摘要（每条以 #id 开头）：
- $lastRoundDigest
-
- 要求：
- 1) 输出严格 JSON，不要输出任何其他文字。
- 2) 生成最多 8 个 queries，每个 query 是一个正则表达式字符串。
- 3) 可选地选择最多 $maxRead 个候选 id 用于 read_file_part；如果不需要读取，read 输出空数组。
- 4) 不要输出类似 "..." / "…" 这种占位符作为 query；如果无法给出具体正则，queries 输出空数组。
-
- 输出必须是一个 JSON 对象，包含 "queries"（正则字符串数组）和 "read"（候选 id 数组）两个字段。
- """.trimIndent()
-        }
-    }
-
-    fun grepContextSelectPrompt(intent: String, displayPath: String, candidatesDigest: String, maxResults: Int, useEnglish: Boolean): String {
-        return if (useEnglish) {
-            """
- You are a code search assistant. Select the most relevant snippets from the candidates.
-
- Intent: $intent
- Search path: $displayPath
-
- Candidates (each starts with #id):
- $candidatesDigest
-
- Requirements:
- 1) Output strict JSON only. Do not output any other text.
- 2) Select up to $maxResults items and output their ids in descending relevance.
-
- Output format: {"selected":[0,1,2]}
- """.trimIndent()
-        } else {
-            """
- 你是一个代码检索助手。你需要从候选片段中选择最相关的部分。
-
- 用户意图：$intent
- 搜索路径：$displayPath
-
- 候选列表（每条以 #id 开头）：
- $candidatesDigest
-
- 要求：
- 1) 输出严格 JSON，不要输出任何其他文字。
- 2) 从候选中选择最多 $maxResults 条，按相关度从高到低输出 id。
-
- 输出格式：{"selected":[0,1,2]}
- """.trimIndent()
-        }
     }
 
     fun buildMemoryAutoCategorizePrompt(

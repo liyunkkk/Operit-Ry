@@ -1,55 +1,102 @@
 package com.ai.assistance.operit.ui.features.settings.screens
 
+import android.view.WindowManager
+import com.ai.assistance.operit.ui.main.components.LocalIsCurrentScreen
+import com.ai.assistance.operit.ui.main.components.LocalSetScreenSoftInputMode
 import android.widget.Toast
-import androidx.compose.foundation.layout.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.text.style.TextOverflow
-import java.text.DecimalFormat
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
 import com.ai.assistance.operit.R
+import com.ai.assistance.operit.core.tools.defaultTool.standard.CookiePrivacyManager
 import com.ai.assistance.operit.core.tools.skill.SkillManager
 import com.ai.assistance.operit.data.mcp.MCPRepository
-import com.ai.assistance.operit.core.tools.defaultTool.standard.CookiePrivacyManager
-import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.preferences.LegacyStoragePreferences
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
-import com.ai.assistance.operit.data.repository.ChatHistoryManager
 import com.ai.assistance.operit.data.repository.WorkflowRepository
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsInfoBanner
+import com.ai.assistance.operit.ui.features.settings.components.SettingsNavRow
+import com.ai.assistance.operit.ui.features.settings.components.SettingsRowDivider
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSearchFocus
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSwitchRow
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
 import com.ai.assistance.operit.util.AppLogger
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.graphics.Color
 
 // 保存滑动状态变量，使其跨重组保持
 private val SettingsScreenScrollPosition = mutableStateOf(0)
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** A row on the settings home page; also what the search box looks through. */
+private data class SettingsEntry(
+        val title: String,
+        val subtitle: String,
+        val icon: ImageVector,
+        val onClick: () -> Unit = {},
+        /** Set for an on/off switch shown in place of a link. */
+        val toggle: SettingsToggle? = null,
+        /** Extra words that should find this row, such as its group name. */
+        val keywords: String = "",
+        /** Deletes data: shown in red and without the "open page" arrow. */
+        val destructive: Boolean = false,
+        /** An option inside a sub page: found by its own name, not just by its page name. */
+        val isOption: Boolean = false
+)
+
+private data class SettingsToggle(
+        val checked: Boolean,
+        val enabled: Boolean,
+        val onCheckedChange: (Boolean) -> Unit
+)
+
+private data class SettingsGroup(
+        val title: String,
+        val icon: ImageVector,
+        val entries: List<SettingsEntry>,
+        val note: String? = null
+)
+
 @Composable
 fun SettingsScreen(
         onNavigateToUserPreferences: () -> Unit,
@@ -64,6 +111,8 @@ fun SettingsScreen(
         navigateToChatBackupSettings: () -> Unit,
         navigateToLanguageSettings: () -> Unit,
         navigateToSpeechServicesSettings: () -> Unit,
+        navigateToComponents: () -> Unit,
+        navigateToStorage: () -> Unit,
         navigateToExternalHttpChatSettings: () -> Unit,
         navigateToPersonaCardGeneration: () -> Unit,
         navigateToWaifuModeSettings: () -> Unit,
@@ -80,6 +129,16 @@ fun SettingsScreen(
         val scope = rememberCoroutineScope()
         var showClearCookieConfirm by remember { mutableStateOf(false) }
 
+        // The search bar lifts itself above the keyboard (imePadding). Stop the window from also
+        // panning the whole page up, which pushed the bar far above the keyboard.
+        val isCurrentScreen = LocalIsCurrentScreen.current
+        val setScreenSoftInputMode = LocalSetScreenSoftInputMode.current
+        SideEffect {
+                if (isCurrentScreen) {
+                        setScreenSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+                }
+        }
+
         val readLegacySkills = legacyStorage.readLegacySkillsFlow().collectAsState(initial = false).value
         val readLegacyMcp = legacyStorage.readLegacyMcpFlow().collectAsState(initial = false).value
         val readLegacyWorkflows = legacyStorage.readLegacyWorkflowsFlow().collectAsState(initial = false).value
@@ -91,8 +150,6 @@ fun SettingsScreen(
 
         // 创建和记住滚动状态，设置为上次保存的位置
         val scrollState = rememberScrollState(SettingsScreenScrollPosition.value)
-
-        // 当滚动状态改变时更新保存的位置
         LaunchedEffect(scrollState) {
                 snapshotFlow { scrollState.value }.collect { position ->
                         SettingsScreenScrollPosition.value = position
@@ -100,292 +157,184 @@ fun SettingsScreen(
         }
 
         val hasBackgroundImage = userPreferences.useBackgroundImage.collectAsState(initial = false).value
-        
-        val cardContainerColor = if (hasBackgroundImage) {
-                MaterialTheme.colorScheme.surface
-        } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        val cardColor = settingsCardColor(hasBackgroundImage)
+
+        fun updateLegacySwitch(key: String, logMessage: String, action: suspend () -> Unit) {
+                scope.launch {
+                        legacySwitchUpdate = key
+                        try {
+                                action()
+                        } catch (e: Exception) {
+                                AppLogger.e("SettingsScreen", logMessage, e)
+                                Toast.makeText(context, legacyStorageUpdateFailedMessage, Toast.LENGTH_SHORT).show()
+                        } finally {
+                                legacySwitchUpdate = null
+                        }
+                }
         }
+        val legacyEnabled = legacySwitchUpdate == null
 
-        Column(
-                modifier = Modifier.fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .verticalScroll(scrollState)
-        ) {
-                // ======= 个性化配置 =======
-                SettingsSection(
-                        title = stringResource(id = R.string.settings_section_personalization),
+        val groups = listOf(
+                SettingsGroup(
+                        title = stringResource(R.string.settings_section_personalization),
                         icon = Icons.Default.Person,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_user_preferences),
-                                subtitle = stringResource(id = R.string.settings_user_preferences_subtitle),
-                                icon = Icons.Default.Face,
-                                onClick = onNavigateToUserPreferences
+                        entries = listOf(
+                                SettingsEntry(stringResource(R.string.settings_user_preferences), stringResource(R.string.settings_user_preferences_subtitle), Icons.Default.Face, onNavigateToUserPreferences),
+                                SettingsEntry(stringResource(R.string.language_settings), stringResource(R.string.settings_language_subtitle), Icons.Default.Language, navigateToLanguageSettings),
+                                SettingsEntry(stringResource(R.string.settings_theme_appearance), stringResource(R.string.settings_theme_subtitle), Icons.Default.Palette, navigateToThemeSettings),
+                                SettingsEntry(stringResource(R.string.settings_global_display), stringResource(R.string.settings_global_display_subtitle), Icons.Default.Visibility, navigateToGlobalDisplaySettings),
+                                SettingsEntry(stringResource(R.string.layout_adjustment), stringResource(R.string.layout_adjustment_subtitle), Icons.Default.AspectRatio, navigateToLayoutAdjustmentSettings)
                         )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(R.string.language_settings),
-                                subtitle = stringResource(id = R.string.settings_language_subtitle),
-                                icon = Icons.Default.Language,
-                                onClick = navigateToLanguageSettings
-                        )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_theme_appearance),
-                                subtitle = stringResource(id = R.string.settings_theme_subtitle),
-                                icon = Icons.Default.Palette,
-                                onClick = navigateToThemeSettings
-                        )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(R.string.settings_global_display),
-                                subtitle = stringResource(R.string.settings_global_display_subtitle),
-                                icon = Icons.Default.Visibility,
-                                onClick = navigateToGlobalDisplaySettings
-                        )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(R.string.layout_adjustment),
-                                subtitle = stringResource(R.string.layout_adjustment_subtitle),
-                                icon = Icons.Default.AspectRatio,
-                                onClick = navigateToLayoutAdjustmentSettings
-                        )
-                }
-
-                // ======= AI模型配置 =======
-                SettingsSection(
-                        title = stringResource(id = R.string.settings_section_ai_model),
+                ),
+                SettingsGroup(
+                        title = stringResource(R.string.settings_section_ai_model),
                         icon = Icons.Default.Settings,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_model_parameters),
-                                subtitle = stringResource(id = R.string.settings_model_params_subtitle),
-                                icon = Icons.Default.Api,
-                                onClick = navigateToModelConfig
+                        entries = listOf(
+                                SettingsEntry(stringResource(R.string.settings_model_parameters), stringResource(R.string.settings_model_params_subtitle), Icons.Default.Api, navigateToModelConfig),
+                                SettingsEntry(stringResource(R.string.settings_agent_profiles), stringResource(R.string.settings_agent_profiles_subtitle), Icons.Default.AccountTree, navigateToAgentProfiles),
+                                SettingsEntry(stringResource(R.string.settings_functional_model), stringResource(R.string.settings_functional_model_subtitle), Icons.Default.Tune, navigateToFunctionalConfig),
+                                SettingsEntry(stringResource(R.string.settings_section_context_summary), stringResource(R.string.settings_context_summary_subtitle), Icons.Default.Summarize, navigateToContextSummarySettings),
+                                SettingsEntry(stringResource(R.string.settings_speech_services), stringResource(R.string.settings_speech_services_subtitle), Icons.Default.RecordVoiceOver, navigateToSpeechServicesSettings)
                         )
-
-                        CompactSettingsItem(
-                                title = stringResource(R.string.settings_agent_profiles),
-                                subtitle = stringResource(R.string.settings_agent_profiles_subtitle),
-                                icon = Icons.Default.AccountTree,
-                                onClick = navigateToAgentProfiles
-                        )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_functional_model),
-                                subtitle = stringResource(id = R.string.settings_functional_model_subtitle),
-                                icon = Icons.Default.Tune,
-                                onClick = navigateToFunctionalConfig
-                        )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_speech_services),
-                                subtitle = stringResource(id = R.string.settings_speech_services_subtitle),
-                                icon = Icons.Default.RecordVoiceOver,
-                                onClick = navigateToSpeechServicesSettings
-                        )
-                        
-                }
-
-                // ======= 提示词配置 =======
-                SettingsSection(
+                ),
+                SettingsGroup(
                         title = stringResource(R.string.settings_prompt_section),
                         icon = Icons.Default.Message,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(R.string.settings_prompt_title),
-                                subtitle = stringResource(id = R.string.settings_system_prompts_subtitle),
-                                icon = Icons.Default.ChatBubble,
-                                onClick = navigateToModelPrompts
+                        entries = listOf(
+                                SettingsEntry(stringResource(R.string.settings_prompt_title), stringResource(R.string.settings_system_prompts_subtitle), Icons.Default.ChatBubble, navigateToModelPrompts),
+                                SettingsEntry(stringResource(R.string.persona_card_generation), stringResource(R.string.persona_card_generation_desc), Icons.Default.Face, navigateToPersonaCardGeneration),
+                                SettingsEntry(stringResource(R.string.waifu_mode_settings), stringResource(R.string.waifu_mode_settings_desc), Icons.Default.EmojiEmotions, navigateToWaifuModeSettings)
                         )
-                        
-                        // 新增：人设卡生成
-                        CompactSettingsItem(
-                                title = stringResource(R.string.persona_card_generation),
-                                subtitle = stringResource(R.string.persona_card_generation_desc),
-                                icon = Icons.Default.Face,
-                                onClick = navigateToPersonaCardGeneration
-                        )
-                        
-                        // 新增：Waifu模式设置
-                        CompactSettingsItem(
-                                title = stringResource(R.string.waifu_mode_settings),
-                                subtitle = stringResource(R.string.waifu_mode_settings_desc),
-                                icon = Icons.Default.EmojiEmotions,
-                                onClick = navigateToWaifuModeSettings
-                        )
-                }
-
-                // ======= 上下文和总结设置 =======
-                SettingsSection(
-                        title = stringResource(id = R.string.settings_section_context_summary),
-                        icon = Icons.Default.Analytics,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_section_context_summary),
-                                subtitle = stringResource(id = R.string.settings_context_summary_subtitle),
-                                icon = Icons.Default.Tune,
-                                onClick = navigateToContextSummarySettings
-                        )
-                }
-
-                // ======= 数据和权限 =======
-                SettingsSection(
-                        title = stringResource(id = R.string.settings_data_permissions),
+                ),
+                SettingsGroup(
+                        title = stringResource(R.string.settings_data_permissions),
                         icon = Icons.Default.Security,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_tool_permissions),
-                                subtitle = stringResource(id = R.string.settings_tool_permissions_subtitle),
-                                icon = Icons.Default.AdminPanelSettings,
-                                onClick = navigateToToolPermissions
+                        entries = listOf(
+                                SettingsEntry(stringResource(R.string.components_title), stringResource(R.string.components_subtitle), Icons.Default.Extension, navigateToComponents),
+                                SettingsEntry(stringResource(R.string.storage_title), stringResource(R.string.storage_subtitle), Icons.Default.Storage, navigateToStorage),
+                                SettingsEntry(stringResource(R.string.settings_tool_permissions), stringResource(R.string.settings_tool_permissions_subtitle), Icons.Default.AdminPanelSettings, navigateToToolPermissions),
+                                SettingsEntry(stringResource(R.string.settings_data_backup), stringResource(R.string.settings_data_backup_desc), Icons.Default.CloudUpload, navigateToChatBackupSettings),
+                                SettingsEntry(stringResource(R.string.settings_chat_history_management), stringResource(R.string.settings_chat_history_management_subtitle), Icons.Default.ManageHistory, navigateToChatHistorySettings),
+                                SettingsEntry(stringResource(R.string.settings_token_usage_stats), stringResource(R.string.settings_token_usage_subtitle), Icons.Default.Analytics, navigateToTokenUsageStatistics)
                         )
-
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_data_backup),
-                                subtitle = stringResource(id = R.string.settings_data_backup_desc),
-                                icon = Icons.Default.CloudUpload,
-                                onClick = navigateToChatBackupSettings
-                        )
-                        
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_chat_history_management),
-                                subtitle = stringResource(id = R.string.settings_chat_history_management_subtitle),
-                                icon = Icons.Default.ManageHistory,
-                                onClick = navigateToChatHistorySettings
-                        )
-
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_token_usage_stats),
-                                subtitle = stringResource(id = R.string.settings_token_usage_subtitle),
-                                icon = Icons.Default.Analytics,
-                                onClick = navigateToTokenUsageStatistics
-                        )
-                }
-
-                SettingsSection(
+                ),
+                SettingsGroup(
                         title = stringResource(R.string.settings_legacy_storage_title),
                         icon = Icons.Default.FolderOpen,
-                        containerColor = cardContainerColor
-                ) {
-                        Text(
-                                text = stringResource(R.string.settings_legacy_storage_description),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                        CompactToggleWithDescription(
-                                title = stringResource(R.string.settings_legacy_skills_title),
-                                description = stringResource(R.string.settings_legacy_skills_description),
-                                checked = readLegacySkills,
-                                enabled = legacySwitchUpdate == null,
-                                onCheckedChange = { enabled ->
-                                        scope.launch {
-                                                legacySwitchUpdate = "skills"
-                                                try {
+                        note = stringResource(R.string.settings_legacy_storage_description),
+                        entries = listOf(
+                                SettingsEntry(
+                                        stringResource(R.string.settings_legacy_skills_title),
+                                        stringResource(R.string.settings_legacy_skills_description),
+                                        Icons.Default.FolderOpen,
+                                        toggle = SettingsToggle(readLegacySkills, legacyEnabled) { enabled ->
+                                                updateLegacySwitch("skills", "Failed to update legacy Skills switch") {
                                                         legacyStorage.setReadLegacySkills(enabled)
-                                                        withContext(Dispatchers.IO) {
-                                                                skillManager.refreshAvailableSkills()
-                                                        }
-                                                } catch (e: Exception) {
-                                                        AppLogger.e("SettingsScreen", "Failed to update legacy Skills switch", e)
-                                                        Toast.makeText(
-                                                                context,
-                                                                legacyStorageUpdateFailedMessage,
-                                                                Toast.LENGTH_SHORT
-                                                        ).show()
-                                                } finally {
-                                                        legacySwitchUpdate = null
+                                                        withContext(Dispatchers.IO) { skillManager.refreshAvailableSkills() }
                                                 }
                                         }
-                                }
-                        )
-                        CompactToggleWithDescription(
-                                title = stringResource(R.string.settings_legacy_mcp_title),
-                                description = stringResource(R.string.settings_legacy_mcp_description),
-                                checked = readLegacyMcp,
-                                enabled = legacySwitchUpdate == null,
-                                onCheckedChange = { enabled ->
-                                        scope.launch {
-                                                legacySwitchUpdate = "mcp"
-                                                try {
+                                ),
+                                SettingsEntry(
+                                        stringResource(R.string.settings_legacy_mcp_title),
+                                        stringResource(R.string.settings_legacy_mcp_description),
+                                        Icons.Default.FolderOpen,
+                                        toggle = SettingsToggle(readLegacyMcp, legacyEnabled) { enabled ->
+                                                updateLegacySwitch("mcp", "Failed to update legacy MCP switch") {
                                                         legacyStorage.setReadLegacyMcp(enabled)
                                                         mcpRepository.onLegacyReadSwitchChanged(enabled)
-                                                } catch (e: Exception) {
-                                                        AppLogger.e("SettingsScreen", "Failed to update legacy MCP switch", e)
-                                                        Toast.makeText(
-                                                                context,
-                                                                legacyStorageUpdateFailedMessage,
-                                                                Toast.LENGTH_SHORT
-                                                        ).show()
-                                                } finally {
-                                                        legacySwitchUpdate = null
                                                 }
                                         }
-                                }
-                        )
-                        CompactToggleWithDescription(
-                                title = stringResource(R.string.settings_legacy_workflows_title),
-                                description = stringResource(R.string.settings_legacy_workflows_description),
-                                checked = readLegacyWorkflows,
-                                enabled = legacySwitchUpdate == null,
-                                onCheckedChange = { enabled ->
-                                        scope.launch {
-                                                legacySwitchUpdate = "workflows"
-                                                try {
+                                ),
+                                SettingsEntry(
+                                        stringResource(R.string.settings_legacy_workflows_title),
+                                        stringResource(R.string.settings_legacy_workflows_description),
+                                        Icons.Default.FolderOpen,
+                                        toggle = SettingsToggle(readLegacyWorkflows, legacyEnabled) { enabled ->
+                                                updateLegacySwitch("workflows", "Failed to update legacy workflow switch") {
                                                         legacyStorage.setReadLegacyWorkflows(enabled)
                                                         workflowRepository.onLegacyReadSwitchChanged(enabled)
-                                                } catch (e: Exception) {
-                                                        AppLogger.e("SettingsScreen", "Failed to update legacy workflow switch", e)
-                                                        Toast.makeText(
-                                                                context,
-                                                                legacyStorageUpdateFailedMessage,
-                                                                Toast.LENGTH_SHORT
-                                                        ).show()
-                                                } finally {
-                                                        legacySwitchUpdate = null
                                                 }
                                         }
+                                )
+                        )
+                ),
+                SettingsGroup(
+                        title = stringResource(R.string.settings_privacy_data_cleanup),
+                        icon = Icons.Default.DeleteSweep,
+                        entries = listOf(
+                                SettingsEntry(stringResource(R.string.settings_clear_cookies), stringResource(R.string.settings_clear_cookies_subtitle), Icons.Default.DeleteSweep, { showClearCookieConfirm = true }, destructive = true)
+                        )
+                ),
+                SettingsGroup(
+                        title = stringResource(R.string.settings_section_external_calls),
+                        icon = Icons.Default.SettingsEthernet,
+                        entries = listOf(
+                                SettingsEntry(stringResource(R.string.settings_external_http_chat), stringResource(R.string.settings_external_http_chat_subtitle), Icons.Default.SettingsEthernet, navigateToExternalHttpChatSettings)
+                        )
+                )
+        )
+
+        // Options inside sub pages, so a search for "帧率" finds the page that holds it.
+        val pageEntries = groups.flatMap { it.entries }
+        fun page(title: String) = pageEntries.first { it.title == title }
+        val optionEntries = settingsOptionEntries(pageOf = ::page)
+
+        var query by rememberSaveable { mutableStateOf("") }
+        val focusManager = LocalFocusManager.current
+        val searching = query.isNotBlank()
+        BackHandler(enabled = searching) {
+                query = ""
+                focusManager.clearFocus()
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+                if (searching) {
+                        val results = searchSettings(
+                                query,
+                                groups.flatMap { group -> group.entries.map { it.copy(keywords = group.title) } } + optionEntries
+                        )
+                        SettingsSearchResults(
+                                results = results,
+                                cardColor = cardColor,
+                                onOpen = { entry ->
+                                        focusManager.clearFocus()
+                                        entry.onClick()
                                 }
                         )
+                } else {
+                        Column(
+                                modifier = Modifier.fillMaxSize()
+                                        .verticalScroll(scrollState)
+                                        .padding(horizontal = 16.dp)
+                                        .padding(top = 8.dp, bottom = SearchBarClearance),
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                                groups.forEach { group ->
+                                        Column {
+                                                SettingsSectionTitle(text = group.title, icon = group.icon)
+                                                if (group.note != null) {
+                                                        SettingsInfoBanner(
+                                                                text = group.note,
+                                                                backgroundColor = cardColor,
+                                                                modifier = Modifier.padding(bottom = 8.dp)
+                                                        )
+                                                }
+                                                SettingsEntriesCard(entries = group.entries, cardColor = cardColor)
+                                        }
+                                }
+                        }
                 }
 
-                // ======= 隐私与数据清理 =======
-                SettingsSection(
-                        title = stringResource(id = R.string.settings_privacy_data_cleanup),
-                        icon = Icons.Default.DeleteSweep,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_clear_cookies),
-                                subtitle = stringResource(id = R.string.settings_clear_cookies_subtitle),
-                                icon = Icons.Default.DeleteSweep,
-                                onClick = { showClearCookieConfirm = true }
-                        )
-                }
-
-                // ======= 外部调用 =======
-                SettingsSection(
-                        title = stringResource(id = R.string.settings_section_external_calls),
-                        icon = Icons.Default.SettingsEthernet,
-                        containerColor = cardContainerColor
-                ) {
-                        CompactSettingsItem(
-                                title = stringResource(id = R.string.settings_external_http_chat),
-                                subtitle = stringResource(id = R.string.settings_external_http_chat_subtitle),
-                                icon = Icons.Default.SettingsEthernet,
-                                onClick = navigateToExternalHttpChatSettings
-                        )
-                }
-
-                // 底部间距
-                Spacer(modifier = Modifier.height(16.dp))
+                SettingsSearchBar(
+                        query = query,
+                        onQueryChange = { query = it },
+                        onClear = {
+                                query = ""
+                                focusManager.clearFocus()
+                        },
+                        onDone = { focusManager.clearFocus() },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                )
         }
 
         if (showClearCookieConfirm) {
@@ -400,18 +349,10 @@ fun SettingsScreen(
                                                 scope.launch {
                                                         try {
                                                                 CookiePrivacyManager.clearAllCookies()
-                                                                Toast.makeText(
-                                                                        context,
-                                                                        clearCookiesSuccessMessage,
-                                                                        Toast.LENGTH_SHORT
-                                                                ).show()
+                                                                Toast.makeText(context, clearCookiesSuccessMessage, Toast.LENGTH_SHORT).show()
                                                         } catch (e: Exception) {
                                                                 AppLogger.e("SettingsScreen", "Failed to clear cookies", e)
-                                                                Toast.makeText(
-                                                                        context,
-                                                                        clearCookiesFailedMessage,
-                                                                        Toast.LENGTH_SHORT
-                                                                ).show()
+                                                                Toast.makeText(context, clearCookiesFailedMessage, Toast.LENGTH_SHORT).show()
                                                         }
                                                 }
                                         }
@@ -428,232 +369,321 @@ fun SettingsScreen(
         }
 }
 
+/** Space left under the list so the floating search bar never covers the last row. */
+private val SearchBarClearance = 88.dp
+
 @Composable
-private fun SettingsSection(
-        title: String,
-        icon: ImageVector,
-        containerColor: Color,
-        content: @Composable ColumnScope.() -> Unit
+private fun settingsOptionEntries(pageOf: (String) -> SettingsEntry): List<SettingsEntry> {
+        fun option(page: SettingsEntry, title: String) =
+                SettingsEntry(
+                        title = title,
+                        subtitle = page.title,
+                        icon = page.icon,
+                        // Remember the option so the opened page scrolls to it and flashes it.
+                        onClick = {
+                                SettingsSearchFocus.request(title)
+                                page.onClick()
+                        },
+                        keywords = page.keywords,
+                        isOption = true
+                )
+
+        @Composable
+        fun page(titleRes: Int) = pageOf(stringResource(titleRes))
+
+        return listOf(
+                page(R.string.settings_global_display) to listOf(
+                        R.string.collapse_completed_process_title,
+                        R.string.tool_collapse_mode_title,
+                        R.string.global_user_name,
+                        R.string.show_fps_counter,
+                        R.string.enable_reply_notification,
+                        R.string.enable_reply_notification_sound,
+                        R.string.enable_reply_notification_vibration,
+                        R.string.enable_enter_to_send,
+                        R.string.composer_predictions,
+                        R.string.keep_screen_on,
+                        R.string.enable_navigation_animation,
+                        R.string.start_with_new_chat,
+                        R.string.ui_accessibility_mode,
+                        R.string.enable_background_keep_alive,
+                        R.string.experimental_virtual_display,
+                        R.string.hide_runtime_task_view,
+                        R.string.visit_web_wait_time_title,
+                        R.string.global_display_virtual_screen_bitrate,
+                        R.string.global_display_status_indicator_style,
+                        R.string.global_display_image_format,
+                        R.string.global_display_image_quality,
+                        R.string.global_display_resolution_scale,
+                        R.string.root_execution_mode_title
+                ),
+                page(R.string.layout_adjustment) to listOf(
+                        R.string.chat_settings_button_end_padding,
+                        R.string.chat_area_horizontal_padding,
+                        R.string.global_text_line_height_multiplier,
+                        R.string.global_text_letter_spacing,
+                        R.string.global_text_paragraph_spacing
+                ),
+                page(R.string.settings_section_context_summary) to listOf(
+                        R.string.max_mode_title,
+                        R.string.chat_context_budget,
+                        R.string.chat_context_auto_compact,
+                        R.string.chat_context_advanced,
+                        R.string.settings_summary_custom_rules,
+                        R.string.settings_summary_structure,
+                        R.string.settings_summary_dialogue_review
+                ),
+                page(R.string.settings_data_backup) to listOf(
+                        R.string.backup_room_db_title,
+                        R.string.backup_room_db_enable_daily,
+                        R.string.backup_raw_snapshot_title,
+                        R.string.backup_official_operit_migration_action,
+                        R.string.stats_quarantine_title
+                ),
+                page(R.string.settings_chat_history_management) to listOf(
+                        R.string.character_card_statistics,
+                        R.string.chat_history_batch_operations_title,
+                        R.string.chat_memory_rebuild_title,
+                        R.string.unbound_workspaces_title
+                ),
+                page(R.string.settings_theme_appearance) to listOf(
+                        R.string.theme_title_mode,
+                        R.string.theme_custom_color,
+                        R.string.theme_enforce_contrast,
+                        R.string.theme_font_settings,
+                        R.string.avatar_customization_title,
+                        R.string.avatar_shape_title,
+                        R.string.input_style_title,
+                        R.string.theme_chat_input_transparent_title,
+                        R.string.chat_style_title,
+                        R.string.chat_style_bubble_color_title,
+                        R.string.chat_style_bubble_user_image_title,
+                        R.string.chat_style_bubble_ai_image_title,
+                        R.string.display_options_title,
+                        R.string.show_thinking_process,
+                        R.string.show_model_name,
+                        R.string.show_user_name,
+                        R.string.theme_title_color,
+                        R.string.theme_statusbar_color,
+                        R.string.theme_navigation_drawer_title,
+                        R.string.theme_chat_header_transparent_title,
+                        R.string.theme_title_background,
+                        R.string.theme_background_blur,
+                        R.string.theme_reset
+                ),
+                page(R.string.settings_functional_model) to listOf(
+                        R.string.function_type_chat,
+                        R.string.function_type_summary,
+                        R.string.function_type_title_generation,
+                        R.string.function_type_memory,
+                        R.string.function_type_translation,
+                        R.string.function_type_permission_reviewer,
+                        R.string.function_type_image_recognition,
+                        R.string.function_type_audio_recognition,
+                        R.string.function_type_video_recognition,
+                        R.string.reset_all_functions_to_default
+                ),
+                page(R.string.settings_agent_profiles) to listOf(
+                        R.string.agent_profile_add,
+                        R.string.agent_profile_model_binding
+                ),
+                page(R.string.settings_speech_services) to listOf(
+                        R.string.speech_services_tts_engine,
+                        R.string.speech_services_stt_engine,
+                        R.string.speech_services_tts_profiles,
+                        R.string.speech_services_stt_profiles,
+                        R.string.speech_services_tts_cleaner_title,
+                        R.string.speech_services_test_tts
+                ),
+                page(R.string.waifu_mode_settings) to listOf(
+                        R.string.enable_waifu_mode,
+                        R.string.waifu_merge_send,
+                        R.string.typing_speed_settings,
+                        R.string.remove_punctuation,
+                        R.string.waifu_custom_prompt,
+                        R.string.enable_emoticons,
+                        R.string.manage_custom_emoji,
+                        R.string.enable_selfie_feature,
+                        R.string.appearance_prompt
+                ),
+                page(R.string.settings_tool_permissions) to listOf(
+                        R.string.global_permission_switch,
+                        R.string.permission_review_policy_title,
+                        R.string.permission_level_auto_review,
+                        R.string.add_tool
+                ),
+                page(R.string.settings_external_http_chat) to listOf(
+                        R.string.external_http_chat_enable,
+                        R.string.external_http_chat_port,
+                        R.string.external_http_chat_token,
+                        R.string.external_http_chat_web_title
+                )
+        ).flatMap { (page, titles) -> titles.map { option(page, stringResource(it)) } }
+}
+
+/**
+ * Every word of the query must appear in the title or subtitle; title hits come first.
+ * An option also needs a word in its own name, so "主题" does not list every option on the theme page.
+ */
+private fun searchSettings(query: String, entries: List<SettingsEntry>): List<SettingsEntry> {
+        val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.isEmpty()) return emptyList()
+        return entries
+                .filter { entry ->
+                        val text = (entry.title + " " + entry.subtitle + " " + entry.keywords).lowercase()
+                        val title = entry.title.lowercase()
+                        words.all { text.contains(it) } && (!entry.isOption || words.any { title.contains(it) })
+                }
+                .distinctBy { it.title to it.subtitle }
+                .sortedBy { entry ->
+                        val title = entry.title.lowercase()
+                        when {
+                                words.all { title.contains(it) } -> 0
+                                else -> 1
+                        }
+                }
+}
+
+@Composable
+private fun SettingsEntriesCard(entries: List<SettingsEntry>, cardColor: androidx.compose.ui.graphics.Color) {
+        SettingsCard(
+                backgroundColor = cardColor,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+                entries.forEachIndexed { index, entry ->
+                        if (index > 0) SettingsRowDivider(inset = entry.toggle == null)
+                        val toggle = entry.toggle
+                        if (toggle != null) {
+                                SettingsSwitchRow(
+                                        title = entry.title,
+                                        subtitle = entry.subtitle,
+                                        checked = toggle.checked,
+                                        enabled = toggle.enabled,
+                                        onCheckedChange = toggle.onCheckedChange,
+                                        searchable = false
+                                )
+                        } else {
+                                SettingsNavRow(
+                                        title = entry.title,
+                                        subtitle = entry.subtitle,
+                                        icon = entry.icon,
+                                        onClick = entry.onClick,
+                                        destructive = entry.destructive,
+                                        searchable = false
+                                )
+                        }
+                }
+        }
+}
+
+@Composable
+private fun SettingsSearchResults(
+        results: List<SettingsEntry>,
+        cardColor: androidx.compose.ui.graphics.Color,
+        onOpen: (SettingsEntry) -> Unit
 ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                // 分组标题
+        Column(
+                modifier = Modifier.fillMaxSize()
+                        .imePadding()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 8.dp, bottom = SearchBarClearance)
+        ) {
+                if (results.isEmpty()) {
+                        Column(
+                                modifier = Modifier.fillMaxWidth().padding(top = 72.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                                Icon(
+                                        imageVector = Icons.Default.SearchOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(40.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                        text = stringResource(R.string.settings_search_empty),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                        }
+                } else {
+                        SettingsSectionTitle(
+                                text = stringResource(R.string.settings_search_results, results.size),
+                                icon = Icons.Default.Search
+                        )
+                        SettingsEntriesCard(
+                                entries = results.map { entry ->
+                                        if (entry.toggle != null) entry else entry.copy(onClick = { onOpen(entry) })
+                                },
+                                cardColor = cardColor
+                        )
+                }
+        }
+}
+
+@Composable
+private fun SettingsSearchBar(
+        query: String,
+        onQueryChange: (String) -> Unit,
+        onClear: () -> Unit,
+        onDone: () -> Unit,
+        modifier: Modifier = Modifier
+) {
+        Surface(
+                modifier = modifier
+                        .imePadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .widthIn(max = 560.dp)
+                        .fillMaxWidth()
+                        .height(52.dp),
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shadowElevation = 6.dp
+        ) {
                 Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 6.dp)
+                        modifier = Modifier.fillMaxSize().padding(start = 18.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                 ) {
                         Icon(
-                                imageVector = icon,
+                                imageVector = Icons.Default.Search,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                        )
-                }
-                
-                // 内容区域
-                Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                                containerColor = containerColor
-                        )
-                ) {
-                        Column(
-                                modifier = Modifier.padding(12.dp),
-                                content = content
-                        )
-                }
-        }
-}
-
-@Composable
-private fun CompactSettingsItem(
-        title: String,
-        subtitle: String,
-        icon: ImageVector,
-        onClick: () -> Unit
-) {
-        Row(
-                modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { onClick() }
-                        .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-        ) {
-                Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                )
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                                text = title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                        )
-                }
-                
-                Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                )
-        }
-}
-
-@Composable
-private fun CompactToggleWithDescription(
-        title: String,
-        description: String,
-        checked: Boolean,
-        enabled: Boolean = true,
-        onCheckedChange: (Boolean) -> Unit
-) {
-        Row(
-                modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text(
-                                text = title,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                                text = description,
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                        )
-                }
-                Switch(
-                        checked = checked,
-                        onCheckedChange = onCheckedChange,
-                        enabled = enabled,
-                        modifier = Modifier.scale(0.8f)
-                )
-        }
-}
-
-@Composable
-private fun CompactSlider(
-        title: String,
-        subtitle: String,
-        value: Float,
-        onValueChange: (Float) -> Unit,
-        valueRange: ClosedFloatingPointRange<Float>,
-        steps: Int,
-        decimalFormatPattern: String,
-        unitText: String? = null,
-        backgroundColor: Color
-) {
-        val focusManager = LocalFocusManager.current
-        val df = remember(decimalFormatPattern) { DecimalFormat(decimalFormatPattern) }
-
-        var sliderValue by remember(value) { mutableStateOf(value) }
-        var textValue by remember(value) { mutableStateOf(df.format(value)) }
-
-        Column(
-                modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 4.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(backgroundColor)
-                        .padding(8.dp)
-        ) {
-                Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                        text = subtitle,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = 10.sp
-                                )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                BasicTextField(
-                                        value = textValue,
-                                        onValueChange = { newText ->
-                                                textValue = newText
-                                                newText.toFloatOrNull()?.let {
-                                                        sliderValue = it.coerceIn(valueRange)
-                                                }
-                                        },
-                                        modifier = Modifier
-                                                .width(40.dp)
-                                                .background(
-                                                        MaterialTheme.colorScheme.surfaceVariant,
-                                                        RoundedCornerShape(4.dp)
-                                                )
-                                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                                        textStyle = TextStyle(
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp,
-                                                textAlign = TextAlign.Center
-                                        ),
-                                        keyboardOptions = KeyboardOptions(
-                                                keyboardType = KeyboardType.Number,
-                                                imeAction = ImeAction.Done
-                                        ),
-                                        keyboardActions = KeyboardActions(
-                                                onDone = {
-                                                        val finalValue = textValue.toFloatOrNull()?.coerceIn(valueRange) ?: sliderValue
-                                                        onValueChange(finalValue)
-                                                        textValue = df.format(finalValue)
-                                                        focusManager.clearFocus()
-                                                }
-                                        ),
-                                        singleLine = true
-                                )
-
-                                if (unitText != null) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                if (query.isEmpty()) {
                                         Text(
-                                                text = unitText,
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 10.sp
-                                                ),
-                                                modifier = Modifier.padding(start = 2.dp)
+                                                text = stringResource(R.string.settings_search_hint),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                 }
+                                BasicTextField(
+                                        value = query,
+                                        onValueChange = onQueryChange,
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                                color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                        keyboardActions = KeyboardActions(onSearch = { onDone() }),
+                                        modifier = Modifier.fillMaxWidth()
+                                )
+                        }
+                        if (query.isNotEmpty()) {
+                                IconButton(onClick = onClear) {
+                                        Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = stringResource(R.string.clear_search),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                }
+                        } else {
+                                Spacer(modifier = Modifier.width(14.dp))
                         }
                 }
         }
 }
-

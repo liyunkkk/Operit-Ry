@@ -30,11 +30,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 class OpenAIVoiceProvider(
     private val context: Context,
-    private val endpointUrl: String,
+    endpointUrl: String,
     private val apiKey: String,
     private val model: String,
     initialVoiceId: String
 ) : VoiceService {
+    private val endpointUrl = resolveOpenAiSpeechEndpoint(endpointUrl)
 
     companion object {
         private const val TAG = "OpenAIVoiceProvider"
@@ -94,7 +95,7 @@ class OpenAIVoiceProvider(
             if (!endpointUrl.startsWith("http://") && !endpointUrl.startsWith("https://")) {
                 throw TtsException(context.getString(R.string.openai_tts_error_url_invalid_scheme))
             }
-            if (!endpointUrl.contains("/audio/speech")) {
+            if (!isOpenAiSpeechEndpoint(endpointUrl)) {
                 throw TtsException(context.getString(R.string.openai_tts_error_url_invalid_path))
             }
             if (apiKey.isBlank()) {
@@ -117,6 +118,8 @@ class OpenAIVoiceProvider(
         }
     }
 
+    private val requestEpoch = com.ai.assistance.operit.api.speech.SpeechRequestEpoch()
+
     override suspend fun speak(
         text: String,
         interrupt: Boolean,
@@ -124,16 +127,16 @@ class OpenAIVoiceProvider(
         pitch: Float?,
         extraParams: Map<String, String>
     ): Boolean = withContext(Dispatchers.IO) {
+        if (interrupt) stop()
+        val epoch = requestEpoch.current()
         playbackMutex.withLock {
+            if (epoch != requestEpoch.current()) return@withLock false
             if (!isInitialized) {
                 val initOk = initialize()
                 if (!initOk) return@withLock false
             }
 
             try {
-                if (interrupt && isSpeaking) {
-                    stop()
-                }
 
                 val profile = com.ai.assistance.operit.data.preferences.SpeechServiceProfilesPreferences(context.applicationContext).getCurrentTtsProfile()
                 val effectiveRate = rate ?: profile.speechRate
@@ -163,20 +166,12 @@ class OpenAIVoiceProvider(
                     .addHeader("Content-Type", "application/json")
                     .build()
 
+                val call = httpClient.newCall(request)
+                requestEpoch.attach(epoch,call)
                 val response = try {
-                    httpClient.newCall(request).execute()
+                    call.execute()
                 } catch (e: IOException) {
                     throw TtsException(context.getString(R.string.openai_tts_error_request_failed), cause = e)
-                }
-
-                if (!response.isSuccessful) {
-                    val errorBody = response.body?.string()
-                    response.close()
-                    throw TtsException(
-                        message = "OpenAI TTS request failed with code ${response.code}",
-                        httpStatusCode = response.code,
-                        errorBody = errorBody
-                    )
                 }
 
                 val safeExt = when (responseFormat.lowercase()) {
@@ -184,15 +179,26 @@ class OpenAIVoiceProvider(
                     else -> "mp3"
                 }
                 val tempFile = File(context.cacheDir, "openai_tts_${UUID.randomUUID()}.$safeExt")
-                response.body?.byteStream()?.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
+                try {
+                    response.use {
+                        if (!it.isSuccessful) throw TtsException(
+                            message = "OpenAI TTS request failed with code ${it.code}",
+                            httpStatusCode = it.code, errorBody = it.body?.string())
+                        val body = it.body ?: throw IOException("Speech response is empty")
+                        body.byteStream().use { input ->
+                            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                        }
                     }
+                    if (epoch != requestEpoch.current()) return@withLock false
+                    return@withLock playAudioFileAndAwait(tempFile, epoch)
+                } finally {
+                    response.close()
+                    requestEpoch.detach(call)
+                    tempFile.delete()
                 }
-                response.close()
-
-                return@withLock playAudioFileAndAwait(tempFile)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (epoch != requestEpoch.current()) return@withLock false
                 AppLogger.e(TAG, "OpenAI TTS speak failed", e)
                 if (e is TtsException) throw e
                 throw TtsException("OpenAI TTS speak failed", cause = e)
@@ -200,7 +206,7 @@ class OpenAIVoiceProvider(
         }
     }
 
-     private suspend fun playAudioFileAndAwait(file: File): Boolean {
+     private suspend fun playAudioFileAndAwait(file: File, epoch: Long): Boolean {
          val done = CompletableDeferred<Boolean>()
          synchronized(playerLock) {
              currentPlaybackDone = done
@@ -213,9 +219,11 @@ class OpenAIVoiceProvider(
                      synchronized(playerLock) {
                          mediaPlayer?.release()
                          mediaPlayer = null
-                     }
 
-                     val mp = MediaPlayer().apply {
+                     if (epoch != requestEpoch.current()) { finishPlayback(false,done,file); return@withContext }
+                     val mp = MediaPlayer()
+                     mediaPlayer = mp
+                     mp.apply {
                          setAudioAttributes(
                              AudioAttributes.Builder()
                                  .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -235,10 +243,8 @@ class OpenAIVoiceProvider(
                          start()
                      }
 
-                     synchronized(playerLock) {
-                         mediaPlayer = mp
-                     }
                      _isSpeaking.value = true
+                     }
                  } catch (e: Exception) {
                      AppLogger.e(TAG, "Play audio failed", e)
                      finishPlayback(false, done, file)
@@ -255,6 +261,7 @@ class OpenAIVoiceProvider(
 
      private fun finishPlayback(success: Boolean, done: CompletableDeferred<Boolean>, file: File) {
          synchronized(playerLock) {
+             if (currentPlaybackDone !== done) { file.delete(); done.complete(false); return }
              if (currentPlaybackDone === done) {
                  currentPlaybackDone = null
              }
@@ -288,6 +295,7 @@ class OpenAIVoiceProvider(
      }
 
     override suspend fun stop(): Boolean = withContext(Dispatchers.IO) {
+        requestEpoch.begin()
         return@withContext try {
             val done: CompletableDeferred<Boolean>?
             val file: File?
@@ -343,6 +351,9 @@ class OpenAIVoiceProvider(
     }
 
     override fun shutdown() {
+        requestEpoch.begin()
+        currentPlaybackDone?.complete(false)
+        currentPlaybackFile?.delete()
         synchronized(playerLock) {
             mediaPlayer?.release()
             mediaPlayer = null

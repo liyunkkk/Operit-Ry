@@ -14,16 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +43,20 @@ import com.ai.assistance.operit.core.agent.AgentProfileRepository
 import com.ai.assistance.operit.data.preferences.preferencesManager
 import com.ai.assistance.operit.ui.main.MainActivity
 import com.ai.assistance.operit.util.LocaleUtils
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsIconBadge
+import com.ai.assistance.operit.ui.features.settings.components.SettingsInfoBanner
+import com.ai.assistance.operit.ui.features.settings.components.SettingsRowDivider
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -62,7 +71,15 @@ fun LanguageSettingsScreen(
 ) {
     val context = LocalContext.current
     var currentLanguage by remember { mutableStateOf(LocaleUtils.getCurrentLanguage(context)) }
-    val supportedLanguages = remember { LocaleUtils.getSupportedLanguages() }
+    val supportedLanguages = remember {
+        // Limit the settings choices to maintained translations without removing legacy support.
+        val settingsLanguages = setOf(
+            LocaleUtils.LanguageCodes.AUTO,
+            LocaleUtils.LanguageCodes.CHINESE,
+            LocaleUtils.LanguageCodes.ENGLISH,
+        )
+        LocaleUtils.getSupportedLanguages().filter { it.code in settingsLanguages }
+    }
     var isChangingLanguage by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -70,96 +87,87 @@ fun LanguageSettingsScreen(
         currentLanguage = LocaleUtils.getCurrentLanguage(context)
     }
 
+    val hasBackgroundImage by
+        remember { UserPreferencesManager.getInstance(context) }.useBackgroundImage.collectAsState(initial = false)
+    val cardColor = settingsCardColor(hasBackgroundImage)
+
+    fun selectLanguage(language: LocaleUtils.Language) {
+        if (language.code == currentLanguage) return
+        // 设置状态为正在切换语言
+        isChangingLanguage = true
+
+        // 应用新的语言设置（使用已初始化的全局实例）
+        LocaleUtils.setAppLanguage(context, language.code)
+        AgentProfileRepository.instance.initialize(context.applicationContext)
+
+        // 显示切换语言的提示
+        Toast.makeText(context, context.getString(R.string.language_changed), Toast.LENGTH_SHORT).show()
+
+        // 延迟重启应用以确保语言设置完全生效
+        scope.launch {
+            delay(600) // 短暂延迟确保设置已保存
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            context.startActivity(intent)
+        }
+    }
+
     CustomScaffold() { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Text(
+            SettingsSectionTitle(
                 text = stringResource(R.string.select_language),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 16.dp)
+                icon = Icons.Default.Language
             )
 
             if (isChangingLanguage) {
                 // 显示语言切换中的进度指示器
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Text(
-                        text = stringResource(id = R.string.language_changing),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                SettingsCard(backgroundColor = cardColor) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.padding(bottom = 16.dp))
+                        Text(
+                            text = stringResource(id = R.string.language_changing),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             } else {
-                LazyColumn {
-                    items(supportedLanguages) { language ->
+                SettingsCard(
+                    backgroundColor = cardColor,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    supportedLanguages.forEachIndexed { index, language ->
+                        if (index > 0) SettingsRowDivider()
                         LanguageItem(
                             language = language,
                             isSelected = language.code == currentLanguage,
-                            onClick = {
-                                if (language.code != currentLanguage) {
-                                    // 设置状态为正在切换语言
-                                    isChangingLanguage = true
-                                    
-                                    // 应用新的语言设置（使用已初始化的全局实例）
-                                    LocaleUtils.setAppLanguage(context, language.code)
-                                    AgentProfileRepository.instance.initialize(
-                                        context.applicationContext
-                                    )
-                                    
-                                    // 显示切换语言的提示
-                                    Toast.makeText(
-                                        context, 
-                                        context.getString(R.string.language_changed), 
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    
-                                    // 延迟重启应用以确保语言设置完全生效
-                                    scope.launch {
-                                        delay(600) // 短暂延迟确保设置已保存
-                                        
-                                        // 重启应用
-                                        val intent = Intent(context, MainActivity::class.java).apply {
-                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or 
-                                                   Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                        }
-                                        context.startActivity(intent)
-                                    }
-                                }
-                            }
+                            onClick = { selectLanguage(language) }
                         )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.language_info),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
+
+            SettingsInfoBanner(
+                text = stringResource(R.string.language_info),
+                backgroundColor = cardColor
+            )
         }
     }
 }
 
 @Composable
-fun LanguageItem(
+private fun LanguageItem(
     language: LocaleUtils.Language,
     isSelected: Boolean,
     onClick: () -> Unit
@@ -167,24 +175,21 @@ fun LanguageItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Default.Language,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
-        )
-        
+        SettingsIconBadge(icon = Icons.Default.Language)
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 16.dp)
+                .padding(start = 12.dp)
         ) {
             Text(
                 text = language.displayName,
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
             )
             Text(
                 text = language.nativeName,
@@ -192,7 +197,6 @@ fun LanguageItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        
         if (isSelected) {
             Icon(
                 imageVector = Icons.Default.Check,
@@ -201,10 +205,4 @@ fun LanguageItem(
             )
         }
     }
-    
-    HorizontalDivider(
-        modifier = Modifier.fillMaxWidth(),
-        thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-    )
 }

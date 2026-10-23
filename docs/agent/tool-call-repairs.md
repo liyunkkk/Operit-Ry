@@ -5,6 +5,8 @@
 - `read_file` 出现 `start_line` 或 `end_line` 时，改为 `read_file_part`。
 - `super_admin` 命名空间下重复冒号的 `terminal`（如 `super_admin::terminal`、
   `super_admin:::terminal`）精确修正为 `super_admin:terminal`；其他名字不动。
+- 代理调用 `super_admin:terminal` 时，将误放在外层的整数 `yieldMs`（0～30000）
+  移入 `params`；内层已有相同值时去掉外层重复参数，冲突或无效值不修复。
 - 仅对 `super_admin:terminal`，将有效整数毫秒 `timeout` 改名为 `timeoutMs`。
   兼容约定：3～300 的整数按秒乘以 1000；3000 到 Int.MAX_VALUE 按毫秒保留；
   其余值不猜测。与 timeoutMs 换算后相等时移除别名，冲突时不改。正式参数仍为 timeoutMs。

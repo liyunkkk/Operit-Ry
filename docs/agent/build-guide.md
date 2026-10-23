@@ -17,6 +17,18 @@
 
 ## 前置步骤
 
+### 当前工具链
+
+使用 JDK 21、Gradle 9.3.1、AGP 9.1.1、Kotlin 2.2.20 和 Android SDK
+37.1（`platforms;android-37.1`）。根构建通过 `finalizeDsl` 为所有 Android
+模块统一编译 SDK，并固定 NDK 27.0.12077973；CMake 仍为 3.31.6。
+`minSdk` 与 `targetSdk` 不因编译 SDK 升级而改变。
+
+AGP 9 迁移期间保留外置 Kotlin 插件与旧 DSL：
+`android.builtInKotlin=false`、`android.newDsl=false`。这是为了兼容当前
+KAPT、ObjectBox 和 terminal 子模块，并非永久方案；升级到 AGP 10 前需要完成迁移。
+本地与 CI 均须安装 Build Tools 37.0.0。
+
 ### 1. 初始化子模块
 
 ```bash
@@ -97,15 +109,13 @@ sdk.dir=C\:\\AndroidSdk
 
 ```powershell
 rg -n 'CMAKE_MAKE_PROGRAM|cmake[\\/]3\.31\.6' `
-  app/.cxx dragonbones/.cxx fbx/.cxx mmd/.cxx quickjs/.cxx `
-  app/build/intermediates/cxx dragonbones/build/intermediates/cxx `
-  fbx/build/intermediates/cxx mmd/build/intermediates/cxx quickjs/build/intermediates/cxx
+  app/.cxx quickjs/.cxx `
+  app/build/intermediates/cxx quickjs/build/intermediates/cxx
 ```
 
 从仓库原始长路径执行以下验证：
 
 ```powershell
-.\gradlew.bat :mmd:assembleDebug
 .\gradlew.bat :app:assembleDebug
 .\gradlew.bat :app:lintDebug
 ```
@@ -203,7 +213,7 @@ Nightly 构建由 `OperitNightlyRelease` 仓库的 `personal-dev-update.yml` wor
 
 关键配置：
 
-- **NDK 版本**：`25.1.8937393`
+- **NDK 版本**：`27.0.12077973`
 - **CMake 版本**：`3.31.6`
 - **JDK**：21
 - **ccache**：`CCACHE_COMPILERCHECK=content`、2G 滚动缓存，加速原生编译
@@ -218,7 +228,7 @@ gh run watch <run-id> --exit-status --interval 60 >/dev/null 2>&1
 
 ## 原生依赖
 
-10 个原生第三方依赖已固定到具体 commit SHA，锁定清单见 `cmake/NATIVE_DEPENDENCY_LOCK.md`。CMake 配置时自动下载对应 GitHub archive，不需要手动获取。
+原生第三方依赖已固定到具体 commit SHA，锁定清单见 `cmake/NATIVE_DEPENDENCY_LOCK.md`。CMake 配置时自动下载对应 GitHub archive，不需要手动获取。
 
 升级依赖时：
 
@@ -233,7 +243,7 @@ gh run watch <run-id> --exit-status --interval 60 >/dev/null 2>&1
 
 | 问题 | 解决方法 |
 |---|---|
-| `NDK not found` | 确认安装了 `ndk;25.1.8937393` |
+| `NDK not found` | 确认安装了 `ndk;27.0.12077973` |
 | `Missing web-chat/dist` | 先执行 `npm run build:webchat` |
 | `ERROR: prebuild step failed` | 先在项目根目录执行 `npm install`，确认 `pnpm` 可用 |
 | Ninja `Filename longer than 260 characters` | 确认 Windows `LongPathsEnabled=1`，安装 SDK Manager 的 CMake 3.31.6，并核对实际使用 Ninja 1.12.1；`subst` 仅作为回退 |

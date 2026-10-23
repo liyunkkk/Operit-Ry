@@ -804,7 +804,8 @@ suspend fun exportAndroidApp(
             onProgress(0.1f, context.getString(R.string.export_prepare_base_apk))
 
             // 1. 初始化APK编辑器
-            val apkEditor = ApkEditor.fromFile(context, OnDemandResources.exportTemplate(context, android = true))
+            OnDemandResources.withExportTemplate(context, android = true) { template ->
+            val apkEditor = ApkEditor.fromFile(context, template)
 
             // 2. 修改包名和应用名
             onProgress(0.3f, context.getString(R.string.export_modify_app_info))
@@ -877,6 +878,7 @@ suspend fun exportAndroidApp(
                 onComplete(false, null, context.getString(R.string.export_sign_apk_failed, e.message ?: ""))
                 apkEditor.cleanup() // 确保失败时也清理资源
             }
+            }
         }
     } catch (e: CancellationException) {
         throw e
@@ -927,7 +929,7 @@ suspend fun exportWindowsApp(
                 // 1. 从assets复制windows.zip模板到临时目录
                 onProgress(0.2f, context.getString(R.string.export_copy_template))
                 val templateZip = File(tempDir, "windows.zip")
-                OnDemandResources.exportTemplate(context, android = false).copyTo(templateZip)
+                OnDemandResources.withExportTemplate(context, android = false) { it.copyTo(templateZip) }
 
                 // 2. 解压windows.zip
                 onProgress(0.3f, context.getString(R.string.export_extract_template))

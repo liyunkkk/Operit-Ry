@@ -128,7 +128,7 @@ fun HtmlPackagerScreen(onGoBack: () -> Unit) {
                             readOnly = true,
                             label = { Text(stringResource(R.string.htmlpackager_main_html)) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isIndexFileDropdownExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                             enabled = webProjectUri != null && htmlFiles.isNotEmpty()
                         )
                         ExposedDropdownMenu(

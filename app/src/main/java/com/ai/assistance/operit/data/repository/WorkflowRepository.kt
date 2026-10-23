@@ -373,6 +373,7 @@ internal data class WorkflowFileScanResult(
     val files: List<File>,
     val truncated: Boolean,
     val skippedEntries: Int,
+    val skippedReasons: Map<String, Int> = emptyMap(),
 )
 
 internal class WorkflowByteBudget(initialBytes: Long) {
@@ -1059,8 +1060,8 @@ class WorkflowRepository(private val context: Context) {
         if (isLegacy && (scan.truncated || scan.skippedEntries > 0)) {
             AppLogger.w(
                 TAG,
-                "Legacy workflow scan was limited; some public definitions were not shown " +
-                    "(truncated=${scan.truncated}, skipped=${scan.skippedEntries})"
+                "Legacy workflow scan skipped entries (including non-workflow files); " +
+                    "(truncated=${scan.truncated}, skipped=${scan.skippedEntries}, reasons=${scan.skippedReasons})"
             )
         }
         val legacyReadBudget = if (isLegacy) {
@@ -2609,6 +2610,11 @@ internal fun scanCanonicalWorkflowJsonFiles(
     var visited = 0
     var totalBytes = 0L
     var skipped = 0
+    val skippedReasons = linkedMapOf<String, Int>()
+    fun skip(reason: String) {
+        skipped++
+        skippedReasons[reason] = (skippedReasons[reason] ?: 0) + 1
+    }
     var truncated = false
     return runCatching {
         Files.newDirectoryStream(canonicalDirectory.toPath()).use { entries ->
@@ -2621,23 +2627,23 @@ internal fun scanCanonicalWorkflowJsonFiles(
                 val path = iterator.next()
                 visited++
                 if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-                    skipped++
+                    skip(if (Files.isSymbolicLink(path)) "symbolic_link" else "not_regular_file")
                     continue
                 }
                 val file = path.toFile()
                 if (file.extension != "json" || Files.isSymbolicLink(path)) {
-                    skipped++
+                    skip("not_json_or_symbolic_link")
                     continue
                 }
                 if (runCatching { file.canonicalFile.parentFile == canonicalDirectory }.getOrDefault(false).not()) {
-                    skipped++
+                    skip("outside_directory")
                     continue
                 }
                 val attributes = runCatching {
                     Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
                 }.getOrNull()
                 if (attributes == null || !attributes.isRegularFile) {
-                    skipped++
+                    skip("attributes_unavailable")
                     continue
                 }
                 val fileBytes = attributes.size()
@@ -2645,14 +2651,14 @@ internal fun scanCanonicalWorkflowJsonFiles(
                     fileBytes > limits.maxFileBytes ||
                     fileBytes > limits.maxTotalBytes - totalBytes
                 ) {
-                    skipped++
+                    skip(if (fileBytes > limits.maxFileBytes) "file_too_large" else "total_byte_limit")
                     continue
                 }
                 accepted += file
                 totalBytes += fileBytes
             }
         }
-        WorkflowFileScanResult(accepted, truncated, skipped)
+        WorkflowFileScanResult(accepted, truncated, skipped, skippedReasons)
     }.getOrDefault(empty)
 }
 

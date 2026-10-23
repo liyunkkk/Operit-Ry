@@ -15,6 +15,7 @@ internal object ToolCallRepairRouter {
     const val PROXY_FLATTENED_TOOL_NAME = "proxy_flattened_tool_name"
     const val MEMORY_ARGUMENT_ALIAS = "memory_argument_alias"
     const val MEMORY_FINISH_ALIAS = "memory_finish_alias"
+    const val TERMINAL_PROXY_YIELD = "terminal_proxy_yield"
 
     fun terminalToolName(invocation: ToolInvocation): String =
         if (invocation.tool.name == "memory_learning_action")

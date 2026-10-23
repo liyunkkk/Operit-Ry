@@ -3,12 +3,22 @@ package com.ai.assistance.operit.plugins.toolpkg
 import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.packTool.ToolPkgContainerRuntime
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 internal object ToolPkgAiProviderRegistry {
     private val installed = AtomicBoolean(false)
 
     @Volatile
     private var providersById: Map<String, ToolPkgAiProviderRegistration> = emptyMap()
+
+    private val registeredProviderIds = MutableStateFlow<Set<String>>(emptySet())
+    val registeredProviderIdsFlow: StateFlow<Set<String>>
+        get() {
+            register()
+            return registeredProviderIds.asStateFlow()
+        }
 
     private val runtimeChangeListener =
         PackageManager.ToolPkgRuntimeChangeListener { activeContainers ->
@@ -75,5 +85,6 @@ internal object ToolPkgAiProviderRegistry {
                     registrationId = ToolPkgAiProviderRegistration::providerId
                 )
         providersById = registrations.associateBy { registration -> registration.providerId.trim().lowercase() }
+        registeredProviderIds.value = providersById.keys.toSet()
     }
 }

@@ -9,11 +9,8 @@ Operit-follow-up/
 ├── app/             主 Android 应用
 ├── ci/              CI 与本地自动化脚本
 ├── docs/            项目文档与文档资源
-├── dragonbones/     DragonBones 动画 Android 库
 ├── examples/        JavaScript/TypeScript 工具包示例
-├── fbx/             FBX 模型 Android 原生库
 ├── gradle/          Gradle Wrapper 与版本目录
-├── mmd/             MMD 模型运行时与预览模块
 ├── quickjs/         QuickJS JNI 模块
 ├── showerclient/    Shower 虚拟显示客户端库
 ├── terminal/        OperitTerminalCore Git 子模块
@@ -35,25 +32,13 @@ Operit-follow-up/
 
 这是项目文档与文档资源目录，包含核心开发指南、脚本和工具包开发说明、架构与协议文档，以及 README 使用的图片等静态资源。
 
-### [`dragonbones`](dragonbones/)
-
-这是 DragonBones Android 库模块。它通过 C++、OpenGL 和 JNI 提供 DragonBones 骨骼动画模型的加载、渲染和动画控制，并向 Android View 与 Compose 使用场景提供封装。
-
 ### [`examples`](examples/)
 
 这是工具包和脚本示例集合，主要使用 JavaScript 和 TypeScript，覆盖聊天、搜索、绘图、浏览器自动化、系统控制、地图等扩展场景。同名的 `.ts` 和 `.js` 文件通常分别用于源码示例和可执行版本。
 
-### [`fbx`](fbx/)
-
-这是 FBX Android 原生运行时模块。它通过 `ufbx` C 库解析 FBX 模型，为应用中的 FBX 虚拟形象和模型展示提供基础能力。`ufbx` 由 CMake 从上游仓库获取，默认使用 `main`。
-
 ### [`gradle`](gradle/)
 
 这是 Gradle 构建支持目录，包含 Gradle Wrapper 配置和项目统一的版本目录 `libs.versions.toml`。
-
-### [`mmd`](mmd/)
-
-这是 MMD 模型 Android 运行时和预览模块，包含模型渲染相关的原生集成，并使用 Bullet3 等第三方组件。Bullet3 由 CMake 从上游仓库获取，默认使用上游主分支。`UPSTREAM_SABA_VIEWER_MAPPING.md` 记录了上游 Saba Viewer 的映射关系。
 
 ### [`quickjs`](quickjs/)
 
@@ -79,5 +64,5 @@ Operit-follow-up/
 
 ## 相关说明
 
-- `app`、`dragonbones`、`terminal`、`mmd`、`fbx`、`showerclient`、`quickjs` 是根 `settings.gradle.kts` 声明的 Gradle 模块。
+- `app`、`terminal`、`showerclient`、`quickjs` 是根 `settings.gradle.kts` 声明的 Gradle 模块。
 - 仍作为 Git 子模块维护的第三方目录，以根目录的 `.gitmodules` 为准。

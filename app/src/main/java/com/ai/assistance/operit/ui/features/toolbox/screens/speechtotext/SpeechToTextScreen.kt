@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SpeechToTextScreen(navController: NavController) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     
@@ -120,22 +122,13 @@ fun SpeechToTextScreen(navController: NavController) {
     var error by remember { mutableStateOf<String?>(null) }
     var availableLanguages by remember { mutableStateOf<List<String>>(emptyList()) }
     
-    // recognitionMode 是驱动服务实例创建的唯一状态源
-    var recognitionMode by remember { mutableStateOf(SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN) }
+    val profiles = remember { com.ai.assistance.operit.data.preferences.SpeechServiceProfilesPreferences(context) }
+    val profile by profiles.currentSttProfileOrNullFlow.collectAsState(initial = null)
+    val activeProfile = profile ?: return
+    val recognitionMode = activeProfile.serviceType
+    val speechService = remember(activeProfile) { SpeechServiceFactory.createSpeechService(context) }
 
-    var speechService by remember {
-        mutableStateOf(SpeechServiceFactory.createSpeechService(context, recognitionMode))
-    }
-
-    LaunchedEffect(recognitionMode) {
-        try {
-            speechService.shutdown()
-        } catch (_: Exception) {
-        }
-        speechService = SpeechServiceFactory.createSpeechService(context, recognitionMode)
-    }
-
-    DisposableEffect(Unit) {
+    DisposableEffect(speechService) {
         onDispose {
             try {
                 speechService.shutdown()
@@ -157,7 +150,7 @@ fun SpeechToTextScreen(navController: NavController) {
         if (success) {
             availableLanguages = speechService.getSupportedLanguages()
         } else {
-            error = context.getString(R.string.engine_init_failed, recognitionMode.name)
+            error = resources.getString(R.string.engine_init_failed, recognitionMode.name)
         } 
     }
     
@@ -171,7 +164,7 @@ fun SpeechToTextScreen(navController: NavController) {
         launch {
             speechService.recognitionErrorFlow.collect { recognitionError ->
                 if (recognitionError.message.isNotBlank()) {
-                    error = context.getString(R.string.recognition_error, recognitionError.message)
+                    error = resources.getString(R.string.recognition_error, recognitionError.message)
                 }
             }
         }
@@ -187,7 +180,7 @@ fun SpeechToTextScreen(navController: NavController) {
                 val partialResults = recognitionMode == SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN
                 speechService.startRecognition(selectedLanguage, continuousMode, partialResults)
             } catch (e: Exception) {
-                error = context.getString(R.string.start_recognition_error, e.message ?: "")
+                error = resources.getString(R.string.start_recognition_error, e.message ?: "")
             }
         }
     }
@@ -198,43 +191,33 @@ fun SpeechToTextScreen(navController: NavController) {
             try {
                 speechService.stopRecognition()
             } catch (e: Exception) {
-                error = context.getString(R.string.stop_recognition_error, e.message ?: "")
+                error = resources.getString(R.string.stop_recognition_error, e.message ?: "")
             }
         }
     }
     
     // 切换识别引擎现在只改变状态，Compose框架会处理后续的重新创建和初始化
-    fun switchRecognitionMode() {
-        recognitionMode = when (recognitionMode) {
-            SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN ->
-                SpeechServiceFactory.SpeechServiceType.OPENAI_STT
-            SpeechServiceFactory.SpeechServiceType.OPENAI_STT ->
-                SpeechServiceFactory.SpeechServiceType.DEEPGRAM_STT
-            SpeechServiceFactory.SpeechServiceType.DEEPGRAM_STT ->
-                SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN
-        }
-    }
-
     // 获取当前引擎的显示名称
     fun getEngineName(mode: SpeechServiceFactory.SpeechServiceType): String {
         return when (mode) {
-            SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN -> context.getString(R.string.sherpa_ncnn_best)
-            SpeechServiceFactory.SpeechServiceType.OPENAI_STT -> context.getString(R.string.speech_services_stt_type_openai)
-            SpeechServiceFactory.SpeechServiceType.DEEPGRAM_STT -> context.getString(R.string.speech_services_stt_type_deepgram)
+            SpeechServiceFactory.SpeechServiceType.SHERPA_ONNX -> resources.getString(R.string.voice_local_engine)
+            SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN -> resources.getString(R.string.sherpa_ncnn_best)
+            SpeechServiceFactory.SpeechServiceType.OPENAI_STT -> resources.getString(R.string.speech_services_stt_type_openai)
+            SpeechServiceFactory.SpeechServiceType.DEEPGRAM_STT -> resources.getString(R.string.speech_services_stt_type_deepgram)
         }
     }
     
     // 复制文本到剪贴板
     fun copyToClipboard(text: String) {
         if (text.isBlank()) {
-            Toast.makeText(context, context.getString(R.string.no_text_to_copy), Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, resources.getString(R.string.no_text_to_copy), Toast.LENGTH_SHORT).show()
             return
         }
         
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("recognized_text", text)
         clipboard.setPrimaryClip(clip)
-        Toast.makeText(context, context.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, resources.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
     }
 
     Column(
@@ -357,19 +340,7 @@ fun SpeechToTextScreen(navController: NavController) {
                     
                 Spacer(modifier = Modifier.height(8.dp))
                     
-                // 切换引擎按钮单独一行
-                    Button(
-                        onClick = { switchRecognitionMode() },
-                        enabled = !isListening && isInitialized,
-                    modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(stringResource(R.string.switch_engine))
-                }
+                Text(activeProfile.name, style = MaterialTheme.typography.bodyMedium)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -396,7 +367,7 @@ fun SpeechToTextScreen(navController: NavController) {
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                         },
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                     )
                     

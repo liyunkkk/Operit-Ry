@@ -2,6 +2,7 @@ package com.ai.assistance.operit.ui.common.markdown
 
 import com.ai.assistance.operit.util.markdown.MarkdownNodeStable
 import com.ai.assistance.operit.util.markdown.MarkdownProcessorType
+import com.ai.assistance.operit.util.markdown.InlineDirectives
 import com.ai.assistance.operit.util.streamnative.NativeMarkdownSplitter
 
 /**
@@ -71,11 +72,13 @@ private fun renderBlockNode(node: MarkdownNodeStable, latexSegments: MutableList
 
 private fun renderInlineBlock(node: MarkdownNodeStable, latexSegments: MutableList<String>): String {
     if (node.children.isEmpty()) return node.content
-    return node.children.joinToString("") { it.plainInlineText(latexSegments) }
+    return node.children.coalescePlainText().joinToString("") { it.plainInlineText(latexSegments) }
 }
 
 private fun MarkdownNodeStable.plainInlineText(latexSegments: MutableList<String>): String {
     return when (type) {
+        MarkdownProcessorType.PLAIN_TEXT -> InlineDirectives.toPlainText(content)
+        MarkdownProcessorType.INLINE_CODE -> content
         MarkdownProcessorType.INLINE_LATEX, MarkdownProcessorType.BLOCK_LATEX ->
             registerLatex(extractLatexContent(content.trim()).trim(), latexSegments)
         MarkdownProcessorType.LINK -> {
@@ -113,7 +116,7 @@ private fun renderTable(content: String, latexSegments: MutableList<String>): St
 private fun renderRawInlineText(raw: String, latexSegments: MutableList<String>): String {
     val nodes = NativeMarkdownSplitter.parseInlineToStableNodes(raw)
     if (nodes.isEmpty()) return raw
-    return nodes.joinToString("") { it.plainInlineText(latexSegments) }
+    return nodes.coalescePlainText().joinToString("") { it.plainInlineText(latexSegments) }
 }
 
 private fun registerLatex(formula: String, latexSegments: MutableList<String>): String {

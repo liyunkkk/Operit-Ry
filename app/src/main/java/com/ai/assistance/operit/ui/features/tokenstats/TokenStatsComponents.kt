@@ -51,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCardShape
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.collects.PricingCurrency
 import com.ai.assistance.operit.data.stats.TokenStatCategory
@@ -103,6 +104,7 @@ internal fun TokenStatsWhiteCard(
     ) {
         Card(
             modifier = modifier,
+            shape = SettingsCardShape,
             colors = CardDefaults.cardColors(
                 containerColor = TokenStatsCardContainer,
                 contentColor = TokenStatsCardContent,
@@ -201,6 +203,12 @@ internal fun TokenStatsLifetimeCard(
                     alignEnd = true,
                 )
             }
+
+            Text(
+                text = stringResource(R.string.token_stats_cost_estimate_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.summaryCardContent.copy(alpha = 0.8f),
+            )
 
             if (unknownCostContributions > 0L) {
                 UnknownHint(
@@ -861,6 +869,7 @@ internal fun TokenStatCategory.labelRes(): Int =
         TokenStatCategory.PERMISSION_REVIEWER -> R.string.token_stats_category_permission_reviewer
         TokenStatCategory.PERMISSION_RISK_SCORER ->
             R.string.token_stats_category_permission_risk_scorer
+        TokenStatCategory.COMPOSER_PREDICTION -> R.string.token_stats_category_composer_prediction
         TokenStatCategory.OTHER -> R.string.token_stats_category_other
     }
 

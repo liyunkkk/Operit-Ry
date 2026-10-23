@@ -35,6 +35,10 @@ import com.ai.assistance.operit.data.model.ChatKind
 import com.ai.assistance.operit.data.model.ChatMessage
 import com.ai.assistance.operit.data.model.ChatMessageLocatorPreview
 import com.ai.assistance.operit.data.model.ChatTodo
+import com.ai.assistance.operit.data.model.forSelectedModel
+import com.ai.assistance.operit.api.chat.prediction.ComposerPredictionCoordinator
+import com.ai.assistance.operit.api.chat.prediction.composerPredictionConfigIdentity
+import com.ai.assistance.operit.api.chat.prediction.ComposerPredictionService
 import com.ai.assistance.operit.data.model.FunctionType
 import com.ai.assistance.operit.data.model.PromptFunctionType
 import com.ai.assistance.operit.data.model.ToolParameter
@@ -50,6 +54,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -62,7 +69,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import com.ai.assistance.operit.ui.floating.ui.pet.AvatarEmotionManager
+import com.ai.assistance.operit.util.XmlTagStripper
 import com.ai.assistance.operit.api.voice.VoiceService
 import com.ai.assistance.operit.api.voice.VoiceServiceFactory
 import com.ai.assistance.operit.data.preferences.SpeechServiceProfilesPreferences
@@ -120,10 +127,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         val query: String,
     )
 
-    private data class MentionDeletionNormalization(
-        val value: TextFieldValue,
-        val removedMentionToken: String? = null,
-    )
+
 
     private fun speechPreview(text: String): String {
         return text.replace("\n", "\\n").take(SPEECH_PREVIEW_MAX)
@@ -200,6 +204,132 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     private lateinit var messageProcessingDelegate: MessageProcessingDelegate
     private lateinit var floatingWindowDelegate: FloatingWindowDelegate
     private lateinit var messageCoordinationDelegate: MessageCoordinationDelegate
+
+    private val composerPredictionCoordinator = ComposerPredictionCoordinator(viewModelScope) { snapshot ->
+        if (messageProcessingDelegate.claimComposerPrediction(snapshot))
+            ComposerPredictionService(context).predict(snapshot) else null
+    }
+    // Attachments only hide the cached suggestion; removing them must not spend another request.
+    val composerPredictionText: StateFlow<String?> by lazy {
+        combine(composerPredictionCoordinator.text, attachments) { text, pending ->
+            text.takeIf { pending.isEmpty() }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }
+    // Wait for persisted preferences before requests; a saved opt-out must never race loading.
+    private val composerPredictionsEnabled =
+        com.ai.assistance.operit.data.preferences.DisplayPreferencesManager.getInstance(context)
+            .composerPredictionsEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private var composerPredictionContext: Any? = null
+
+    private data class PredictionTranscriptEntry(
+        val timestamp: Long, val sender: String, val content: String, val variant: Int,
+    )
+    private data class PredictionContext(
+        val chatId: String,
+        val sourceTurnId: String,
+        val transcript: List<PredictionTranscriptEntry>,
+        val config: com.ai.assistance.operit.data.model.ModelConfigData,
+        val modelIndex: Int,
+    )
+
+    private fun currentPredictionContext(): PredictionContext? {
+        if (!composerPredictionsEnabled.value) return null
+        val chatId = currentChatId.value ?: return null
+        if (displayedChatId.value != chatId || chatId in activeStreamingChatIds.value) return null
+        val metadata = chatHistories.value.firstOrNull { it.id == chatId } ?: return null
+        if (metadata.chatKind == ChatKind.SUBAGENT.name || metadata.characterGroupId != null || metadata.isHidden) return null
+        val snapshot = messageProcessingDelegate.composerPredictionSnapshots.value[chatId] ?: return null
+        val last = chatHistory.value.lastOrNull() ?: return null
+        if (last.sender != "ai" || last.timestamp.toString() != snapshot.sourceMessageId || last.contentStream != null) return null
+        val target = effectiveChatConfigTarget.value
+        val config = apiConfigDelegate.effectiveChatConfig.value
+        if (!target.isResolved || target.configId != config.id ||
+            composerPredictionConfigIdentity(config.forSelectedModel(target.modelIndex)) !=
+                composerPredictionConfigIdentity(snapshot.modelConfig)) return null
+        if (com.ai.assistance.operit.core.agent.collaboration.CollaborationCoordinator.getInstance(context)
+                .blocksComposerPrediction(chatId)) return null
+        return PredictionContext(chatId, snapshot.sourceTurnId, chatHistory.value.map {
+            PredictionTranscriptEntry(it.timestamp, it.sender, it.content, it.selectedVariantIndex)
+        }, composerPredictionConfigIdentity(config), target.modelIndex)
+    }
+
+    private fun setupComposerPredictions() {
+        viewModelScope.launch {
+            // All invalidating state is observed; draft typing intentionally is not.
+            combine(
+                currentChatId.map { Unit }, displayedChatId.map { Unit }, chatHistory.map { Unit },
+                chatHistories.map { Unit }, apiConfigDelegate.effectiveChatConfig.map { Unit },
+                effectiveChatConfigTarget.map { Unit },
+                activeStreamingChatIds.map { Unit }, composerPredictionsEnabled.map { Unit },
+                messageProcessingDelegate.composerPredictionSnapshots.map { Unit },
+                com.ai.assistance.operit.core.agent.collaboration.CollaborationCoordinator.getInstance(context)
+                    .composerPredictionRevision.map { Unit },
+            ) { }.collect {
+                val key = currentPredictionContext()
+                composerPredictionContext = key
+                val snapshot = key?.let { messageProcessingDelegate.composerPredictionSnapshots.value[it.chatId] }
+                composerPredictionCoordinator.update(composerPredictionsEnabled.value, key, snapshot) {
+                    key != null && currentPredictionContext() == key
+                }
+            }
+        }
+        viewModelScope.launch {
+            var previousChatId = currentChatId.value
+            currentChatId.drop(1).collect {
+                previousChatId?.let(messageProcessingDelegate::invalidateComposerPrediction)
+                invalidateCurrentComposerPrediction()
+                previousChatId = it
+            }
+        }
+        viewModelScope.launch {
+            activePromptManager.activePromptFlow.distinctUntilChanged().drop(1).collect { invalidateCurrentComposerPrediction() }
+        }
+        viewModelScope.launch {
+            composerPredictionsEnabled.drop(1).collect { enabled ->
+                if (!enabled) invalidateCurrentComposerPrediction()
+            }
+        }
+        viewModelScope.launch {
+            combine(
+                enableThinkingMode, thinkingQualityLevel,
+            ) { thinking, quality -> thinking to quality }
+                .distinctUntilChanged().drop(1).collect { onPredictionThinkingChanged() }
+        }
+        viewModelScope.launch {
+            combine(
+                enableTools, toolPromptVisibility,
+                disableUserPreferenceDescription,
+            ) { tools, visibility, preferences ->
+                listOf(tools, visibility, preferences)
+            }.distinctUntilChanged().drop(1).collect { invalidateCurrentComposerPrediction() }
+        }
+    }
+
+    private fun onPredictionThinkingChanged() {
+        if (composerPredictionCoordinator.invalidateForThinkingChange()) {
+            composerPredictionContext = null
+            currentChatId.value?.let { messageProcessingDelegate.invalidateComposerPrediction(it) }
+        }
+    }
+
+    private fun invalidateCurrentComposerPrediction(chatId: String? = currentChatId.value) {
+        composerPredictionCoordinator.invalidate()
+        composerPredictionContext = null
+        chatId?.let { messageProcessingDelegate.invalidateComposerPrediction(it) }
+    }
+
+    fun acceptComposerPrediction(expectedPrediction: String? = null): Boolean {
+        // Recheck at adoption as the UI may still contain a frame rendered before attachment change.
+        if (attachments.value.isNotEmpty()) return false
+        val draft = userMessage.value
+        val text = composerPredictionCoordinator.textForAdoption(
+            expected = expectedPrediction,
+            draftEmpty = draft.text.isEmpty() && draft.composition == null,
+            stillValid = { composerPredictionContext != null && currentPredictionContext() == composerPredictionContext },
+        ) ?: return false
+        updateUserMessage(TextFieldValue(text, selection = TextRange(text.length)))
+        return true
+    }
 
     // Use lazy initialization for exposed properties to avoid circular reference issues
     // API配置相关
@@ -420,6 +550,105 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     // 控制 @ mention 建议面板的可见性
     private val _showMentionSuggestionPanel = MutableStateFlow(false)
+    private val _contextEditor = MutableStateFlow<com.ai.assistance.operit.ui.features.chat.components.ChatContextEditorTarget?>(null)
+    val contextEditor = _contextEditor.asStateFlow()
+    private val _contextEditorSaving = MutableStateFlow(false)
+    val contextEditorSaving = _contextEditorSaving.asStateFlow()
+    private var contextEditorRequest = 0L
+    val resolvedChatContext get() = apiConfigDelegate.effectiveResolvedContext
+
+    fun dismissContextEditor() { contextEditorRequest++; _contextEditor.value = null }
+
+    fun openContextEditor(draft: String? = null) {
+        val chatId = currentChatId.value ?: return
+        val configId = apiConfigDelegate.effectiveChatConfigTarget.value.configId
+        val revision = messageProcessingDelegate.draftRevision
+        val request = ++contextEditorRequest
+        viewModelScope.launch {
+            try {
+                val resolved = apiConfigDelegate.loadChatContext(chatId, configId)
+                if (currentChatId.value != chatId || request != contextEditorRequest) return@launch
+                _contextEditor.value = com.ai.assistance.operit.ui.features.chat.components.ChatContextEditorTarget(
+                    chatId, configId, resolved.policy, resolved.capacityK, draft, revision)
+                hideMentionSuggestionPanel()
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                uiStateDelegate.showToast(context.getString(R.string.chat_context_save_failed))
+            }
+        }
+    }
+
+    fun saveContextEditor(policy: com.ai.assistance.operit.data.model.ChatContextPolicy) {
+        val target = _contextEditor.value ?: return
+        if (_contextEditorSaving.value || currentChatId.value != target.chatId) return
+        _contextEditorSaving.value = true
+        viewModelScope.launch {
+            try {
+                apiConfigDelegate.updateChatContextPolicy(target.chatId, target.configId) { policy }
+                if (_contextEditor.value == target) _contextEditor.value = null
+                clearShortcutDraft(target.chatId, target.draft, target.draftRevision)
+                uiStateDelegate.showToast(context.getString(R.string.chat_context_saved))
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                uiStateDelegate.showToast(context.getString(R.string.chat_context_save_failed))
+            } finally {
+                _contextEditorSaving.value = false
+            }
+        }
+    }
+
+    private fun clearShortcutDraft(chatId: String, draft: String?, revision: Long) {
+        if (draft != null && currentChatId.value == chatId && userMessage.value.text == draft &&
+            userMessage.value.composition == null && messageProcessingDelegate.draftRevision == revision) {
+            messageProcessingDelegate.updateUserMessage(TextFieldValue(""))
+            hideMentionSuggestionPanel()
+        }
+    }
+
+    fun executeChatShortcut(shortcut: com.ai.assistance.operit.ui.features.chat.util.ChatShortcut, draft: String) {
+        val chatId = currentChatId.value ?: return
+        val revision = messageProcessingDelegate.draftRevision
+        if (isCurrentTranscriptReadOnly() || userMessage.value.text != draft ||
+            userMessage.value.composition != null) return
+        val argument = com.ai.assistance.operit.ui.features.chat.util.chatShortcutArgument(draft, shortcut)
+        if (!com.ai.assistance.operit.ui.features.chat.util.isValidShortcutArgument(shortcut, argument)) return
+        if (shortcut == com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.COMPACT) {
+            if (isChatBusy(chatId)) {
+                uiStateDelegate.showToast(context.getString(R.string.chat_shortcut_busy))
+                return
+            }
+            messageCoordinationDelegate.manuallySummarizeConversation(chatId) {
+                clearShortcutDraft(chatId, draft, revision)
+            }
+            hideMentionSuggestionPanel()
+            return
+        }
+        if (argument.isEmpty()) {
+            openContextEditor(draft)
+            return
+        }
+        val configId = apiConfigDelegate.effectiveChatConfigTarget.value.configId
+        viewModelScope.launch {
+            try {
+                apiConfigDelegate.updateChatContextPolicy(chatId, configId) { policy ->
+                    when (shortcut) {
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.CONTEXT ->
+                            policy.copy(windowK = requireNotNull(com.ai.assistance.operit.ui.features.chat.util.parseContextK(argument)), maxMode = false)
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.AUTO_COMPACT ->
+                            policy.copy(compactAtK = com.ai.assistance.operit.ui.features.chat.util.parseContextK(argument), autoCompact = true)
+                        com.ai.assistance.operit.ui.features.chat.util.ChatShortcut.MAX ->
+                            policy.copy(maxMode = argument.equals("on", true))
+                        else -> policy
+                    }
+                }
+                clearShortcutDraft(chatId, draft, revision)
+                uiStateDelegate.showToast(context.getString(R.string.chat_context_saved))
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                uiStateDelegate.showToast(context.getString(R.string.chat_context_save_failed))
+            }
+        }
+    }
     val showMentionSuggestionPanel: StateFlow<Boolean> = _showMentionSuggestionPanel.asStateFlow()
 
     // 当前 @ mention 的搜索词
@@ -440,6 +669,10 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     init {
         // Initialize delegates in correct order to avoid circular references
         initializeDelegates()
+        viewModelScope.launch {
+            currentChatId.collect { dismissContextEditor() }
+        }
+        setupComposerPredictions()
 
         // Setup additional components
         setupPermissionSystemCollection()
@@ -606,6 +839,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         apiConfigDelegate.saveDeepSeekConfiguration(configId, apiKey)
     }
     fun useDefaultConfig() {
+        invalidateCurrentComposerPrediction()
         if (apiConfigDelegate.useDefaultConfig()) {
             uiStateDelegate.showToast(context.getString(R.string.chat_use_default_config_continue))
         } else {
@@ -619,10 +853,16 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     // 切换思考模式的方法现在委托给ApiConfigDelegate
     fun toggleThinkingMode() {
+        onPredictionThinkingChanged()
         apiConfigDelegate.toggleThinkingMode()
     }
 
+    fun setThinkingMode(enabled: Boolean) {
+        onPredictionThinkingChanged()
+        apiConfigDelegate.setThinkingMode(enabled)
+    }
     fun updateThinkingQualityLevel(level: Int) {
+        onPredictionThinkingChanged()
         apiConfigDelegate.updateThinkingQualityLevel(level)
     }
 
@@ -661,20 +901,24 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun toggleTools() {
+        invalidateCurrentComposerPrediction()
         apiConfigDelegate.toggleTools()
     }
 
     fun saveToolPromptVisibility(toolName: String, isVisible: Boolean) {
+        invalidateCurrentComposerPrediction()
         apiConfigDelegate.saveToolPromptVisibility(toolName, isVisible)
     }
 
     fun saveToolPromptVisibilityMap(visibilityMap: Map<String, Boolean>) {
+        invalidateCurrentComposerPrediction()
         apiConfigDelegate.saveToolPromptVisibilityMap(visibilityMap)
     }
 
     val toolPromptOrder: StateFlow<List<String>> by lazy { apiConfigDelegate.toolPromptOrder }
 
     fun saveToolPromptOrder(order: List<String>) {
+        invalidateCurrentComposerPrediction()
         apiConfigDelegate.saveToolPromptOrder(order)
     }
 
@@ -683,6 +927,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun toggleDisableUserPreferenceDescription() {
+        invalidateCurrentComposerPrediction()
         apiConfigDelegate.toggleDisableUserPreferenceDescription()
     }
 
@@ -692,6 +937,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         characterGroupId: String? = null,
         inheritGroupFromCurrent: Boolean = true,
     ) {
+        invalidateCurrentComposerPrediction()
         chatHistoryDelegate.createNewChat(
             characterCardName = characterCardName,
             characterGroupId = characterGroupId,
@@ -716,6 +962,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun createNewChatWithDraft(draft: String) {
+        invalidateCurrentComposerPrediction()
         val trimmedDraft = draft.trim()
         if (trimmedDraft.isBlank()) return
 
@@ -736,6 +983,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun switchChat(chatId: String, scrollToBottom: Boolean = true) {
+        invalidateCurrentComposerPrediction()
+        messageProcessingDelegate.invalidateComposerPrediction(chatId)
         chatHistoryDelegate.switchChat(chatId, scrollToBottom = scrollToBottom)
         chatRuntimeHolder.syncMainChatSelectionToFloating(chatId)
 
@@ -767,6 +1016,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * 隐藏审计 transcript 使用此路径，退出或进程重启后仍以用户原来的可见聊天为全局选择。
      */
     fun switchChatLocally(chatId: String, scrollToBottom: Boolean = false) {
+        invalidateCurrentComposerPrediction()
+        messageProcessingDelegate.invalidateComposerPrediction(chatId)
         chatHistoryDelegate.switchChat(
             chatId = chatId,
             syncToGlobal = false,
@@ -802,6 +1053,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         chatHistoryDelegate.revealMessageForCurrentChat(targetTimestamp)
 
     fun deleteChatHistory(chatId: String) {
+        invalidateCurrentComposerPrediction(chatId)
         chatHistoryDelegate.deleteChatHistory(chatId) { deleted ->
             if (deleted) {
                 pendingMessageQueueStore.removeChat(chatId)
@@ -813,6 +1065,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun clearCurrentChat() {
+        invalidateCurrentComposerPrediction()
         chatHistoryDelegate.clearCurrentChat { deleted, deletedChatId ->
             if (deleted) {
                 deletedChatId?.let {
@@ -831,6 +1084,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun switchActiveCharacterTarget(target: CharacterSelectorTarget) {
+        invalidateCurrentComposerPrediction()
         viewModelScope.launch {
             when (target) {
                 is CharacterSelectorTarget.CharacterCardTarget -> {
@@ -919,6 +1173,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     /** 创建对话分支 */
     fun createBranch(upToMessageTimestamp: Long? = null) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         chatHistoryDelegate.createBranch(upToMessageTimestamp)
         uiStateDelegate.showToast(context.getString(R.string.chat_branch_created))
@@ -926,6 +1181,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     /** 插入总结 */
     fun insertSummary(message: ChatMessage) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         performInsertSummary(message)
     }
@@ -1029,6 +1285,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     /** 删除单条消息 */
     fun deleteMessage(index: Int) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         AppLogger.d(TAG, "准备删除消息，索引: $index")
         val chatIdSnapshot = chatHistoryDelegate.currentChatId.value
@@ -1043,6 +1300,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     /** 从指定索引删除后续所有消息 */
     fun deleteMessagesFrom(index: Int) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             AppLogger.d(TAG, "准备从索引 $index 开始删除后续消息")
@@ -1052,6 +1310,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     /** 批量删除消息 */
     fun deleteMessagesByTimestamp(timestamps: Set<Long>) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         val chatId = chatHistoryDelegate.currentChatId.value ?: return
         viewModelScope.launch {
@@ -1060,6 +1319,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun deleteMessages(indices: Set<Int>) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             AppLogger.d(TAG, "准备批量删除消息，索引: $indices")
@@ -1193,6 +1453,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     // 添加消息编辑方法
     fun updateMessage(index: Int, editedMessage: ChatMessage) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             try {
@@ -1289,6 +1550,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun regenerateSingleAiMessage(index: Int) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             try {
@@ -1310,6 +1572,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun switchMessageVariant(index: Int, targetVariantIndex: Int) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             try {
@@ -1335,6 +1598,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun deleteCurrentMessageVariant(index: Int) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             try {
@@ -1374,6 +1638,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
      * @param editedContent 编辑后的消息内容（如果有）
      */
     fun rewindAndResendMessage(index: Int, editedContent: String) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             try {
@@ -1449,6 +1714,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun rollbackToMessage(index: Int) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         viewModelScope.launch {
             try {
@@ -1471,7 +1737,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                 val timestampOfFirstDeletedMessage = currentHistory[index].timestamp
                 chatHistoryDelegate.truncateChatHistory(timestampOfFirstDeletedMessage)
 
-                val plainText = AvatarEmotionManager.stripXmlLikeTags(targetMessage.content)
+                val plainText = XmlTagStripper.stripXmlLikeTags(targetMessage.content)
                 updateUserMessage(TextFieldValue(plainText))
 
                 uiStateDelegate.showToast(context.getString(R.string.chat_rolled_back_message_in_input))
@@ -1484,7 +1750,9 @@ class ChatViewModel(private val context: Context) : ViewModel() {
 
     // 消息处理相关方法
     fun updateUserMessage(value: TextFieldValue) {
-        val normalization = normalizeMentionDeletion(userMessage.value, value)
+        val normalization = com.ai.assistance.operit.ui.features.chat.util.normalizeAttachedMentionDeletion(
+            userMessage.value, value, attachmentDelegate::isAttachedMention
+        )
         val normalizedValue = normalization.value
         val removedMentionToken = normalization.removedMentionToken
 
@@ -1581,12 +1849,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun sendUserMessage(promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         hideMentionSuggestionPanel()
         messageCoordinationDelegate.sendUserMessage(promptFunctionType)
     }
 
     fun sendTextMessage(text: String, promptFunctionType: PromptFunctionType = PromptFunctionType.CHAT) {
+        invalidateCurrentComposerPrediction()
         if (isCurrentTranscriptReadOnly()) return
         hideMentionSuggestionPanel()
         messageCoordinationDelegate.sendUserMessage(
@@ -1624,6 +1894,24 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         )
         if (!accepted) pendingMessageQueueStore.remove(chatId, item.id)
         return accepted
+    }
+
+    fun submitDynamicUi(
+        owner: com.ai.assistance.operit.ui.common.dynamicui.DynamicUiOwner,
+        text: String,
+    ): Boolean {
+        if (currentChatId.value != owner.chatId || displayedChatId.value != owner.chatId ||
+            isCurrentTranscriptReadOnly() || isChatBusy(owner.chatId) || text.length > 40_000) return false
+        val message = chatHistory.value.firstOrNull { it.timestamp == owner.timestamp } ?: return false
+        if (message.sender != "ai" || message.isVariantPreview ||
+            message.selectedVariantIndex != owner.variant || message.content != owner.content) return false
+        return messageCoordinationDelegate.trySendUserMessageToExistingChat(
+            promptFunctionType = PromptFunctionType.CHAT,
+            chatId = owner.chatId,
+            messageText = text,
+            attachments = emptyList(),
+            turnOptions = com.ai.assistance.operit.data.model.ChatTurnOptions(useComposerReply = false),
+        )
     }
 
     fun trySendQueuedTextMessage(
@@ -1746,37 +2034,6 @@ class ChatViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    private fun normalizeMentionDeletion(
-        previous: TextFieldValue,
-        proposed: TextFieldValue,
-    ): MentionDeletionNormalization {
-        if (previous.selection.start != previous.selection.end) return MentionDeletionNormalization(proposed)
-        if (proposed.selection.start != proposed.selection.end) return MentionDeletionNormalization(proposed)
-        if (previous.text.length != proposed.text.length + 1) return MentionDeletionNormalization(proposed)
-
-        val oldCursor = previous.selection.start.coerceIn(0, previous.text.length)
-        val newCursor = proposed.selection.start.coerceIn(0, proposed.text.length)
-        if (newCursor != oldCursor - 1) return MentionDeletionNormalization(proposed)
-
-        val expectedText = previous.text.removeRange(newCursor, oldCursor)
-        if (expectedText != proposed.text) return MentionDeletionNormalization(proposed)
-
-        val mentionToken =
-            findMentionTokenEndingAtCursor(previous.text, oldCursor)
-                ?: return MentionDeletionNormalization(proposed)
-        val removedMentionToken =
-            previous.text.substring(mentionToken.start + 1, mentionToken.contentEndExclusive).trim()
-        val normalizedText = previous.text.removeRange(mentionToken.start, mentionToken.endExclusive)
-        return MentionDeletionNormalization(
-            value =
-                proposed.copy(
-                    text = normalizedText,
-                    selection = TextRange(mentionToken.start),
-                ),
-            removedMentionToken = removedMentionToken.ifBlank { null },
-        )
-    }
-
     private fun attachMentionPackage(packageName: String) {
         viewModelScope.launch {
             try {
@@ -1827,6 +2084,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     fun cancelMessage(chatId: String) {
+        invalidateCurrentComposerPrediction(chatId)
         if (::messageCoordinationDelegate.isInitialized) {
             messageCoordinationDelegate.cancelSummaryForChat(chatId)
         }
@@ -2104,6 +2362,14 @@ class ChatViewModel(private val context: Context) : ViewModel() {
     }
 
     private fun updateMentionSuggestionState(value: TextFieldValue) {
+        if (value.composition == null && value.selection.collapsed &&
+            value.selection.end == value.text.length &&
+            com.ai.assistance.operit.ui.features.chat.util.chatShortcutSuggestions(value.text).isNotEmpty()) {
+            _showMentionSuggestionPanel.value = true
+            _mentionSuggestionTriggerChar.value = '/'
+            _mentionSearchQuery.value = value.text.drop(1)
+            return
+        }
         val activeMention = findActiveMentionTrigger(value)
         if (activeMention == null) {
             clearMentionSuggestionState()
@@ -3223,7 +3489,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
                     return@launch
                 }
 
-                val segments = TtsSegmenter.split(cleanMessage)
+                val segments = if (currentVoiceService.supportsLongText) listOf(cleanMessage)
+                    else TtsSegmenter.split(cleanMessage)
                 AppLogger.d(TAG, "speech[segments] count=${segments.size} lengths=${segments.joinToString(prefix = "[", postfix = "]") { it.length.toString() }}")
                 var isFirstSegment = true
                 for ((index, segment) in segments.withIndex()) {
@@ -3289,9 +3556,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             try {
                 logSpeechState("pauseSpeaking.request")
                 cancelSpeechControlsHide("pauseSpeaking")
-                speechPlaybackJob?.cancel()
-                speechPlaybackJob = null
-                logSpeechState("pauseSpeaking.cancelPlaybackJob")
+                // Cancelling speak closes the provider and discards queued audio. Pause must
+                // keep the owning job alive so resume can continue the same utterance.
                 val success = ensureActiveVoiceService()?.pause() == true
                 if (success) {
                     _isSpeechPaused.value = true

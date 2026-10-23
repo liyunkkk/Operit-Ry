@@ -1,7 +1,6 @@
 package com.ai.assistance.operit.ui.features.settings.screens
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,16 +19,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import com.ai.assistance.operit.ui.components.CustomScaffold
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.ai.assistance.operit.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.ai.assistance.operit.data.model.PromptTag
 import com.ai.assistance.operit.data.model.TagType
 import com.ai.assistance.operit.data.preferences.PromptTagManager
+import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsIconBadge
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -47,24 +52,26 @@ fun TagMarketScreen(onBackPressed: () -> Unit) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var selectedPreset by remember { mutableStateOf<PresetTagBilingual?>(null) }
     var newTagName by remember { mutableStateOf("") }
+    val hasBackgroundImage by
+        remember { UserPreferencesManager.getInstance(context) }.useBackgroundImage.collectAsState(initial = false)
+    val cardColor = settingsCardColor(hasBackgroundImage)
 
     CustomScaffold() { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 按分类分组显示标签 (Group tags by category)
             val groupedTags = bilingualPresetTags.groupBy { it.getLocalizedCategory(context) }
-            groupedTags.forEach { (category, tags) ->
+            groupedTags.entries.forEachIndexed { index, (category, tags) ->
                 item {
-                    Text(
+                    SettingsSectionTitle(
                         text = category,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                        icon = tags.first().icon,
+                        modifier = Modifier.padding(top = if (index == 0) 0.dp else 8.dp)
                     )
                 }
 
@@ -72,6 +79,7 @@ fun TagMarketScreen(onBackPressed: () -> Unit) {
                     PresetTagCard(
                         preset = preset,
                         context = context,
+                        cardColor = cardColor,
                         onUseClick = {
                             selectedPreset = it
                             newTagName = it.getLocalizedName(context) // 默认使用预设名称 (Use preset name by default)
@@ -156,66 +164,76 @@ fun TagMarketScreen(onBackPressed: () -> Unit) {
 }
 
 @Composable
-private fun PresetTagCard(preset: PresetTagBilingual, context: android.content.Context, onUseClick: (PresetTagBilingual) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = preset.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+private fun PresetTagCard(
+    preset: PresetTagBilingual,
+    context: android.content.Context,
+    cardColor: androidx.compose.ui.graphics.Color,
+    onUseClick: (PresetTagBilingual) -> Unit
+) {
+    SettingsCard(backgroundColor = cardColor, contentPadding = PaddingValues(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsIconBadge(icon = preset.icon, size = 40)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = preset.getLocalizedName(context),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                // 标签类型徽章 (Tag type badge)
-                AssistChip(
-                    onClick = { },
-                    label = { Text(preset.tagType.name, fontSize = 10.sp) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    ),
-                    modifier = Modifier.height(24.dp)
+                Text(
+                    text = preset.getLocalizedDescription(context),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            // 标签类型徽章 (Tag type badge)
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Text(
+                    text = preset.tagType.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Text(
-                text = preset.getLocalizedDescription(context),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.height(40.dp) // 保证差不多两行的高度 (Ensure about two lines height)
+                stringResource(R.string.tag_content),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(stringResource(R.string.tag_content), style = MaterialTheme.typography.labelMedium)
             Text(
                 text = preset.getLocalizedPromptContent(context),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 6,
-                modifier = Modifier.heightIn(max = 100.dp)
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { onUseClick(preset) },
-                modifier = Modifier.align(Alignment.End),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.tag_add))
-            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        FilledTonalButton(
+            onClick = { onUseClick(preset) },
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.tag_add))
         }
     }
 }

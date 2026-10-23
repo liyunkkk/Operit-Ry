@@ -42,7 +42,6 @@ internal object WorkspaceToolPermissionPolicy {
             "read_file_binary",
             "list_files",
             "grep_code",
-            "grep_context",
             "write_file",
             "write_file_binary",
             "file_exists",

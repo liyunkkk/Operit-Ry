@@ -16,8 +16,8 @@ METADATA
         {
             "name": "terminal",
             "description": {
-                "zh": "在持久 Ubuntu 会话执行命令。默认等待10秒，未结束返回 status=running 和 runId，命令继续运行；用 terminal_wait 查询、terminal_cancel 取消。yieldMs 是本次等待时间，不会中断命令；timeoutMs 是执行总上限，默认30分钟。复用会话保留目录和变量。输出为最近尾部快照，outputTruncated 表示截断；大日志请在命令中重定向到文件。completed 只表示回到提示符，不保证命令退出码为0，应检查输出。不要在复用会话直接 exit，需要时用 (命令; exit $?)。",
-                "en": "Run a command in a persistent Ubuntu shell. Waits 10s by default; status=running and runId mean it continues. Use terminal_wait to poll or terminal_cancel to cancel. yieldMs bounds only this wait; timeoutMs bounds execution (default 30 minutes). Preserves cwd and variables. Output is a recent tail snapshot with outputTruncated; redirect large logs to a file. completed means the shell prompt returned, not a verified zero exit code. Use an explicit subshell for exit."
+                "zh": "在持久 Ubuntu 会话执行命令，保留目录、变量和函数。默认等待10秒，未结束返回running和runId，用terminal_wait查询或terminal_cancel取消。yieldMs仅限制本次等待；timeoutMs是执行总上限，默认30分钟。output为日志尾部快照，screen为可替换的当前终端画面（可能包含先前输出），不要重复拼接。completed仅表示结束；exitCode为0才表示命令成功，非0为失败，null为未知。sessionExitCode仅表示会话进程退出码，不能当作命令码。大日志请重定向到文件。不要在复用会话直接exit，需要时用子Shell。",
+                "en": "Run in a persistent Ubuntu shell, preserving cwd, variables and functions. Waits 10s by default; running and runId mean it continues. Poll with terminal_wait or cancel with terminal_cancel. yieldMs bounds this wait; timeoutMs bounds execution (default 30 minutes). output is a log tail; screen is a replaceable current terminal display and may include earlier output. Do not concatenate snapshots. completed means ended; exitCode=0 means command success, nonzero means failure, null means unknown. sessionExitCode describes only the session process. Redirect large logs to a file. Use a subshell instead of exiting the persistent shell."
             },
             "parameters": [
                 {
@@ -61,8 +61,8 @@ METADATA
         {
             "name": "terminal_wait",
             "description": {
-                "zh": "查询 terminal 返回的 runId，短暂等待完成并返回最新输出尾部快照。仍运行就返回running，不会中断命令或排入检测命令。不传runId时查询指定sessionId或当前会话最近一次任务。进程重启或记录淘汰后ID失效，不要自动重跑命令。",
-                "en": "Poll a runId from terminal and return the latest tail snapshot. A running task stays alive; no probe command is queued. Without runId, polls the latest task in sessionId or the current chat session. IDs expire after app restart or completed-record eviction; do not automatically rerun commands."
+                "zh": "查询runId，返回日志尾部output和动态画面screen快照；不要重复拼接。新消息到达时可能提前返回running，命令继续执行；稍后用同一runId查询，不要重跑。completed后检查exitCode，null不能视为成功。查询不会中断命令或排入检测命令。不传runId时查询指定sessionId或当前会话最近任务。ID失效时不要自动重跑命令。",
+                "en": "Poll runId for output log tail and dynamic screen snapshots; do not concatenate repeats. New input may return running early while the command continues; poll the same runId later instead of rerunning. After completed, inspect exitCode; null is not success. Polling never interrupts or queues a probe command. Without runId, polls the latest task in the specified/current session. Do not rerun automatically if an ID expires."
             },
             "parameters": [
                 {
@@ -160,19 +160,46 @@ METADATA
         {
             "name": "shell",
             "description": {
-                "zh": "通过Shizuku/Root权限直接在Android系统中执行Shell命令。运行环境：直接访问Android系统，具有系统级权限，适用于需要操作Android系统底层的场景（如pm、am等系统命令）。",
-                "en": "Execute shell commands directly on Android with Shizuku/Root. Environment: direct Android system access with system-level privileges, suitable for low-level commands such as pm/am."
+                "zh": "在Android执行独立Shell任务，严格使用用户当前权限（标准/Shizuku/Root）。默认等待10秒，未结束返回running和runId，用shell_wait查询、shell_cancel取消；timeoutMs默认2分钟，限制执行总时长。output是合并正常与错误输出的尾部快照，不要重复拼接。只有completed且exitCode=0才成功；failed/timed_out/cancelled表示失败/超时/取消，cancelling表示仍在清理。新消息可提前结束本次等待，任务继续。每次都是独立环境，不保留cwd/变量，无交互输入。不要用&放后台，改用yieldMs=0；结束会清理本任务进程组。主动脱离进程组的守护进程不受管理。",
+                "en": "Run an isolated Android Shell task using the selected STANDARD/Shizuku/Root permission. Default wait 10s; running and runId mean poll with shell_wait or cancel with shell_cancel. timeoutMs defaults to 2 minutes and limits total execution. output is a combined stdout/stderr tail snapshot; do not concatenate snapshots. Only completed with exitCode=0 means success. failed/timed_out/cancelled indicate failure/timeout/cancellation; cancelling means cleanup is pending. New input may end a wait while execution continues. No persistent cwd/variables or interactive stdin. Use yieldMs=0 instead of &. The owned process group is cleaned up on completion; deliberately detached daemons are not managed."
             },
             "parameters": [
                 {
                     "name": "command",
                     "description": {
-                        "zh": "要执行的 Android Shell 命令。本工具仅接受 command，不接受 timeoutMs；不要与 Ubuntu terminal 的参数混用。",
-                        "en": "Android Shell command to execute. This tool accepts only command, not timeoutMs; do not reuse Ubuntu terminal parameters."
+                        "zh": "要执行的 Android Shell 命令，不是 Ubuntu 命令。",
+                        "en": "Android Shell command, not an Ubuntu command."
                     },
                     "type": "string",
                     "required": true
+                },
+                {
+                    "name": "timeoutMs",
+                    "description": { "zh": "执行总上限，1000～1800000毫秒，默认120000。超时终止任务进程组。", "en": "Execution limit, 1000..1800000 ms; default 120000. Timeout terminates the task process group." },
+                    "type": "string",
+                    "required": false
+                },
+                {
+                    "name": "yieldMs",
+                    "description": { "zh": "本次等待0～30000毫秒，默认10000；0立即返回任务编号。", "en": "Wait 0..30000 ms, default 10000; 0 immediately returns a task ID." },
+                    "type": "string",
+                    "required": false
                 }
+            ]
+        },
+        {
+            "name": "shell_wait",
+            "description": { "zh": "等待或查询shell返回的runId，仅结束本次等待，不重新执行命令、不取消任务。", "en": "Wait for or inspect a shell runId. Ending the wait neither reruns nor cancels the command." },
+            "parameters": [
+                { "name": "runId", "description": { "zh": "shell返回的任务编号。", "en": "Task ID returned by shell." }, "type": "string", "required": true },
+                { "name": "yieldMs", "description": { "zh": "等待0～30000毫秒，默认10000。", "en": "Wait 0..30000 ms, default 10000." }, "type": "string", "required": false }
+            ]
+        },
+        {
+            "name": "shell_cancel",
+            "description": { "zh": "取消本对话指定Shell任务并清理其进程组。若仍为cancelling，用shell_wait确认结果。", "en": "Cancel this chat's Shell task and clean up its process group. If still cancelling, use shell_wait to confirm." },
+            "parameters": [
+                { "name": "runId", "description": { "zh": "shell返回的任务编号。", "en": "Task ID returned by shell." }, "type": "string", "required": true }
             ]
         },
         {
@@ -281,29 +308,25 @@ const superAdmin = (function () {
      * 运行环境：直接访问Android系统，具有系统级权限
      * @param command - 要执行的Shell命令
      */
-    async function shell(params: { command: string }): Promise<any> {
-        try {
-            if (!params.command) {
-                throw new Error("命令不能为空");
-            }
-            const command = params.command;
-
-            console.log(`执行Shell命令: ${command}`);
-
-            // 通过Shizuku/Root权限执行shell操作
-            const result = await Tools.System.shell(`${command}`);
-
-            return {
-                command: command,
-                output: result.output,
-                exitCode: result.exitCode
-            };
-        } catch (error) {
-            console.error(`[shell] 错误: ${error.message}`);
-            console.error(error.stack);
-
-            throw error;
+    async function shell(params: { command: string, timeoutMs?: string, yieldMs?: string }): Promise<any> {
+        if (!params.command?.trim()) throw new Error("command is required");
+        const timeoutMs = params.timeoutMs === undefined ? 120000 : Number(params.timeoutMs);
+        if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 1800000) {
+            throw new Error("timeoutMs must be an integer between 1000 and 1800000");
         }
+        return Tools.System.shellTask.start(params.command, { timeoutMs, yieldMs: waitMs(params.yieldMs) });
+    }
+
+    async function shell_wait(params: { runId: string, yieldMs?: string }): Promise<any> {
+        if (!params.runId?.trim()) throw new Error("runId is required");
+        if (Object.prototype.hasOwnProperty.call(params, "command"))
+            throw new Error("shell_wait does not execute commands; use shell.");
+        return Tools.System.shellTask.poll(params.runId, waitMs(params.yieldMs));
+    }
+
+    async function shell_cancel(params: { runId: string }): Promise<any> {
+        if (!params.runId?.trim()) throw new Error("runId is required");
+        return Tools.System.shellTask.cancel(params.runId);
     }
 
     /**
@@ -373,7 +396,9 @@ const superAdmin = (function () {
         terminal_cancel,
         terminal_getscreen,
         terminal_input,
-        shell
+        shell,
+        shell_wait,
+        shell_cancel
     };
 })();
 
@@ -385,3 +410,5 @@ exports.terminal_cancel = superAdmin.terminal_cancel;
 exports.terminal_getscreen = superAdmin.terminal_getscreen;
 exports.terminal_input = superAdmin.terminal_input;
 exports.shell = superAdmin.shell; 
+exports.shell_wait = superAdmin.shell_wait;
+exports.shell_cancel = superAdmin.shell_cancel;

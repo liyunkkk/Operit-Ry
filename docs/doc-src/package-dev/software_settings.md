@@ -106,13 +106,14 @@ writeEnvironmentVariable(key: string, value?: string): Promise<StringResultData>
 - 接口信息：`name`、`api_provider_type`、`api_endpoint`、`api_key`、`model_name`
 - 采样参数：`max_tokens`、`temperature`、`top_p`、`top_k`
 - 惩罚项：`presence_penalty`、`frequency_penalty`、`repetition_penalty`
-- 上下文参数：`context_length`、`max_context_length`、`enable_max_context_mode`
-- 摘要相关：`summary_token_threshold`、`enable_summary`、`enable_summary_by_message_count`、`summary_message_count_threshold`
+- 模型上下文容量：`max_context_length`，单位 K token，须为有限正数。
 - 多模态开关：`enable_direct_image_processing`、`enable_direct_audio_processing`、`enable_direct_video_processing`
 - 扩展能力：`enable_google_search`、`enable_tool_call`
 - 本地模型/并发控制：`mnn_forward_type`、`mnn_thread_count`、`llama_thread_count`、`llama_context_size`、`request_limit_per_minute`、`max_concurrent_requests`
 
 同一组字段都带有对应的 `..._enabled` 布尔控制项时，应按类型定义一起传递。
+
+对话预算、Max 与自动压缩现为每个聊天的独立设置，不再通过模型配置工具修改。旧的 `context_length`、`enable_max_context_mode` 和摘要触发参数会明确返回错误；请在聊天的上下文设置中调整。
 
 ## 示例
 

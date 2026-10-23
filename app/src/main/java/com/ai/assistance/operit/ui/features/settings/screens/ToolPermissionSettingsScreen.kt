@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.ui.features.settings.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,14 +21,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.RemoveCircleOutline
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Build as OutlinedBuild
+import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.DialogProperties
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.core.tools.AIToolHandler
 import com.ai.assistance.operit.core.tools.PermissionReviewInternalTools
+import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsInfoBanner
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
 import com.ai.assistance.operit.ui.permissions.PermissionLevel
 import com.ai.assistance.operit.ui.permissions.PermissionStopSlider
 import com.ai.assistance.operit.ui.permissions.PermissionReviewPolicyStore
@@ -107,45 +126,35 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
         scope.launch { toolPermissionSystem.savePermissionStop(stop) }
     }
 
+    val hasBackgroundImage by
+        remember { UserPreferencesManager.getInstance(context) }.useBackgroundImage.collectAsState(initial = false)
+    val cardColor = settingsCardColor(hasBackgroundImage)
+
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                stringResource(R.string.tool_permissions_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.tool_permissions_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            SettingsInfoBanner(
+                text = stringResource(R.string.tool_permissions_description),
+                backgroundColor = cardColor
             )
         }
 
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.global_permission_switch),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+            val globalTitle = stringResource(R.string.global_permission_switch)
+            SettingsSectionTitle(
+                text = globalTitle,
+                icon = Icons.Outlined.Shield,
+                modifier = Modifier.fillMaxWidth().settingsSearchTarget(globalTitle)
+            )
+            SettingsCard(backgroundColor = cardColor, contentPadding = PaddingValues(16.dp)) {
+                Column {
                     Text(
                         stringResource(R.string.global_permission_switch_description),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     selectedStop?.let { stop ->
@@ -166,21 +175,21 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
                         Text(
                             stringResource(shownStop.descriptionRes),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
         }
         item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        stringResource(R.string.permission_review_policy_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+            val policyTitle = stringResource(R.string.permission_review_policy_title)
+            SettingsSectionTitle(
+                text = policyTitle,
+                icon = Icons.Outlined.Policy,
+                modifier = Modifier.fillMaxWidth().settingsSearchTarget(policyTitle)
+            )
+            SettingsCard(backgroundColor = cardColor, contentPadding = PaddingValues(16.dp)) {
+                Column {
                     Text(
                         stringResource(
                             R.string.permission_review_policy_description,
@@ -222,7 +231,7 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
                                 minLines = 5,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
+                                FilledTonalButton(
                                     onClick = {
                                         scope.launch { reviewPolicyStore.saveCustomPolicy(policyDraft) }
                                     }
@@ -240,25 +249,14 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
             }
         }
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.tool_permission_instruction_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.tool_permission_instruction_content),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+            SettingsSectionTitle(
+                text = stringResource(R.string.tool_permission_instruction_title),
+                icon = Icons.Outlined.OutlinedBuild
+            )
+            SettingsInfoBanner(
+                text = stringResource(R.string.tool_permission_instruction_content),
+                backgroundColor = cardColor
+            )
         }
 
         item {
@@ -277,6 +275,7 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
                 allTools = allTools,
                 toolsInLevel = toolPermissions.filterValues { it == PermissionLevel.ALLOW }.keys,
                 defaultTools = allowedByDefault.toSet(),
+                cardColor = cardColor,
                 toolHandler = toolHandler,
                 onToolToggled = { toolName -> handlePermissionChange(toolName, PermissionLevel.ALLOW) }
             )
@@ -287,6 +286,7 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
                 allTools = allTools,
                 toolsInLevel =
                     toolPermissions.filterValues { it == PermissionLevel.AUTO_REVIEW }.keys,
+                cardColor = cardColor,
                 toolHandler = toolHandler,
                 onToolToggled = { toolName ->
                     handlePermissionChange(toolName, PermissionLevel.AUTO_REVIEW)
@@ -298,6 +298,7 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
                 level = PermissionLevel.ASK,
                 allTools = allTools,
                 toolsInLevel = toolPermissions.filterValues { it == PermissionLevel.ASK }.keys,
+                cardColor = cardColor,
                 toolHandler = toolHandler,
                 onToolToggled = { toolName -> handlePermissionChange(toolName, PermissionLevel.ASK) }
             )
@@ -307,6 +308,7 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
                 level = PermissionLevel.FORBID,
                 allTools = allTools,
                 toolsInLevel = toolPermissions.filterValues { it == PermissionLevel.FORBID }.keys,
+                cardColor = cardColor,
                 toolHandler = toolHandler,
                 onToolToggled = { toolName -> handlePermissionChange(toolName, PermissionLevel.FORBID) }
             )
@@ -314,16 +316,28 @@ fun ToolPermissionSettingsScreen(navigateBack: () -> Unit) {
     }
 }
 
+/** Chips shown inside a group before the rest move behind "show all". */
+private const val PREVIEW_LIMIT = 8
+
+/** Package tools are named `package:tool`; everything else is built in. */
+private fun packageOf(toolName: String): String = toolName.substringBefore(':', "")
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PermissionGroup(
     level: PermissionLevel,
     allTools: List<String>,
     toolsInLevel: Set<String>,
     defaultTools: Set<String> = emptySet(),
+    cardColor: Color,
     toolHandler: AIToolHandler,
     onToolToggled: (String) -> Unit
 ) {
     var showToolSelector by remember { mutableStateOf(false) }
+    var showAll by remember { mutableStateOf(false) }
+    var showDefaults by remember { mutableStateOf(false) }
+    val chosen = remember(toolsInLevel) { toolsInLevel.sorted() }
+    val defaults = remember(defaultTools) { defaultTools.sorted() }
 
     val (title, description, color) = when (level) {
         PermissionLevel.ALLOW -> Triple(
@@ -348,12 +362,12 @@ private fun PermissionGroup(
         )
     }
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    SettingsCard(
+        backgroundColor = cardColor,
+        modifier = Modifier.settingsSearchTarget(title),
+        contentPadding = PaddingValues(16.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -362,24 +376,40 @@ private fun PermissionGroup(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (chosen.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                stringResource(R.string.tool_permission_count, chosen.size),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = color,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(color.copy(alpha = 0.12f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = { showToolSelector = true }) {
+                IconButton(
+                    onClick = { showToolSelector = true },
+                    modifier = Modifier.settingsSearchTarget(stringResource(R.string.add_tool))
+                ) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_tool), tint = color)
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val chips = toolsInLevel + defaultTools
-            if (chips.isNotEmpty()) {
-                chips.forEach { toolName ->
-                    val onRemove: (() -> Unit)? =
-                        if (toolName in defaultTools) null else { { onToolToggled(toolName) } }
-                    ToolChip(toolName = toolName, onRemove = onRemove)
-                }
-            } else {
+            if (chosen.isEmpty() && defaults.isEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     stringResource(R.string.no_tools_in_group),
                     style = MaterialTheme.typography.bodyMedium,
@@ -387,15 +417,76 @@ private fun PermissionGroup(
                 )
             }
 
-            if (defaultTools.isNotEmpty()) {
+            if (chosen.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    chosen.take(PREVIEW_LIMIT).forEach { toolName ->
+                        ToolChip(toolName = toolName, onRemove = { onToolToggled(toolName) })
+                    }
+                }
+                if (chosen.size > PREVIEW_LIMIT) {
+                    TextButton(onClick = { showAll = true }) {
+                        Text(stringResource(R.string.tool_permission_show_all, chosen.size))
+                    }
+                }
+            }
+
+            // A tool that carries its own default level is allowed without the user choosing it. It
+            // has no stored choice to clear, so it sits folded away without a remove button; giving
+            // it another level is what overrides it.
+            if (defaults.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    stringResource(R.string.permission_level_allow_default_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showDefaults = !showDefaults }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(R.string.tool_permission_default_count, defaults.size),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        if (showDefaults) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                AnimatedVisibility(showDefaults) {
+                    Column {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            defaults.forEach { ToolChip(toolName = it, onRemove = null) }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.permission_level_allow_default_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }
+    }
+
+    if (showAll) {
+        ToolListDialog(
+            title = title,
+            color = color,
+            tools = chosen,
+            onRemove = onToolToggled,
+            onDismiss = { showAll = false }
+        )
     }
 
     if (showToolSelector) {
@@ -413,28 +504,225 @@ private fun PermissionGroup(
 private fun ToolChip(toolName: String, onRemove: (() -> Unit)?) {
     Row(
         modifier = Modifier
-            .padding(vertical = 4.dp)
+            .widthIn(max = 260.dp)
+            .heightIn(min = 40.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(start = 10.dp, end = if (onRemove != null) 2.dp else 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             toolName,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.onSecondaryContainer
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(vertical = 10.dp)
         )
         if (onRemove != null) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = stringResource(R.string.remove_tool),
+            Box(
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
                     .clickable { onRemove() },
-                tint = MaterialTheme.colorScheme.onSecondaryContainer
-            )
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.remove_tool),
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
+    }
+}
+
+/** Every tool in one group, searchable and grouped by package, for when the preview is not enough. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ToolListDialog(
+    title: String,
+    color: Color,
+    tools: List<String>,
+    onRemove: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val sections = remember(tools, searchQuery) {
+        tools.filter { it.contains(searchQuery.trim(), ignoreCase = true) }
+            .groupBy(::packageOf)
+            .toSortedMap()
+    }
+    val builtIn = stringResource(R.string.tool_permission_builtin_group)
+    val container = MaterialTheme.colorScheme.surfaceContainerHigh
+    // Rows sit on a lighter block in light mode and a raised one in dark mode, so both read as cards.
+    val rowBlock =
+        if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerLowest
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(max = 560.dp)
+                .fillMaxWidth(0.92f)
+                .heightIn(max = 640.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = container)
+        ) {
+            Column(modifier = Modifier.padding(top = 20.dp, bottom = 12.dp)) {
+                Row(
+                    modifier = Modifier.padding(start = 24.dp, end = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.size(12.dp).background(color, CircleShape))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            stringResource(R.string.tool_permission_total, tools.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.common_close))
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text(stringResource(R.string.search_tools)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_search))
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (sections.isEmpty()) {
+                    Text(
+                        stringResource(
+                            if (tools.isEmpty()) R.string.no_tools_in_group else R.string.tool_permission_no_match
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 32.dp)
+                    )
+                }
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    sections.forEach { (pkg, names) ->
+                        stickyHeader(key = "header:$pkg", contentType = "header") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(container)
+                                    .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    if (pkg.isEmpty()) Icons.Default.Build else Icons.Default.Extension,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    pkg.ifEmpty { builtIn },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    names.size.toString(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(color.copy(alpha = 0.16f))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        itemsIndexed(names, key = { _, name -> "tool:$name" }, contentType = { _, _ -> "tool" }) { index, toolName ->
+                            val first = index == 0
+                            val last = index == names.lastIndex
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = if (first) 16.dp else 0.dp,
+                                            topEnd = if (first) 16.dp else 0.dp,
+                                            bottomStart = if (last) 16.dp else 0.dp,
+                                            bottomEnd = if (last) 16.dp else 0.dp
+                                        )
+                                    )
+                                    .background(rowBlock)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 52.dp)
+                                        .padding(start = 16.dp, end = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        if (pkg.isEmpty()) toolName else toolName.substringAfter(':'),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(onClick = { onRemove(toolName) }) {
+                                        Icon(
+                                            Icons.Default.RemoveCircleOutline,
+                                            contentDescription = stringResource(R.string.remove_tool),
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                if (!last) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -453,32 +741,45 @@ private fun ToolSelectorDialog(
     }
     val filteredTools = allTools.filter { it.contains(searchQuery, ignoreCase = true) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 500.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                .widthIn(max = 560.dp)
+                .fillMaxWidth(0.92f)
+                .heightIn(max = 640.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
-            Column(modifier = Modifier.padding(vertical = 16.dp)) {
+            Column(modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)) {
                 Text(
                     stringResource(R.string.select_tools),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 24.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text(stringResource(R.string.search_tools)) },
+                    placeholder = { Text(stringResource(R.string.search_tools)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_search))
+                            }
+                        }
+                    },
+                    singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 20.dp),
                     shape = RoundedCornerShape(16.dp)
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(filteredTools) { toolName ->
                         val isSelected = toolsInLevel.contains(toolName)

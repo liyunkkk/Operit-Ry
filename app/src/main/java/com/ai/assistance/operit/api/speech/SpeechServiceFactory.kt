@@ -15,6 +15,7 @@ object SpeechServiceFactory {
     enum class SpeechServiceType {
         /** 基于Sherpa-ncnn的本地识别实现 */
         SHERPA_NCNN,
+        SHERPA_ONNX,
         OPENAI_STT,
         DEEPGRAM_STT,
     }
@@ -31,7 +32,7 @@ object SpeechServiceFactory {
         val profiles = SpeechServiceProfilesPreferences(context)
         val profile = runBlocking { profiles.getCurrentSttProfile() }
 
-        return createSpeechService(context, profile.serviceType, profile.httpConfig)
+        return createSpeechService(context, profile.serviceType, profile.httpConfig, profile.localModelId)
     }
 
     fun createWakeSpeechService(
@@ -43,6 +44,7 @@ object SpeechServiceFactory {
         val effectiveType = when (selectedType) {
             SpeechServiceType.OPENAI_STT,
             SpeechServiceType.DEEPGRAM_STT,
+            SpeechServiceType.SHERPA_ONNX,
             -> SpeechServiceType.SHERPA_NCNN
             else -> selectedType
         }
@@ -62,8 +64,10 @@ object SpeechServiceFactory {
         context: Context,
         type: SpeechServiceType,
         httpConfig: SttHttpConfig,
+        localModelId: String = "sensevoice-int8",
     ): SpeechService {
         return when (type) {
+            SpeechServiceType.SHERPA_ONNX -> OnnxSpeechProvider(context.applicationContext, localModelId)
             SpeechServiceType.SHERPA_NCNN -> acquireLocalSpeechService(context, type)
             SpeechServiceType.OPENAI_STT -> {
                 runBlocking {
@@ -109,6 +113,16 @@ object SpeechServiceFactory {
 
     private val localLock = Any()
     private var localEntry: LocalEntry? = null
+    private var closingLocalEngines = 0
+
+    /** Serializes file removal with every acquisition, including wake-word recognition. */
+    internal fun <T> withUnusedLegacyModel(context: Context, action: () -> T): T =
+        synchronized(localLock) {
+            check(localEntry == null && closingLocalEngines == 0) {
+                context.getString(com.ai.assistance.operit.R.string.voice_legacy_in_use)
+            }
+            action()
+        }
 
     private fun acquireLocalSpeechService(
         context: Context,
@@ -158,6 +172,7 @@ object SpeechServiceFactory {
             }
 
             localEntry = null
+            closingLocalEngines++
             toShutdown = entry.service
         }
 
@@ -165,6 +180,8 @@ object SpeechServiceFactory {
             toShutdown?.shutdown()
         } catch (e: Exception) {
             AppLogger.w(TAG, "Failed to shutdown local SpeechService", e)
+        } finally {
+            synchronized(localLock) { closingLocalEngines-- }
         }
     }
 
@@ -198,7 +215,7 @@ object SpeechServiceFactory {
 
             val created =
                 try {
-                    createSpeechService(context, profile.serviceType, profile.httpConfig)
+                    createSpeechService(context, profile.serviceType, profile.httpConfig, profile.localModelId)
                 } catch (e: IllegalStateException) {
                     AppLogger.w(TAG, "Failed to create SpeechService for profile=$selectedProfileId, keeping previous instance", e)
                     null

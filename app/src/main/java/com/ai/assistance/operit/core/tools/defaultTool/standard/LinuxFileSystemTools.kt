@@ -1185,63 +1185,6 @@ class LinuxFileSystemTools(context: Context) : StandardFileSystemTools(context) 
         )
     }
 
-    /** Linux上下文搜索 - 基于意图字符串查找相关文件或文件内的相关代码段 */
-    override suspend fun grepContext(tool: AITool): ToolResult {
-        val path = tool.parameters.find { it.name == "path" }?.value ?: ""
-        val intent = tool.parameters.find { it.name == "intent" }?.value ?: ""
-        val filePattern = tool.parameters.find { it.name == "file_pattern" }?.value ?: "*"
-        val maxResults = tool.parameters.find { it.name == "max_results" }?.value?.toIntOrNull() ?: 10
-        
-        PathValidator.validateLinuxPath(path, tool.name)?.let { return it }
-
-        if (path.isBlank()) {
-            return ToolResult(
-                toolName = tool.name,
-                success = false,
-                result = StringResultData(""),
-                error = "Path parameter is required"
-            )
-        }
-
-        if (intent.isBlank()) {
-            return ToolResult(
-                toolName = tool.name,
-                success = false,
-                result = StringResultData(""),
-                error = "Intent parameter is required"
-            )
-        }
-
-        val isFile = fs.isFile(path)
-
-        if (isFile) {
-            val parent = path.substringBeforeLast('/', "")
-            val fileName = path.substringAfterLast('/')
-            val searchPath = if (parent.isNotBlank()) parent else "/"
-            return grepContextAgentic(
-                toolName = tool.name,
-                displayPath = path,
-                searchPath = searchPath,
-                environment = "linux",
-                intent = intent,
-                filePattern = fileName,
-                maxResults = maxResults,
-                envLabel = "linux"
-            )
-        }
-
-        return grepContextAgentic(
-            toolName = tool.name,
-            displayPath = path,
-            searchPath = path,
-            environment = "linux",
-            intent = intent,
-            filePattern = filePattern,
-            maxResults = maxResults,
-            envLabel = "linux"
-        )
-    }
-
     /** 分享Linux文件（暂不支持） */
     override suspend fun shareFile(tool: AITool): ToolResult {
         val path = tool.parameters.find { it.name == "path" }?.value ?: ""

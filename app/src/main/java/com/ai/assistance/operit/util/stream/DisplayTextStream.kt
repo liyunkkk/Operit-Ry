@@ -1,9 +1,11 @@
 package com.ai.assistance.operit.util.stream
 
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.yield
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Display-only replay: keep one text buffer, not a queue of every token per renderer.
@@ -11,15 +13,20 @@ import kotlinx.coroutines.yield
  * A revision uses a new stream, so offsets always refer to an append-only document.
  */
 internal class DisplayTextStream : Stream<String> {
+    private companion object {
+        const val BATCH_CHARS = 16 * 1024
+        const val COALESCE_MS = 16L
+    }
     private val monitor = Any()
     private val text = StringBuilder()
     private val subscribers = mutableSetOf<Channel<Unit>>()
     private var closed = false
     private var failure: Throwable? = null
+    private val completion = CompletableDeferred<Unit>()
     private data class Batch(val text: String, val finished: Boolean, val failure: Throwable?)
 
     private fun readBatch(offset: Int): Batch = synchronized(monitor) {
-        val end = minOf(text.length, offset + 16 * 1024)
+        val end = offset + minOf(text.length - offset, BATCH_CHARS)
         Batch(text.substring(offset, end), closed && end == text.length, failure)
     }
 
@@ -52,6 +59,7 @@ internal class DisplayTextStream : Stream<String> {
             failure = cause
             subscribers.forEach { it.trySend(Unit) }
         }
+        completion.complete(Unit)
     }
 
     override suspend fun collect(collector: StreamCollector<String>) {
@@ -70,7 +78,15 @@ internal class DisplayTextStream : Stream<String> {
                     if (batch.failure != null) throw batch.failure
                     return
                 }
-                if (batch.text.isEmpty()) changed.receive() else yield()
+                when {
+                    batch.text.isEmpty() -> changed.receive()
+                    // Drain a replay/backlog at full speed, yielding fairly between batches.
+                    batch.text.length == BATCH_CHARS -> yield()
+                    // First content was already delivered. Read the *next* batch after the
+                    // window, merging tiny deltas without delaying execution or revision events.
+                    // Close interrupts the wait; cancellation remains immediately cancellable.
+                    else -> withTimeoutOrNull(COALESCE_MS) { completion.await() }
+                }
             }
         } finally {
             unsubscribe(changed)

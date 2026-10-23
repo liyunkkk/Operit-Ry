@@ -3,6 +3,7 @@ package com.ai.assistance.operit.ui.features.settings.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,12 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -55,6 +55,13 @@ import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.ui.common.displays.MarkdownTextComposable
 import com.ai.assistance.operit.ui.components.CustomScaffold
 import com.ai.assistance.operit.ui.theme.ProvideAiMarkdownTextLayoutSettings
+import com.ai.assistance.operit.ui.theme.TonedIconStyle
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsInfoBanner
+import com.ai.assistance.operit.ui.features.settings.components.SettingsRowDivider
+import com.ai.assistance.operit.ui.features.settings.components.SettingsSectionTitle
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
 import java.text.DecimalFormat
 import kotlinx.coroutines.launch
 
@@ -72,9 +79,11 @@ fun LayoutAdjustmentSettingsScreen(
     val aiMarkdownLineHeightMultiplier by userPreferences.aiMarkdownLineHeightMultiplier.collectAsState(initial = 1f)
     val aiMarkdownLetterSpacing by userPreferences.aiMarkdownLetterSpacing.collectAsState(initial = 0f)
     val aiMarkdownParagraphSpacing by userPreferences.aiMarkdownParagraphSpacing.collectAsState(initial = 12f)
+    val tonedIconStyle by userPreferences.aiMarkdownTonedIconStyle.collectAsState(initial = TonedIconStyle.Plain)
 
-    val sectionContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
-    val itemBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    val hasBackgroundImage by userPreferences.useBackgroundImage.collectAsState(initial = false)
+    val sectionContainerColor = settingsCardColor(hasBackgroundImage)
+    val itemBackgroundColor = Color.Transparent
 
     CustomScaffold { paddingValues ->
         Column(
@@ -85,13 +94,12 @@ fun LayoutAdjustmentSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
+            SettingsInfoBanner(
                 text = stringResource(R.string.layout_adjustment_description),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                backgroundColor = sectionContainerColor
             )
 
-            SectionTitle(
+            SettingsSectionTitle(
                 text = stringResource(R.string.layout_adjustment_settings_title),
                 icon = Icons.Default.Tune
             )
@@ -111,6 +119,7 @@ fun LayoutAdjustmentSettingsScreen(
                     backgroundColor = itemBackgroundColor
                 )
 
+                SettingsRowDivider(inset = false)
                 CompactEditableFloatSettingItem(
                     title = stringResource(R.string.chat_area_horizontal_padding),
                     description = stringResource(R.string.chat_area_horizontal_padding_desc),
@@ -125,7 +134,7 @@ fun LayoutAdjustmentSettingsScreen(
                     backgroundColor = itemBackgroundColor
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsRowDivider(inset = false)
 
                 CompactEditableFloatSettingItem(
                     title = stringResource(R.string.global_text_line_height_multiplier),
@@ -142,6 +151,7 @@ fun LayoutAdjustmentSettingsScreen(
                     backgroundColor = itemBackgroundColor
                 )
 
+                SettingsRowDivider(inset = false)
                 CompactEditableFloatSettingItem(
                     title = stringResource(R.string.global_text_letter_spacing),
                     description = stringResource(R.string.global_text_letter_spacing_desc),
@@ -157,6 +167,7 @@ fun LayoutAdjustmentSettingsScreen(
                     backgroundColor = itemBackgroundColor
                 )
 
+                SettingsRowDivider(inset = false)
                 CompactEditableFloatSettingItem(
                     title = stringResource(R.string.global_text_paragraph_spacing),
                     description = stringResource(R.string.global_text_paragraph_spacing_desc),
@@ -172,9 +183,43 @@ fun LayoutAdjustmentSettingsScreen(
                     backgroundColor = itemBackgroundColor
                 )
 
+                SettingsRowDivider(inset = false)
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.toned_icon_style),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = stringResource(R.string.toned_icon_style_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val styles = listOf(
+                        TonedIconStyle.Plain to R.string.toned_icon_style_plain,
+                        TonedIconStyle.Dot to R.string.toned_icon_style_dot,
+                        TonedIconStyle.Halo to R.string.toned_icon_style_halo,
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        styles.forEachIndexed { index, (style, label) ->
+                            SegmentedButton(
+                                selected = tonedIconStyle == style,
+                                onClick = { scope.launch { userPreferences.saveAiMarkdownTonedIconStyle(style) } },
+                                shape = SegmentedButtonDefaults.itemShape(index = index, count = styles.size),
+                            ) { Text(stringResource(label)) }
+                        }
+                    }
+                }
+
             }
 
-            SectionTitle(
+            SettingsSectionTitle(
                 text = stringResource(R.string.layout_adjustment_preview_title),
                 icon = Icons.Default.Visibility
             )
@@ -190,44 +235,15 @@ fun LayoutAdjustmentSettingsScreen(
 }
 
 @Composable
-private fun SectionTitle(
-    text: String,
-    icon: ImageVector
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 2.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@Composable
 private fun SettingsSectionCard(
     containerColor: Color,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            content = content
-        )
-    }
+    SettingsCard(
+        backgroundColor = containerColor,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+        content = content
+    )
 }
 
 @Composable
@@ -239,12 +255,8 @@ private fun LayoutAdjustmentPreviewCard(
         markdownText.replace("\\n", "\n")
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
+    SettingsCard(backgroundColor = containerColor, contentPadding = PaddingValues(16.dp)) {
         Column(
-            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
@@ -308,9 +320,10 @@ private fun CompactEditableFloatSettingItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(backgroundColor, RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .background(backgroundColor)
+            .settingsSearchTarget(title)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -326,8 +339,7 @@ private fun CompactEditableFloatSettingItem(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -342,20 +354,20 @@ private fun CompactEditableFloatSettingItem(
                         isError = newValue.isNotBlank() && (floatValue == null || floatValue !in valueRange)
                     },
                     modifier = Modifier
-                        .width(64.dp)
+                        .width(72.dp)
                         .background(
                             color = if (isError) {
                                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f)
                             } else {
-                                MaterialTheme.colorScheme.surface
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                             },
-                            shape = RoundedCornerShape(4.dp)
+                            shape = RoundedCornerShape(10.dp)
                         )
-                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     textStyle = TextStyle(
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
                         textAlign = TextAlign.Center
                     ),
                     keyboardOptions = KeyboardOptions(
@@ -371,9 +383,8 @@ private fun CompactEditableFloatSettingItem(
                 Text(
                     text = unitLabel,
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 6.dp)
                 )
             }
         }
@@ -390,17 +401,24 @@ private fun CompactEditableFloatSettingItem(
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = resetToDefault) {
-                Text(stringResource(R.string.reset_to_default))
-            }
-
-            TextButton(onClick = validateAndSave) {
-                Text(stringResource(R.string.save))
+        val dirty = textValue != decimalFormat.format(currentValue)
+        val canReset = currentValue != defaultValue
+        if (dirty || canReset) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (canReset) {
+                    TextButton(onClick = resetToDefault) {
+                        Text(stringResource(R.string.reset_to_default))
+                    }
+                }
+                if (dirty) {
+                    TextButton(onClick = validateAndSave) {
+                        Text(stringResource(R.string.save))
+                    }
+                }
             }
         }
     }

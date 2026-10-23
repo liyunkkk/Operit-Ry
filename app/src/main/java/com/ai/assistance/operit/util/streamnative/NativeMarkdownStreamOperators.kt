@@ -27,6 +27,7 @@ private fun Stream<Char>.nativeMarkdownSplitBySession(
     debugTag: String,
     flushIntervalMs: Long? = null,
     maxDeltaChars: Int? = null,
+    finishAtEnd: Boolean = false,
 ): Stream<StreamGroup<MarkdownProcessorType?>> {
     val upstream = this
 
@@ -85,7 +86,9 @@ private fun Stream<Char>.nativeMarkdownSplitBySession(
                         activeTag = null
                     }
 
-                    suspend fun flushDelta() {
+                    var finished = false
+
+                    suspend fun flushDelta(finish: Boolean = false) {
                         flushMutex.withLock {
                             val delta = mutex.withLock {
                                 if (deltaBuffer.isEmpty()) {
@@ -93,9 +96,12 @@ private fun Stream<Char>.nativeMarkdownSplitBySession(
                                 } else {
                                     deltaBuffer.toString().also { deltaBuffer.setLength(0) }
                                 }
-                            } ?: return
+                            }
+                            if (delta == null && !finish) return
 
-                            val segments = session.push(delta)
+                            var segments = if (delta != null) session.push(delta) else IntArray(0)
+                            // Text still waiting for a closing delimiter at the end is plain text.
+                            if (finish) segments += session.finish()
                             if (segments.isEmpty()) return
 
                             data class Action(val type: MarkdownProcessorType?, val text: String?)
@@ -189,14 +195,22 @@ private fun Stream<Char>.nativeMarkdownSplitBySession(
                                 flushDelta()
                             }
                         }
-                        flushDelta()
+                        flushDelta(finish = finishAtEnd)
+                        finished = true
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         StreamLogger.e(debugTag, "nativeMarkdownSplitBy failed: ${e.message}", e)
                         throw e
                     } finally {
-                        withContext(NonCancellable) { flushJob?.cancelAndJoin() }
+                        withContext(NonCancellable) {
+                            flushJob?.cancelAndJoin()
+                            // A cancelled or failed stream still shows the text it already received.
+                            if (!finished) {
+                                runCatching { flushDelta(finish = finishAtEnd) }
+                                    .onFailure { StreamLogger.e(debugTag, "final flush failed: ${it.message}", it) }
+                            }
+                        }
                         try {
                             closeDefaultChannel()
                             closePluginChannel()
@@ -220,6 +234,7 @@ private fun Stream<String>.nativeMarkdownSplitBySessionString(
     debugTag: String,
     flushIntervalMs: Long? = null,
     maxDeltaChars: Int? = null,
+    finishAtEnd: Boolean = false,
 ): Stream<StreamGroup<MarkdownProcessorType?>> {
     val upstream = this
 
@@ -278,7 +293,9 @@ private fun Stream<String>.nativeMarkdownSplitBySessionString(
                         activeTag = null
                     }
 
-                    suspend fun flushDelta() {
+                    var finished = false
+
+                    suspend fun flushDelta(finish: Boolean = false) {
                         flushMutex.withLock {
                             val delta = mutex.withLock {
                                 if (deltaBuffer.isEmpty()) {
@@ -286,9 +303,12 @@ private fun Stream<String>.nativeMarkdownSplitBySessionString(
                                 } else {
                                     deltaBuffer.toString().also { deltaBuffer.setLength(0) }
                                 }
-                            } ?: return
+                            }
+                            if (delta == null && !finish) return
 
-                            val segments = session.push(delta)
+                            var segments = if (delta != null) session.push(delta) else IntArray(0)
+                            // Text still waiting for a closing delimiter at the end is plain text.
+                            if (finish) segments += session.finish()
                             if (segments.isEmpty()) return
 
                             data class Action(val type: MarkdownProcessorType?, val text: String?)
@@ -382,14 +402,22 @@ private fun Stream<String>.nativeMarkdownSplitBySessionString(
                                 flushDelta()
                             }
                         }
-                        flushDelta()
+                        flushDelta(finish = finishAtEnd)
+                        finished = true
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         StreamLogger.e(debugTag, "nativeMarkdownSplitBy failed: ${e.message}", e)
                         throw e
                     } finally {
-                        withContext(NonCancellable) { flushJob?.cancelAndJoin() }
+                        withContext(NonCancellable) {
+                            flushJob?.cancelAndJoin()
+                            // A cancelled or failed stream still shows the text it already received.
+                            if (!finished) {
+                                runCatching { flushDelta(finish = finishAtEnd) }
+                                    .onFailure { StreamLogger.e(debugTag, "final flush failed: ${it.message}", it) }
+                            }
+                        }
                         try {
                             closeDefaultChannel()
                             closePluginChannel()
@@ -417,6 +445,7 @@ fun Stream<Char>.nativeMarkdownSplitByBlock(
         debugTag = "NativeMarkdownBlockSplitBy",
         flushIntervalMs = flushIntervalMs,
         maxDeltaChars = maxDeltaChars,
+        finishAtEnd = true,
     )
 
 fun Stream<Char>.nativeMarkdownSplitByInline(
@@ -428,6 +457,7 @@ fun Stream<Char>.nativeMarkdownSplitByInline(
         debugTag = "NativeMarkdownInlineSplitBy",
         flushIntervalMs = flushIntervalMs,
         maxDeltaChars = maxDeltaChars,
+        finishAtEnd = true,
     )
 
 @JvmName("nativeMarkdownSplitByBlockString")
@@ -440,6 +470,7 @@ fun Stream<String>.nativeMarkdownSplitByBlock(
         debugTag = "NativeMarkdownBlockSplitBy",
         flushIntervalMs = flushIntervalMs,
         maxDeltaChars = maxDeltaChars,
+        finishAtEnd = true,
     )
 
 @JvmName("nativeMarkdownSplitByInlineString")
@@ -452,4 +483,5 @@ fun Stream<String>.nativeMarkdownSplitByInline(
         debugTag = "NativeMarkdownInlineSplitBy",
         flushIntervalMs = flushIntervalMs,
         maxDeltaChars = maxDeltaChars,
+        finishAtEnd = true,
     )

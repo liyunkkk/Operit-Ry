@@ -70,9 +70,6 @@ ANDROID_FULL_PATTERNS = (
 ANDROID_MODULE_ROOTS = (
     "chat-storage",
     "memory-storage",
-    "dragonbones",
-    "fbx",
-    "mmd",
     "quickjs",
     "showerclient",
     "terminal",

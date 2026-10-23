@@ -62,8 +62,12 @@ import com.ai.assistance.operit.data.preferences.CharacterGroupCardManager
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.data.repository.ChatHistoryManager
 import com.ai.assistance.operit.data.repository.MemoryRepository
+import com.ai.assistance.operit.ui.features.settings.components.SettingsIconBadge
+import com.ai.assistance.operit.ui.features.settings.components.rememberSettingsCardColor
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
 import com.ai.assistance.operit.ui.features.settings.components.CharacterCardAssignDialog
 import com.ai.assistance.operit.ui.features.settings.components.CharacterGroupAssignDialog
+import com.ai.assistance.operit.ui.features.settings.components.settingsSearchTarget
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -771,15 +775,15 @@ private fun ChatManagementOverviewCard(
     activeProfileName: String
 ) {
     val context = LocalContext.current
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                     text = context.getString(R.string.chat_history_overview),
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(
                     text = context.getString(R.string.current_config_label, activeProfileName),
@@ -843,9 +847,9 @@ private fun CharacterCardStatsCard(
     val context = LocalContext.current
     val userPreferencesManager = remember { UserPreferencesManager.getInstance(context) }
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -919,9 +923,9 @@ private fun CharacterGroupStatsCard(
         characterGroups.associateBy { it.id }
     }
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -1352,9 +1356,9 @@ private fun ChatHistoryBatchSelectorCard(
             !deleteInProgress &&
             !isMemoryRebuildRunning
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -1629,7 +1633,7 @@ private fun ChatHistoryBatchSelectorCard(
                         placeholder = { Text(context.getString(R.string.select_card_or_unbind)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
                         colors = ExposedDropdownMenuDefaults.textFieldColors()
                     )
@@ -1687,7 +1691,7 @@ private fun ChatHistoryBatchSelectorCard(
                         placeholder = { Text(context.getString(R.string.select_group_or_unbind)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = groupDropdownExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
                         colors = ExposedDropdownMenuDefaults.textFieldColors()
                     )
@@ -1758,7 +1762,7 @@ private fun ChatHistoryBatchSelectorCard(
                             Icon(Icons.Default.Folder, contentDescription = null)
                         },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             .fillMaxWidth(),
                         colors = ExposedDropdownMenuDefaults.textFieldColors()
                     )
@@ -2044,7 +2048,7 @@ private fun ChatHistoryBatchSelectorCard(
                                     expanded = memoryWindowSizeMenuExpanded
                                 )
                             },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                             colors = ExposedDropdownMenuDefaults.textFieldColors()
                         )
                         ExposedDropdownMenu(
@@ -2382,37 +2386,27 @@ private fun SectionHeader(
     title: String,
     subtitle: String,
     icon: ImageVector
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().settingsSearchTarget(title),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-                modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-    ) {
-        Icon(
-            imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(10.dp)
+        SettingsIconBadge(icon = icon, size = 40)
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = title,
-                style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
-
+}
 /**
  * 无绑定工作区管理卡片
  */
@@ -2434,9 +2428,9 @@ private fun UnboundWorkspaceCard(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var deleteInProgress by remember { mutableStateOf(false) }
     
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(

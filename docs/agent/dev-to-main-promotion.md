@@ -8,6 +8,22 @@
 2. 用户已明确同意晋升。
 3. `personal/dev` 工作区干净且与远端同步。
 
+## 版本号规则
+
+稳定版本号形如 `<基线版本>-ry.<序号>`，例如 `1.12.2-ry.6`。两段各自独立演进：
+
+| 字段 | 何时变化 | 例子 |
+|---|---|---|
+| `versionName` 的 `ry.<序号>` | 每次稳定版发布加一 | `1.12.2-ry.6` → `1.12.2-ry.7` |
+| `versionName` 的基线版本 | 跟随上游正式版本 | `1.12.1` → `1.12.2` |
+| `versionCode` | 只随基线版本更新加一，`ry` 发布不动 | 基线变到 `1.12.3` 时才从 `100205` 变为 `100206` |
+
+约束：
+
+- `personal/dev` 与 `personal/main` 的 `versionCode` 必须一致；它按基线版本推进，dev 不得落后或领先稳定分支。
+- 晋升分支只更新 `versionName` 的 `ry` 序号，不调整 `versionCode`；混入 `versionCode` 改动视为晋升失败。
+- dev 的 `-dev.<build>` 后缀由 debug 变体的 `versionNameSuffix` 自动追加，不要在源码里手写。
+
 ## 晋升检查点
 
 每次晋升完成后，将最新 `personal/main` 回合并到 `personal/dev`，并在专用检查点提交上创建不可复用的 annotated tag：

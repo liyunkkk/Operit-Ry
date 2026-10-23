@@ -17,6 +17,17 @@ import java.util.ArrayDeque
  * app-owned tool tag grammar and treats every other tag as ordinary text.
  */
 internal object ExecutableToolProtocolParser {
+    /** A preempted sampling is a draft, not a tool execution. Do not repair its partial arguments. */
+    fun retainBeforeUnexecutedTool(content: String): String {
+        val codeMask = MarkdownCodeMask.build(content)
+        val scan = buildMarkupScan(content, codeMask)
+        val first = scan.executableOpeningPositions.firstOrNull {
+            !codeMask[it] && !scan.opaqueMask[it] && isExecutableBoundary(content, it)
+        }
+        val partial = inspectTruncation(content).truncatedTool?.fragmentStart
+        val cut = listOfNotNull(first, partial).minOrNull() ?: return content
+        return content.take(cut)
+    }
     private data class OpeningTag(
         val name: String,
         val endExclusive: Int,

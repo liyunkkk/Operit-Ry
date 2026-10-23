@@ -1,5 +1,8 @@
 package com.ai.assistance.operit.core.tools.javascript
 
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Handler
@@ -1607,6 +1610,119 @@ class JsEngine(private val context: Context) {
             }
             readingCompanionBridgeJobs.put(normalizedCallId, job)?.cancel()
             job.start()
+        }
+
+        @JavascriptInterface
+        fun dynamicUiGuide(): String =
+            com.ai.assistance.operit.ui.common.dynamicui.CardAuthoringCatalog.guide()
+
+        @JavascriptInterface
+        fun dynamicUiIcons(query: String, limit: Int, offset: Int): String =
+            com.ai.assistance.operit.ui.common.dynamicui.CardIcons.search(query, limit, offset)
+
+        @JavascriptInterface
+        fun prepareDynamicUi(callId: String, source: String, live: Boolean): String {
+            val session = resolveExecutionSession(callId)?.takeIf {
+                it.packageName == "dynamic_ui" && boundToolPkgContainerName == null
+            }
+            val run = session?.toolRuntimeContext?.dynamicUiRunId
+            if (run == null) return """{"valid":false,"code":"inactive_turn","message":"Generate cards inside an active chat turn using the dynamic_ui package."}"""
+            val report = com.ai.assistance.operit.ui.common.dynamicui.CardExpress.report(source)
+            if (report["valid"]?.jsonPrimitive?.booleanOrNull != true) return report.toString()
+            return try {
+                val id = com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.register(
+                    run, report.getValue("document").jsonPrimitive.content,
+                    report["preparedSource"]?.jsonPrimitive?.content ?: source,
+                    liveChat = if (live) requireNotNull(session.toolRuntimeContext?.callerChatId) else null,
+                    liveDirectory = if (live) java.io.File(context.filesDir, "dynamic_ui/" +
+                        com.ai.assistance.operit.ui.common.dynamicui.DynamicUiProtocol.fingerprint(
+                            requireNotNull(session.toolRuntimeContext?.callerChatId))) else null,
+                )
+                kotlinx.serialization.json.buildJsonObject {
+                    put("valid", kotlinx.serialization.json.JsonPrimitive(true))
+                    put("reference", kotlinx.serialization.json.JsonPrimitive(id))
+                    if (live) put("version", kotlinx.serialization.json.JsonPrimitive(0))
+                    report["repaired"]?.let { put("repaired", it) }
+                    report["repair"]?.let { put("repair", it) }
+                    put("message", kotlinx.serialization.json.JsonPrimitive(
+                        "UI block compiled and checked. Place exactly this reference where the block belongs in your answer, with prose around it as needed; do not repeat the source or call validation again:\n```a2ui-ref\n$id\n```"
+                    ))
+                }.toString()
+            } catch (e: IllegalArgumentException) {
+                kotlinx.serialization.json.buildJsonObject {
+                    put("valid", kotlinx.serialization.json.JsonPrimitive(false))
+                    put("code", kotlinx.serialization.json.JsonPrimitive("invalid_card"))
+                    put("message", kotlinx.serialization.json.JsonPrimitive(e.message?.take(240) ?: "Invalid card data"))
+                }.toString()
+            } catch (_: IllegalStateException) {
+                """{"valid":false,"code":"inactive_turn","message":"This chat turn has ended. Generate the card again in the active turn."}"""
+            }
+        }
+
+        @JavascriptInterface
+        fun patchDynamicUiData(callId: String, reference: String, expectedVersion: Int, dataJson: String): String {
+            val run = resolveExecutionSession(callId)?.takeIf {
+                it.packageName == "dynamic_ui" && boundToolPkgContainerName == null
+            }?.toolRuntimeContext?.dynamicUiRunId
+                ?: return """{"valid":false,"code":"inactive_turn","message":"Update data inside the active chat turn."}"""
+            return try {
+                require(dataJson.length <= 8192)
+                val data = kotlinx.serialization.json.Json.parseToJsonElement(dataJson) as kotlinx.serialization.json.JsonObject
+                val id = com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.canonical(run, reference)
+                    ?: error("No live card in this turn")
+                val version = com.ai.assistance.operit.ui.common.dynamicui.CardLiveStore.patch(run, id, expectedVersion, data)
+                kotlinx.serialization.json.buildJsonObject {
+                    put("valid", kotlinx.serialization.json.JsonPrimitive(true))
+                    put("version", kotlinx.serialization.json.JsonPrimitive(version))
+                    put("message", kotlinx.serialization.json.JsonPrimitive("Card data updated in place. Do not display the reference again."))
+                }.toString()
+            } catch (e: Exception) {
+                kotlinx.serialization.json.buildJsonObject {
+                    put("valid", kotlinx.serialization.json.JsonPrimitive(false))
+                    put("code", kotlinx.serialization.json.JsonPrimitive("data_update_failed"))
+                    put("message", kotlinx.serialization.json.JsonPrimitive(e.message?.take(240) ?: "Invalid data; no update applied"))
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun updateDynamicUi(callId: String, reference: String, changes: String, removeJson: String): String {
+            val run = resolveExecutionSession(callId)?.takeIf {
+                it.packageName == "dynamic_ui" && boundToolPkgContainerName == null
+            }?.toolRuntimeContext?.dynamicUiRunId
+                ?: return """{"valid":false,"code":"inactive_turn","message":"Update cards inside the active chat turn."}"""
+            val source = com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.source(run, reference)
+                ?: return """{"valid":false,"code":"unknown_reference","message":"Reference is not from this active turn. Prepare a new card instead."}"""
+            return try {
+                require(removeJson.length <= 16384)
+                val remove = (kotlinx.serialization.json.Json.parseToJsonElement(removeJson) as kotlinx.serialization.json.JsonArray).map {
+                    require(it is kotlinx.serialization.json.JsonPrimitive && it.isString)
+                    it.jsonPrimitive.content
+                }
+                val prepared = com.ai.assistance.operit.ui.common.dynamicui.CardExpress.prepareRevision(source, changes, remove)
+                val id = com.ai.assistance.operit.ui.common.dynamicui.CardDelivery.register(run, prepared.document, prepared.source)
+                kotlinx.serialization.json.buildJsonObject {
+                    put("valid", kotlinx.serialization.json.JsonPrimitive(true))
+                    put("reference", kotlinx.serialization.json.JsonPrimitive(id))
+                    put("baseReference", kotlinx.serialization.json.JsonPrimitive(reference))
+                    prepared.repair?.let {
+                        put("repaired", kotlinx.serialization.json.JsonPrimitive(true))
+                        put("repair", kotlinx.serialization.json.JsonPrimitive(it))
+                    }
+                    put("message", kotlinx.serialization.json.JsonPrimitive(
+                        "New revision compiled. The previous card and its user state remain unchanged. Display this NEW reference:\n```a2ui-ref\n$id\n```"))
+                }.toString()
+            } catch (e: com.ai.assistance.operit.ui.common.dynamicui.CardExpress.Failure) {
+                kotlinx.serialization.json.buildJsonObject {
+                    put("valid", kotlinx.serialization.json.JsonPrimitive(false))
+                    put("code", kotlinx.serialization.json.JsonPrimitive("invalid_revision"))
+                    put("line", kotlinx.serialization.json.JsonPrimitive(e.line))
+                    put("column", kotlinx.serialization.json.JsonPrimitive(e.column))
+                    put("message", kotlinx.serialization.json.JsonPrimitive(e.reason))
+                }.toString()
+            } catch (_: Exception) {
+                """{"valid":false,"code":"invalid_revision","message":"Revision failed validation or turn storage limits. No card was changed. Check remove names and use fewer/smaller revisions."}"""
+            }
         }
 
         @JavascriptInterface

@@ -79,7 +79,7 @@ class TaskToolExecutor(context: Context) : ToolExecutor {
             require(
                 com.ai.assistance.operit.core.agent.collaboration.CollaborationToolPolicy
                     .visibility(appContext, parentChatId, runtime?.isSubagent == true)["task"] == true
-            ) { "The task tool is only available in v1 subagent conversations" }
+            ) { "The legacy task tool is internal-only. Use spawn_agent or followup_task in chats." }
             if (taskId != null) {
                 require(coordinator.getRun(taskId)?.externalOwnerType !=
                     com.ai.assistance.operit.core.agent.collaboration.CollaborationCoordinator.OWNER_TYPE

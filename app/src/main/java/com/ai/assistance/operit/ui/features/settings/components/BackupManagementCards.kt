@@ -1,6 +1,7 @@
 package com.ai.assistance.operit.ui.features.settings.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -25,7 +26,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,9 +49,9 @@ fun CharacterCardManagementCard(
     onImport: () -> Unit
 ) {
     val characterCardsTitle = stringResource(R.string.backup_character_cards_title)
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -140,9 +140,9 @@ fun DataManagementCard(
 ) {
     val chatTitle = stringResource(R.string.backup_chat_history)
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -240,9 +240,9 @@ fun MemoryManagementCard(
 ) {
     val memoryTitle = stringResource(R.string.backup_memory_library)
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -323,9 +323,9 @@ fun ModelConfigManagementCard(
 ) {
     val modelConfigTitle = stringResource(R.string.backup_model_config)
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SectionHeader(
@@ -448,7 +448,8 @@ fun OperationResultCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor.copy(alpha = 0.2f))
+        colors = CardDefaults.cardColors(containerColor = containerColor.copy(alpha = 0.2f)),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -498,14 +499,14 @@ fun OperationProgressView(message: String) {
 
 @Composable
 fun FaqCard() {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    SettingsCard(backgroundColor = rememberSettingsCardColor(), contentPadding = PaddingValues(0.dp)) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = stringResource(R.string.backup_faq_title),
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.titleMedium
             )
             Text(
                 text = stringResource(R.string.backup_faq_subtitle),

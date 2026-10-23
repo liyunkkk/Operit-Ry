@@ -160,6 +160,7 @@ sealed class Screen(
                     onNavigateToSettings = { navigateTo(Settings) },
                     onNavigateToUserPreferences = { navigateTo(UserPreferencesSettings) },
                     onNavigateToModelConfig = { navigateTo(ModelConfig) },
+                    onNavigateToFunctionalConfig = { navigateTo(FunctionalConfig) },
                     onNavigateToOnboardingModelConfig = { navigateTo(ModelConfigOnboarding) },
                     onNavigateToModelPrompts = { navigateTo(ModelPromptsSettings) },
                     onNavigateToPackageManager = { navigateTo(Packages) },
@@ -632,6 +633,8 @@ sealed class Screen(
                     navigateToChatBackupSettings = { navigateTo(ChatBackupSettings) },
                     navigateToLanguageSettings = { navigateTo(LanguageSettings) },
                     navigateToSpeechServicesSettings = { navigateTo(SpeechServicesSettings) },
+                    navigateToComponents = { navigateTo(ComponentManagement) },
+                    navigateToStorage = { navigateTo(StorageManagement) },
                     navigateToExternalHttpChatSettings = { navigateTo(ExternalHttpChatSettings) },
                     navigateToPersonaCardGeneration = { navigateTo(PersonaCardGeneration) },
                     navigateToWaifuModeSettings = { navigateTo(WaifuModeSettings) },
@@ -866,6 +869,22 @@ sealed class Screen(
             )
         }
     }
+    data object ComponentManagement :
+        Screen(navItem = NavItem.Settings, titleRes = R.string.components_title) {
+        @Composable
+        override fun Content(
+            navController: NavController,
+            navigateTo: ScreenNavigationHandler,
+            onGoBack: () -> Unit,
+            hasBackgroundImage: Boolean,
+            onLoading: (Boolean) -> Unit,
+            onError: (String) -> Unit,
+            onGestureConsumed: (Boolean) -> Unit
+        ) {
+            com.ai.assistance.operit.ui.features.settings.screens.ComponentManagementScreen()
+        }
+    }
+
     // 添加SpeechServicesSettings屏幕定义
     data object SpeechServicesSettings :
             Screen(navItem = NavItem.Settings, titleRes = R.string.screen_title_speech_services_settings) {
@@ -881,7 +900,8 @@ sealed class Screen(
         ) {
             SpeechServicesSettingsScreen(
                 onBackPressed = onGoBack,
-                onNavigateToTextToSpeech = { navigateTo(TextToSpeech) }
+                onNavigateToTextToSpeech = { navigateTo(TextToSpeech) },
+                onNavigateToSpeechToText = { navigateTo(SpeechToText) }
             )
         }
     }
@@ -1176,6 +1196,26 @@ sealed class Screen(
                 onGestureConsumed: (Boolean) -> Unit
         ) {
             TokenStatsManagementScreen(initialPricingTab = true)
+        }
+    }
+
+    data object StorageManagement :
+            Screen(navItem = NavItem.Settings, titleRes = R.string.storage_title) {
+        @Composable
+        override fun Content(
+                navController: NavController,
+                navigateTo: ScreenNavigationHandler,
+                onGoBack: () -> Unit,
+                hasBackgroundImage: Boolean,
+                onLoading: (Boolean) -> Unit,
+                onError: (String) -> Unit,
+                onGestureConsumed: (Boolean) -> Unit
+        ) {
+            com.ai.assistance.operit.ui.features.settings.screens.StorageManagementScreen(
+                    onManageComponents = { navigateTo(ComponentManagement) },
+                    onManageChats = { navigateTo(ChatHistorySettings) },
+                    onBackup = { navigateTo(ChatBackupSettings) }
+            )
         }
     }
 

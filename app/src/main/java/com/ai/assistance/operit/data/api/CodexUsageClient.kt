@@ -54,13 +54,15 @@ class CodexUsageClient(
                 client.newCall(request).execute().use { response ->
                     val responseBody = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        throw IOException("Codex usage request failed with HTTP ${response.code}")
+                        throw CodexHttpException(response.code, isCodexExpiredToken(response.code, responseBody))
                     }
                     responseBody
                 }
             }
 
             Result.success(parseUsage(body))
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
         } catch (error: Exception) {
             AppLogger.e(TAG, "Failed to fetch Codex usage", error)
             Result.failure(error)

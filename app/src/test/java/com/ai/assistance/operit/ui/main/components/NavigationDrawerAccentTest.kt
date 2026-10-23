@@ -19,16 +19,42 @@ class NavigationDrawerAccentTest {
     fun `a pale custom accent is strengthened for the drawer container`() {
         // 0xFFFFCDE8 on the default white drawer is 1.3862:1: the title would be a smudge.
         val pale = 0xFFFFCDE8.toInt()
-        val resolved = resolveDrawerAccentColor(pale, useCustomAccent = true, containerColor = RainyLightPanel)
+        val resolved =
+            resolveDrawerAccentColor(
+                pale,
+                useCustomAccent = true,
+                containerColor = RainyLightPanel,
+                enforceContrast = true,
+            )
 
         assertTrue(contrastRatio(Color(pale), RainyLightPanel) < 3.0)
         assertTrue(contrastRatio(resolved!!, RainyLightPanel) >= 3.0)
     }
 
     @Test
+    fun `with enhanced contrast off the drawer accent is shown as picked`() {
+        val pale = 0xFFFFCDE8.toInt()
+        val resolved =
+            resolveDrawerAccentColor(
+                pale,
+                useCustomAccent = true,
+                containerColor = RainyLightPanel,
+                enforceContrast = false,
+            )
+
+        assertEquals(Color(pale), resolved)
+    }
+
+    @Test
     fun `a dark custom accent is lightened on a dark drawer container`() {
         val dark = 0xFF102030.toInt()
-        val resolved = resolveDrawerAccentColor(dark, useCustomAccent = true, containerColor = RainyDarkPanel)
+        val resolved =
+            resolveDrawerAccentColor(
+                dark,
+                useCustomAccent = true,
+                containerColor = RainyDarkPanel,
+                enforceContrast = true,
+            )
 
         assertTrue(contrastRatio(Color(dark), RainyDarkPanel) < 3.0)
         assertTrue(contrastRatio(resolved!!, RainyDarkPanel) >= 3.0)
@@ -41,7 +67,12 @@ class NavigationDrawerAccentTest {
         val readable = 0xFF336699.toInt()
         assertEquals(
             Color(readable),
-            resolveDrawerAccentColor(readable, useCustomAccent = true, containerColor = RainyLightPanel),
+            resolveDrawerAccentColor(
+                readable,
+                useCustomAccent = true,
+                containerColor = RainyLightPanel,
+                enforceContrast = true,
+            ),
         )
     }
 

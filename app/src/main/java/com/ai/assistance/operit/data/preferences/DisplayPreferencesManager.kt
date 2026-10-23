@@ -26,6 +26,8 @@ private val Context.displayPreferencesDataStore: DataStore<Preferences> by prefe
 class DisplayPreferencesManager private constructor(private val context: Context) {
 
     companion object {
+        const val DEFAULT_COMPOSER_PREDICTIONS_ENABLED = true
+
         @Volatile
         private var INSTANCE: DisplayPreferencesManager? = null
 
@@ -44,6 +46,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
             booleanPreferencesKey("enable_reply_notification_sound")
         private val KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION =
             booleanPreferencesKey("enable_reply_notification_vibration")
+        private val KEY_COMPOSER_PREDICTIONS_ENABLED = booleanPreferencesKey("composer_predictions_enabled")
         private val KEY_ENABLE_ENTER_TO_SEND = booleanPreferencesKey("enable_enter_to_send")
         private val KEY_ENABLE_NAVIGATION_ANIMATION =
             booleanPreferencesKey("enable_navigation_animation")
@@ -112,10 +115,13 @@ class DisplayPreferencesManager private constructor(private val context: Context
             preferences[KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION] ?: false
         }
 
-    /**
-     * 是否启用回车发送
-     * 默认值：false
-     */
+    /** 独立预测会额外调用模型，默认开启；保留用户明确保存的关闭选择。 */
+    val composerPredictionsEnabled: Flow<Boolean> =
+        context.displayPreferencesDataStore.data.map { preferences ->
+            preferences[KEY_COMPOSER_PREDICTIONS_ENABLED] ?: DEFAULT_COMPOSER_PREDICTIONS_ENABLED
+        }
+
+    /** 是否启用回车发送，默认关闭。 */
     val enableEnterToSend: Flow<Boolean> =
         context.displayPreferencesDataStore.data.map { preferences ->
             preferences[KEY_ENABLE_ENTER_TO_SEND] ?: false
@@ -237,7 +243,8 @@ class DisplayPreferencesManager private constructor(private val context: Context
         virtualDisplayBitrateKbps: Int? = null,
         toolPkgHookTimeoutSeconds: Int? = null,
         collapseCompletedProcess: Boolean? = null,
-        toolCollapseMode: ToolCollapseMode? = null
+        toolCollapseMode: ToolCollapseMode? = null,
+        composerPredictionsEnabled: Boolean? = null,
     ) {
         context.displayPreferencesDataStore.edit { preferences ->
             showFpsCounter?.let { preferences[KEY_SHOW_FPS_COUNTER] = it }
@@ -248,6 +255,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
             enableReplyNotificationVibration?.let {
                 preferences[KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION] = it
             }
+            composerPredictionsEnabled?.let { preferences[KEY_COMPOSER_PREDICTIONS_ENABLED] = it }
             enableEnterToSend?.let { preferences[KEY_ENABLE_ENTER_TO_SEND] = it }
             enableNavigationAnimation?.let {
                 preferences[KEY_ENABLE_NAVIGATION_ANIMATION] = it
@@ -337,6 +345,7 @@ class DisplayPreferencesManager private constructor(private val context: Context
             preferences[KEY_ENABLE_REPLY_NOTIFICATION_SOUND] = false
             preferences[KEY_ENABLE_REPLY_NOTIFICATION_VIBRATION] = false
             preferences[KEY_ENABLE_ENTER_TO_SEND] = false
+            preferences[KEY_COMPOSER_PREDICTIONS_ENABLED] = DEFAULT_COMPOSER_PREDICTIONS_ENABLED
             preferences.remove(KEY_ENABLE_NAVIGATION_ANIMATION)
             preferences[KEY_START_WITH_NEW_CHAT] = false
             preferences.remove(KEY_GLOBAL_USER_AVATAR_URI)

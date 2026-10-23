@@ -28,12 +28,22 @@ import com.ai.assistance.operit.R
 import com.ai.assistance.operit.data.model.CustomEmoji
 import com.ai.assistance.operit.data.preferences.CustomEmojiPreferences
 import com.ai.assistance.operit.ui.features.settings.viewmodels.CustomEmojiViewModel
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import com.ai.assistance.operit.data.preferences.UserPreferencesManager
+import com.ai.assistance.operit.ui.features.settings.components.SettingsCard
+import com.ai.assistance.operit.ui.features.settings.components.SettingsIconBadge
+import com.ai.assistance.operit.ui.features.settings.components.settingsCardColor
 import kotlinx.coroutines.launch
 
 /**
  * 自定义表情管理页面
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CustomEmojiManagementScreen(
     onNavigateBack: () -> Unit
@@ -55,6 +65,9 @@ fun CustomEmojiManagementScreen(
     var showDeleteEmojiDialog by remember { mutableStateOf<CustomEmoji?>(null) }
     var showImagePreview by remember { mutableStateOf<Uri?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
+    val hasBackgroundImage by
+        remember { UserPreferencesManager.getInstance(context) }.useBackgroundImage.collectAsState(initial = false)
+    val cardColor = settingsCardColor(hasBackgroundImage)
 
     // 图片选择器
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -74,6 +87,7 @@ fun CustomEmojiManagementScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { imagePickerLauncher.launch("image/*") }
@@ -87,66 +101,50 @@ fun CustomEmojiManagementScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 类别选择器
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            // 绑定的角色卡
+            SettingsCard(
+                backgroundColor = cardColor,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.Link,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SettingsIconBadge(icon = Icons.Default.Link, size = 36)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.custom_emoji_bound_to_target),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = activeTargetName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
 
-            CategorySelector(
-                categories = categories,
-                selectedCategory = selectedCategory,
-                onCategorySelected = { viewModel.selectCategory(it) },
-                modifier = Modifier.padding(16.dp)
-            )
-            
-            // 分组管理和重置按钮
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // 类别选择和分组管理
+            SettingsCard(
+                backgroundColor = cardColor,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                contentPadding = PaddingValues(16.dp)
             ) {
-                // 左侧：分组管理按钮
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                CategorySelector(
+                    categories = categories,
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { viewModel.selectCategory(it) }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // 创建分组按钮
-                    OutlinedButton(
+                    FilledTonalButton(
                         onClick = { showCreateCategoryDialog = true },
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                     ) {
@@ -176,24 +174,24 @@ fun CustomEmojiManagementScreen(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(stringResource(R.string.delete_group), fontSize = 12.sp)
                     }
-                }
 
-                // 右侧：重置按钮
-                OutlinedButton(
-                    onClick = { showResetDialog = true },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Restore,
-                        contentDescription = stringResource(R.string.reset_to_default),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.reset_to_default), fontSize = 12.sp)
+                    // 重置按钮
+                    OutlinedButton(
+                        onClick = { showResetDialog = true },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Restore,
+                            contentDescription = stringResource(R.string.reset_to_default),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.reset_to_default), fontSize = 12.sp)
+                    }
                 }
             }
 
@@ -394,7 +392,7 @@ private fun CategorySelector(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
-                .menuAnchor()
+                .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth()
         )
 
@@ -471,13 +469,16 @@ private fun EmojiCard(
     uri: Uri,
     showDeleteIcon: Boolean
 ) {
-    Card(
+    Surface(
         modifier = Modifier
             .aspectRatio(1f)
+            .clip(RoundedCornerShape(16.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
-            )
+            ),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -488,15 +489,22 @@ private fun EmojiCard(
             )
 
             if (showDeleteIcon) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.delete),
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                        .size(18.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
+                        .padding(6.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.delete),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }

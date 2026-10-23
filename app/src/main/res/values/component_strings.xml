@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="components_title">组件与下载</string>
+    <string name="components_subtitle">管理终端安装包、本地语音模型和导出模板</string>
+    <string name="components_intro">按需下载，用不到时可删除以释放空间。下载会在离开页面后继续；下载语音模型不会切换当前语音配置。</string>
+    <string name="component_terminal_detail">Ubuntu 安装包缓存。首次进入终端时完成安装；删除缓存会保留终端环境、已安装的软件和个人文件。</string>
+    <string name="component_terminal_installed">终端环境已安装，可单独清理安装包缓存。</string>
+    <string name="component_export_detail">将网页导出为独立应用时使用。删除模板不会影响已导出的应用。</string>
+    <string name="component_download_size">完整下载大小：%1$s</string>
+    <string name="component_loading">正在检查本地资源…</string>
+    <string name="component_ready">已下载</string>
+    <string name="component_partial">部分下载</string>
+    <string name="component_missing">未下载</string>
+    <string name="component_download">下载</string>
+    <string name="component_delete_detail">删除此组件的下载文件和未完成的下载。需要时可重新下载，不会删除聊天记录、语音配置或终端个人文件。</string>
+    <string name="component_in_use">组件正在使用，请稍后再删除。</string>
+</resources>

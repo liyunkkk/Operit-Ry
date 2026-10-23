@@ -54,7 +54,6 @@ import com.ai.assistance.operit.core.tools.packTool.PackageManager
 import com.ai.assistance.operit.core.tools.system.AndroidPermissionLevel
 import com.ai.assistance.operit.core.tools.system.ShizukuAuthorizer
 import com.ai.assistance.operit.core.tools.system.action.ActionListenerFactory
-import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.data.preferences.androidPermissionPreferences
 import com.ai.assistance.operit.data.repository.WorkflowRepository
 import com.ai.assistance.operit.ui.common.NavItem
@@ -135,19 +134,9 @@ fun DrawerContent(
         onNavigationEntrySelected: (NavigationEntrySpec) -> Unit
 ) {
         val context = LocalContext.current
-        val userPreferencesManager = remember(context) { UserPreferencesManager.getInstance(context) }
-        val softwareIdentity by
-                userPreferencesManager.softwareIdentity.collectAsState(
-                        initial = UserPreferencesManager.SOFTWARE_IDENTITY_OPERIT
-                )
         val preferredPermissionLevel by
                 androidPermissionPreferences.preferredPermissionLevelFlow.collectAsState(initial = null)
-        val drawerBrandName =
-                if (softwareIdentity == UserPreferencesManager.SOFTWARE_IDENTITY_LINGSHU) {
-                        context.getString(R.string.software_identity_option_lingshu)
-                } else {
-                        context.getString(R.string.software_identity_option_operit)
-                }
+        val drawerBrandName = context.getString(R.string.software_identity_option_operit)
         val bottomInset =
                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val resolvedTopContentPadding =

@@ -45,6 +45,8 @@ fun rememberNavigationDrawerAppearance(): NavigationDrawerAppearance {
         preferencesManager.useCustomNavigationDrawerAccentColor.collectAsState(initial = false)
     val customNavigationDrawerAccentColor by
         preferencesManager.customNavigationDrawerAccentColor.collectAsState(initial = null)
+    val enforceColorContrast by
+        preferencesManager.enforceColorContrast.collectAsState(initial = false)
 
     val waterGlassEnabled = navigationDrawerWaterGlass && isWaterGlassSupported()
     val buttonLiquidGlassEnabled =
@@ -60,6 +62,7 @@ fun rememberNavigationDrawerAppearance(): NavigationDrawerAppearance {
             customNavigationDrawerAccentColor,
             useCustomNavigationDrawerAccentColor,
             MaterialTheme.colorScheme.surface,
+            enforceContrast = enforceColorContrast,
         )
     val defaultAppearance =
         NavigationDrawerAppearance(
@@ -86,6 +89,7 @@ fun rememberNavigationDrawerAppearance(): NavigationDrawerAppearance {
             customNavigationDrawerAccentColor,
             useCustomNavigationDrawerAccentColor,
             containerColor,
+            enforceContrast = enforceColorContrast,
         )
     val onContainerColor = getTextColorForBackground(containerColor)
     val accentColor = lerp(onContainerColor, MaterialTheme.colorScheme.primary, 0.28f)
@@ -118,7 +122,11 @@ internal fun resolveDrawerAccentColor(
     customAccent: Int?,
     useCustomAccent: Boolean,
     containerColor: Color,
+    enforceContrast: Boolean = false,
 ): Color? =
     customAccent
         ?.takeIf { useCustomAccent }
-        ?.let { ensureAccentReadableOn(Color(it), containerColor) }
+        ?.let {
+            // The accent is shown as picked unless the user turned on enhanced contrast.
+            if (enforceContrast) ensureAccentReadableOn(Color(it), containerColor) else Color(it)
+        }

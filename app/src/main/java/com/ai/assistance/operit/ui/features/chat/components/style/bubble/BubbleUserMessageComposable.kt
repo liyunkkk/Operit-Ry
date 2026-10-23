@@ -124,14 +124,32 @@ fun BubbleUserMessageComposable(
     val scope = rememberCoroutineScope()
 
     // Parse message content to separate text and attachments
-    val parseResult =
+    val parsedState =
         remember(message.content, isHiddenPlaceholder) {
-            if (isHiddenPlaceholder) {
+            mutableStateOf(if (isHiddenPlaceholder) {
                 MessageParseResult(processedText = "", trailingAttachments = emptyList())
             } else {
                 parseMessageContent(context, message.content)
-            }
+            })
         }
+    LaunchedEffect(parsedState) {
+        val initial = parsedState.value
+        if (initial.imageLinks.isNotEmpty()) {
+            val loaded = withContext(Dispatchers.IO) {
+                initial.imageLinks.map { image ->
+                    val data = ImagePoolManager.resolveImage(image.id, image.sourcePath)
+                    val bitmap = data?.let {
+                        runCatching {
+                            ImageBitmapLimiter.decodeDownsampledBitmap(Base64.decode(it.base64, Base64.DEFAULT))
+                        }.getOrNull()
+                    }
+                    image.copy(bitmap = bitmap, loading = false)
+                }
+            }
+            parsedState.value = initial.copy(imageLinks = loaded)
+        }
+    }
+    val parseResult = parsedState.value
     val textContent = parseResult.processedText
     val trailingAttachments = parseResult.trailingAttachments
     val replyInfo = parseResult.replyInfo
@@ -275,6 +293,12 @@ fun BubbleUserMessageComposable(
                 horizontalAlignment = Alignment.End
             ) {
                 imageLinks.forEach { imageLink ->
+                    if (imageLink.loading) {
+                        Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+                            Text(stringResource(R.string.chat_image_loading), style = MaterialTheme.typography.bodySmall)
+                        }
+                        return@forEach
+                    }
                     imageLink.bitmap?.let { bitmap ->
                         // 图片还在池子里，显示图片
                         Card(
@@ -773,7 +797,9 @@ data class ReplyInfo(
 
 data class ImageLinkData(
     val id: String,
-    val bitmap: Bitmap?
+    val bitmap: Bitmap?,
+    val sourcePath: String? = null,
+    val loading: Boolean = false
 )
 
 /**
@@ -791,20 +817,10 @@ private fun parseMessageContent(context: android.content.Context, content: Strin
         cleanedContent = cleanedContent.replace(proxySenderMatch.value, "").trim()
     }
 
-    // Extract image link tags and load from pool
+    // Parse immediately; disk access and legacy source recovery happen off the UI thread.
     val imageLinks = mutableListOf<ImageLinkData>()
-    MediaLinkParser.extractImageLinkIds(cleanedContent).forEach { id ->
-        val imageData = ImagePoolManager.getImage(id)
-        val bitmap = imageData?.let {
-            try {
-                val bytes = Base64.decode(it.base64, Base64.DEFAULT)
-                ImageBitmapLimiter.decodeDownsampledBitmap(bytes)
-            } catch (e: Exception) {
-                AppLogger.e("BubbleUserMessage", "Failed to decode image: $id", e)
-                null
-            }
-        }
-        imageLinks.add(ImageLinkData(id, bitmap))
+    MediaLinkParser.extractImageLinkTags(cleanedContent).forEach { tag ->
+        imageLinks.add(ImageLinkData(tag.id, null, tag.sourcePath, loading = true))
     }
     cleanedContent = MediaLinkParser.removeImageLinks(cleanedContent).trim()
 

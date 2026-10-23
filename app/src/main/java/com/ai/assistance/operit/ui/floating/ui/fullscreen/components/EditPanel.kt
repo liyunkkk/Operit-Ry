@@ -55,6 +55,7 @@ fun EditPanel(
     onTextChange: (String) -> Unit,
     onCancel: () -> Unit,
     onSend: () -> Unit,
+    canSend: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -148,6 +149,7 @@ fun EditPanel(
                 // 发送按钮
                 Button(
                     onClick = onSend,
+                    enabled = canSend && editableText.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
@@ -158,7 +160,7 @@ fun EditPanel(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.floating_send))
+                    Text(stringResource(if (canSend) R.string.floating_send else R.string.voice_draft_wait))
                 }
             }
         }

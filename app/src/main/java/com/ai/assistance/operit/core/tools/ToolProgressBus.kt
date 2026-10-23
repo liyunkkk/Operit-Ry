@@ -21,7 +21,6 @@ object ToolProgressBus {
     private fun priorityForTool(toolName: String): Int {
         return when (toolName) {
             SUMMARY_PROGRESS_TOOL_NAME -> 1000
-            "grep_context" -> 100
             "grep_code" -> 10
             "find_files" -> 5
             else -> 0

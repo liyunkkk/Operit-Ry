@@ -1,5 +1,24 @@
 <resources>
-    <string name="logcat_flush_incomplete">现有日志已保存至 %1$s；部分日志尚未写入或写入失败，导出可能不完整。</string>
+    <string name="memory_editor_process_records">过程记录 · 思考与工具</string>
+    <string name="memory_editor_expand_process">展开过程记录</string>
+    <string name="memory_editor_collapse_process">收起过程记录</string>
+    <string name="memory_editor_dynamic_ui">动态 UI 卡片</string>
+    <string name="memory_editor_dynamic_ui_hint">源码已折叠，修改正文不会影响卡片</string>
+    <string name="memory_editor_edit_source">编辑卡片源码</string>
+    <string name="codex_auth_sign_in_required">Codex 未登录，请在模型设置中登录。</string>
+    <string name="codex_auth_login_changed">Codex 登录已改变，已停止旧请求，请重新发送。</string>
+    <string name="codex_auth_login_required">Codex 登录凭据已失效，请在模型设置中重新登录。</string>
+    <string name="codex_auth_refresh_temporary">Codex 认证刷新暂时失败，登录已保留，请检查网络后重试。</string>
+    <string name="codex_auth_recovery_rejected">Codex 刷新后仍返回 401，已停止重试，请重新登录。</string>
+    <string name="dynamic_ui_clear">清空</string>
+    <string name="dynamic_ui_date_outside_range">当前日期无效或不在可选范围内，请重新选择。</string>
+    <string name="dynamic_ui_close_details">关闭详情</string>
+    <string name="dynamic_ui_bad_table">表格数据格式有误，请检查输入</string>
+    <string name="logcat_flush_incomplete">现有日志已保存至 %1$s；日志可能不完整，原因也已记录在压缩包的 export-status.txt 中。</string>
+    <string name="logcat_export_pending">开始导出时的日志仍有 %1$d 条未完成写入。</string>
+    <string name="logcat_export_dropped">日志队列曾因繁忙或线程中断丢弃 %1$d 条记录，无法恢复。</string>
+    <string name="logcat_export_write_failed">本次日志记录期间发生过文件写入失败。</string>
+    <string name="logcat_export_interrupted">等待日志写入的操作被中断。</string>
     <string name="local_llm_removed">此版本已移除手机本地大模型推理。请选择云端或远程服务；原模型文件保留在 Download/Operit/models，可通过文件管理器自行清理。</string>
     <string name="openai_error_repetition_truncation">模型因重复输出被服务端截断，已丢弃异常响应并停止本轮工具执行。</string>
     <string name="openai_retry_repetition_truncation">模型出现重复输出，已丢弃异常响应，正在重新请求一次。</string>
@@ -22,7 +41,7 @@
     <string name="phone_control_title">Opeirt正在控制你的手机</string>
     <string name="phone_control_stop">停止操控</string>
     <string name="phone_control_overlay_required">请先允许 Operit 显示悬浮窗，以便随时停止操控。</string>
-    <string name="subagent_v2_limits">v2 运行限制</string>
+    <string name="subagent_v2_limits">子代理运行限制</string>
     <string name="subagent_v2_max_active">同时运行的子代理数</string>
     <string name="subagent_v2_max_depth">最大子代理层数</string>
     <string name="subagent_v2_min_wait">最短等待（毫秒）</string>
@@ -36,10 +55,6 @@
     <string name="subagent_message_note">有了更新</string>
     <string name="subagent_message_midway">中途消息</string>
     <string name="subagent_message_open_detail">查看消息详情</string>
-    <string name="subagent_version_title">Subagent 版本</string>
-    <string name="subagent_version_description">选择新对话使用的协作工具。现有代理保留其版本，阅读伴侣继续使用 v1。</string>
-    <string name="subagent_version_v2">v2 · 多代理协作（默认）</string>
-    <string name="subagent_version_v1">v1 · Task 同步任务</string>
     <string name="chat_live_elapsed">已用时 %1$s</string>
     <string name="chat_estimated_cost">本对话估算费用：¥%1$s</string>
     <string name="chat_estimated_cost_partial">本对话估算费用：¥%1$s（部分未知）</string>
@@ -78,7 +93,7 @@
     <string name="action_retry">重试</string>
     <string name="common_collapse">收起</string>
     <string name="common_expand_more">展开更多</string>
-    <string name="nav_packages">包管理</string>
+    <string name="nav_packages">扩展管理</string>
     <string name="nav_memory_base">记忆库</string>
     <string name="nav_assistant_config">助手配置</string>
     <string name="nav_terminal">终端</string>
@@ -143,7 +158,7 @@
     <string name="floating_thinking_2">思考中...</string>
     <string name="floating_didnt_hear_clearly">没有听清</string>
     <string name="floating_hello">你好</string>
-    <string name="nav_help">使用手册</string>
+    <string name="nav_help">使用帮助</string>
 
     <!-- Color Picker -->
     <string name="colorpicker_select_primary">选择主色</string>
@@ -410,8 +425,6 @@
     
     <!-- 助手配置界面 -->
     <string name="assistant_config_title">助手配置</string>
-    <string name="import_model">导入模型</string>
-    <string name="scan_user_models">扫描用户模型</string>
     <string name="operation_success">操作成功</string>
     <string name="error_occurred_simple">发生错误</string>
     <string name="function_config_title">功能配置</string>
@@ -420,112 +433,9 @@
     <string name="not_configured">未配置</string>
     <string name="function_prompt">功能提示词</string>
     <string name="function_model">功能模型</string>
-    <string name="importing_model">正在导入模型...</string>
     <string name="processing">处理中...</string>
-    <string name="error_occurred">发生错误: %1$s</string>
-    <string name="avatar_config">虚拟形象配置</string>
-    <string name="avatar_voice_call_enable_title">虚拟形象是否启用</string>
-    <string name="avatar_voice_call_enable_summary">启用后，语音通话界面会使用虚拟形象，并根据返回的 &lt;mood&gt; 标签播放情绪动作。</string>
-    <string name="select_model">选择模型</string>
-    <string name="current_model">当前模型</string>
-    <string name="scale">缩放: %1$s</string>
-    <string name="x_translation">X轴位移: %1$s</string>
-    <string name="y_translation">Y轴位移: %1$s</string>
-    <string name="confirm_delete_model_title">确认删除模型？</string>
-    <string name="confirm_delete_model_message">删除后不可恢复，确定要删除该模型吗？</string>
-    <string name="rename_avatar_model_title">重命名模型</string>
-    <string name="rename_avatar_model_message">输入新的模型显示名称</string>
-    <string name="avatar_model_name_label">模型名称</string>
     <string name="no_models_available">没有可用的模型</string>
-    <string name="please_select_model">请选择一个模型</string>
-    <string name="unsupported_model_type">不支持的模型类型: %1$s</string>
-    <string name="avatar_preview_error_log">头像预览错误: %1$s</string>
-    <string name="how_to_import">如何制作和导入模型?</string>
-    <string name="how_to_import_tap_to_expand">如何制作和导入模型?（点击展开）</string>
-    <string name="how_to_import_tap_to_collapse">如何制作和导入模型?（点击收起）</string>
-    <string name="avatar_config_supported_formats">支持：DragonBones（.json + _tex.json + _tex.png）、WebP（.webp）、MP4（.mp4）、MMD（.pmx/.pmd + 可选 .vmd）、glTF（.glb/.gltf）、FBX（.fbx）。</string>
-    <string name="avatar_config_import_methods">直接文件导入支持 .glb/.gltf/.mp4/.fbx；DragonBones、WebP、MP4、MMD、多文件 glTF，或带外置贴图/资源的 FBX 请导入 .zip。</string>
-    <string name="avatar_mood_trigger_mapping_title">Mood 触发映射</string>
-    <string name="avatar_mood_trigger_mapping_desc">桌宠和语音头像返回的 &lt;mood&gt; 会优先匹配这里的 trigger。只有绑定了动画的自定义类型才会拼接进提示词。</string>
-    <string name="avatar_no_model_actions">当前虚拟形象没有可用动作</string>
-    <string name="avatar_custom_types_title">自定义类型</string>
-    <string name="avatar_custom_type_add">添加自定义类型</string>
-    <string name="avatar_custom_type_none">还没有自定义类型</string>
-    <string name="avatar_trigger_key_label">触发键：%1$s</string>
-    <string name="avatar_fallback_emotion_label">回退表情：%1$s</string>
-    <string name="avatar_edit_custom_mood_type">编辑自定义类型</string>
-    <string name="avatar_delete_custom_mood_type">删除自定义类型</string>
-    <string name="avatar_mapped_action">绑定动作</string>
-    <string name="avatar_preview_action">预览</string>
-    <string name="avatar_unmapped">未绑定</string>
-    <string name="avatar_custom_type_add_title">添加自定义类型</string>
-    <string name="avatar_custom_type_edit_title">编辑自定义类型</string>
-    <string name="avatar_custom_type_key">类型键</string>
-    <string name="avatar_custom_type_key_hint">仅允许小写字母、数字、_ 和 -。规范化后的 key：%1$s</string>
-    <string name="avatar_empty_value_placeholder">&lt;空&gt;</string>
-    <string name="avatar_custom_type_prompt_hint_label">提示词说明</string>
-    <string name="avatar_custom_type_prompt_hint_help">这个提示会被拼接进桌宠/语音头像的 mood 规则里，引导模型在什么场景下使用该类型。</string>
-    <string name="avatar_emotion_mapping_title">表情映射</string>
-    <string name="avatar_emotion_mapping_chip">%1$s：%2$s</string>
-    <string name="avatar_emotion_label">表情</string>
-    <string name="avatar_clear_selected_mapping">清除当前映射</string>
-    <string name="avatar_emotion_idle">待机</string>
-    <string name="avatar_emotion_listening">监听</string>
-    <string name="avatar_emotion_thinking">思考</string>
-    <string name="avatar_emotion_happy">开心</string>
-    <string name="avatar_emotion_sad">难过</string>
-    <string name="avatar_emotion_confused">困惑</string>
-    <string name="avatar_emotion_surprised">惊讶</string>
-    <string name="avatar_mood_angry_name">生气</string>
-    <string name="avatar_mood_happy_name">开心</string>
-    <string name="avatar_mood_shy_name">害羞</string>
-    <string name="avatar_mood_aojiao_name">傲娇</string>
-    <string name="avatar_mood_cry_name">难过</string>
-    <string name="avatar_mood_angry_hint">用户表达侮辱、不公、责备、生气或强烈不满时使用。</string>
-    <string name="avatar_mood_happy_hint">用户表达明确表扬、达成目标、收到礼物或明显开心时使用。</string>
-    <string name="avatar_mood_shy_hint">用户夸奖、暧昧、戳中可爱点，角色表现害羞时使用。</string>
-    <string name="avatar_mood_aojiao_hint">用户调侃、轻微争执、角色嘴硬又软化时使用。</string>
-    <string name="avatar_mood_cry_hint">用户失落、难过、受挫、哭诉或道歉后低落时使用。</string>
-    <string name="avatar_custom_type_prompt_hint_required">提示词说明不能为空</string>
-    <string name="avatar_custom_type_invalid_key">自定义类型 key 只能使用小写字母、数字、_ 或 -，且不能与内置 key 冲突</string>
-    <string name="avatar_custom_type_duplicate_key">自定义类型 key 已存在</string>
-    <string name="avatar_mmd_camera_pitch">MMD 相机俯仰（%1$s）</string>
-    <string name="avatar_mmd_camera_yaw">MMD 相机偏航（%1$s）</string>
-    <string name="avatar_mmd_camera_distance">MMD 相机距离（%1$s）</string>
-    <string name="avatar_mmd_orbit_pivot_height">MMD 环绕中心高度（%1$s）</string>
-    <string name="avatar_gltf_camera_pitch">glTF 相机俯仰（%1$s）</string>
-    <string name="avatar_gltf_camera_yaw">glTF 相机偏航（%1$s）</string>
-    <string name="avatar_gltf_camera_distance">glTF 相机距离（%1$s）</string>
-    <string name="avatar_gltf_orbit_pivot_height">glTF 环绕中心高度（%1$s）</string>
-    <string name="avatar_fbx_camera_pitch">FBX 相机俯仰（%1$s）</string>
-    <string name="avatar_fbx_camera_yaw">FBX 相机偏航（%1$s）</string>
-    <string name="avatar_fbx_camera_distance">FBX 相机距离（%1$s）</string>
-    <string name="avatar_fbx_orbit_pivot_height">FBX 环绕中心高度（%1$s）</string>
-    <string name="avatar_supported_formats_title">支持格式</string>
-    <string name="avatar_supported_formats_desc">- DragonBones：骨骼 .json + *_tex.json + *_tex.png\n- WebP：一个或多个 .webp 文件\n- MP4：一个或多个 .mp4 文件\n- MMD：.pmx 或 .pmd 模型，可选 .vmd 动作\n- glTF：.glb 或 .gltf（如有引用还需 .bin/贴图等资源）\n- FBX：.fbx（直传仅限自包含资源）</string>
-    <string name="avatar_import_methods_title">导入方式</string>
-    <string name="avatar_import_methods_desc">- 直接选文件：.glb / .gltf / .mp4 / .fbx\n- ZIP 导入：DragonBones、WebP、MP4、MMD、多文件 glTF，或带外置贴图/资源的 FBX 包</string>
-    <string name="import_structure_guide_tap_to_expand">导入结构指南（点击展开）</string>
-    <string name="import_structure_guide_tap_to_collapse">导入结构指南（点击收起）</string>
-    <string name="import_structure_guide_content">这是“导入包”的目录结构（ZIP 或选中文件内部），不是应用内部存储。\n\nDragonBones（.zip）\n  my_dragonbones.zip\n    any_folder_name/\n      hero_ske.json\n      hero_tex.json\n      hero_tex.png\n  要求：ske/tex json/png 文件名前缀一致。\n\nWebP（.zip）\n  my_webp.zip\n    any_folder_name/\n      idle.webp\n      talking.webp\n      happy.webp\n  要求：至少包含一个 .webp 文件。\n\nMP4\n  方式 A（直接文件）:\n    avatar.mp4\n  方式 B（.zip）:\n    my_mp4.zip\n      any_folder_name/\n        idle.mp4\n        talking.mp4\n        happy.mp4\n  要求：至少包含一个 .mp4 文件。\n\nMMD（.zip）\n  my_mmd.zip\n    any_folder_name/\n      character.pmx（或 .pmd）\n      motions/idle.vmd（可选）\n      textures/...\n  要求：保持 PMX/PMD 引用的相对路径不变。\n\nglTF\n  方式 A（直接文件）:\n    avatar.glb\n  方式 B（多文件 glTF 使用 .zip）:\n    my_gltf.zip\n      any_folder_name/\n        avatar.gltf\n        avatar.bin\n        textures/...\n  要求：保持 .gltf 引用的相对路径不变。\n\nFBX\n  方式 A（直接文件，仅限自包含资源）:\n    avatar.fbx\n  方式 B（外置贴图/资源请使用 .zip）:\n    my_fbx.zip\n      any_folder_name/\n        avatar.fbx\n        textures/...\n  要求：直接上传 .fbx 仅支持内嵌资源；若模型引用外置贴图或其他资源，请保持相对路径并放进 ZIP。</string>
     <string name="enter">进入</string>
-    <string name="about_avatar_formats">本应用支持多种虚拟形象格式，包括DragonBones。以下是制作和导入模型的说明。</string>
-    <string name="dragon_bones_config">DragonBones配置</string>
-    <string name="dragon_bones_renamed">DragonBones已更名为LoongBones，并推出了新的在线编辑器。\nLoongBones支持IK、网格变形、骨骼绑定等专业动画功能。</string>
-    <string name="making_models">1. 制作模型：</string>
-    <string name="making_models_desc">    · 推荐：使用新版在线编辑器。\n    · 备选：从第三方存档网站下载旧版 v5.6.3 离线编辑器。</string>
-    <string name="making_models_desc_general">    · 您可以使用多种工具来创建您的虚拟形象模型。\n    · 对于DragonBones，推荐使用新版在线编辑器，也可使用旧版 v5.6.3 离线编辑器。</string>
-    <string name="exporting_files">2. 导出文件：</string>
-    <string name="exporting_files_desc">    · 无论使用哪个版本，导出数据时类型请选择 JSON，版本请选择 5.5（当前还不支持 6.0 运行时）。\n    · 导出的核心文件为：*_ske.json、*_tex.json、*_tex.png。</string>
-    <string name="exporting_files_desc_general">    · 请遵循您所选格式的导出指南。\n    · 对于DragonBones，导出数据时类型请选择 JSON，版本请选择 5.5（当前还不支持 6.0 运行时）。\n    · 导出的核心文件为：*_ske.json、*_tex.json、*_tex.png。</string>
-    <string name="configuring_interaction">3. 配置交互：</string>
-    <string name="configuring_interaction_desc">    · 如需实现头部跟随，请添加 IK 约束，并将其目标骨骼命名为 ik_target。\n    · idle 动画：请确保有一个命名为 idle 的动画，作为基础待机动画，会自动循环播放。\n    · 随机动画：可添加如 blink（眨眼）、shake_head（摇头）、wag_tail（摇尾巴）等动画，\n      系统会随机自动触发这些动画，丰富宠物表现。</string>
-    <string name="packaging_and_importing">4. 打包与导入：</string>
-    <string name="packaging_and_importing_desc">    · 将导出的三个文件打包成一个 .zip 文件后导入。</string>
-    <string name="important_tip">重要提示：旧版编辑器下载页面中，Windows和Mac的下载链接放反了，请注意选择正确的链接下载。</string>
-    <string name="dragonbones_important_tip">重要提示：旧版编辑器下载页面中，Windows和Mac的下载链接放反了，请注意选择正确的链接下载。</string>
-    <string name="download_old_editor">下载旧版编辑器</string>
-    <string name="visit_online_editor">访问在线编辑器</string>
 
     <string name="voice_wakeup_section_title">语音唤醒</string>
     <string name="voice_wakeup_always_listen_title">始终监听</string>
@@ -605,6 +515,7 @@
     <string name="unbound_character_card">未绑定</string>
     <string name="chat_binding_scope_hint">仅影响此对话的绑定，不会修改已有消息</string>
     <string name="confirm_delete">确认删除</string>
+    <string name="chat_delete_selected_messages_confirm">确定删除选中的 %1$d 条消息吗？此操作无法撤销。</string>
     <string name="delete_warning">删除所有聊天记录将无法恢复。建议在执行此操作前先导出备份。</string>
     <string name="export_success">导出成功</string>
     <string name="import_success">导入成功</string>
@@ -790,13 +701,15 @@
     <string name="theme_custom_color">自定义配色</string>
     <string name="theme_use_custom_color">使用自定义颜色</string>
     <string name="theme_custom_color_desc">开启后可以自定义应用的主要配色</string>
+    <string name="theme_enforce_contrast">增强对比度</string>
+    <string name="theme_enforce_contrast_desc">颜色看不清时再打开，会把强调色加深</string>
     <string name="theme_select_color">选择颜色</string>
     <string name="theme_primary_color">主色</string>
     <string name="theme_secondary_color">次色</string>
     <string name="theme_preview">色彩效果预览</string>
     <string name="theme_primary_button">主按钮</string>
     <string name="theme_secondary_button">次要按钮</string>
-    <string name="theme_contrast_tip">提示: 选择对比度高的颜色组合效果最佳；所选颜色太浅时，应用会自动加深到能看清文字</string>
+    <string name="theme_contrast_tip">提示: 选择对比度高的颜色组合效果最佳；颜色太浅看不清时，可以打开“增强对比度”自动加深</string>
     <string name="theme_save_colors">保存颜色设置</string>
     <string name="theme_title_background">背景定制</string>
     <string name="theme_bg_media">背景媒体设置</string>
@@ -811,6 +724,10 @@
     <string name="theme_bg_opacity">背景不透明度: %1$d%%</string>
     <string name="theme_reset">重置为默认主题</string>
     <string name="theme_saved">设置已保存</string>
+    <string name="theme_reset_done">已恢复默认主题</string>
+    <string name="chat_style_bubble_fine_tuning">裁切与缩放</string>
+    <string name="theme_reset_confirm_title">重置主题？</string>
+    <string name="theme_reset_confirm_message">所有主题设置会恢复默认，当前角色绑定的主题也会删除，无法撤销。</string>
     <string name="theme_video_too_large">视频文件过大，可能导致应用卡顿或崩溃。请选择小于30MB的视频。</string>
     <string name="theme_video_saved">背景视频已保存</string>
     <string name="theme_image_saved">背景图片已保存</string>
@@ -892,7 +809,7 @@
     <string name="disable_tools_desc">禁用后，AI将无法调用包括记忆查询在内的内置工具，例如文件系统、HTTP和记忆工具。</string>
     <string name="tools_disabled">工具已禁用</string>
     <string name="max_mode_title">Max模式</string>
-    <string name="max_mode_info">Max Mode（超大上下文模式）开启后将使用 %2$sk 上下文窗口，关闭则回到 %1$sk。您可以在设置中自定义这些数值。</string>
+    <string name="max_mode_info">开启后按当前模型上限 %2$sK 使用；关闭后恢复当前对话预算 %1$sK。软件会预留必要空间。</string>
     <string name="processing_input">正在处理输入...</string>
     <string name="references">参考资料:</string>
     <string name="tool_weather">天气查询</string>
@@ -920,12 +837,12 @@
     <string name="settings_model_prompts">模型提示词设置</string>
     <string name="settings_model_prompts_desc">自定义AI助手的系统提示词，包括自我介绍和语气风格，使AI更符合您的预期</string>
     <string name="settings_configure_prompts">配置提示词</string>
-    <string name="settings_theme_appearance">主题和外观</string>
+    <string name="settings_theme_appearance">主题外观</string>
     <string name="settings_theme_appearance_desc">个性化应用外观，包括深色/浅色模式和自定义配色方案</string>
     <string name="settings_customize_theme">自定义主题</string>
     <string name="settings_global_display">显示与行为</string>
     <string name="settings_global_display_subtitle">管理显示样式、自动化行为与截图等全局选项</string>
-    <string name="settings_data_backup">数据备份与恢复</string>
+    <string name="settings_data_backup">备份与恢复</string>
     <string name="settings_data_backup_desc">导入、导出或删除聊天记录和记忆库数据，方便备份和恢复重要信息</string>
     <string name="settings_manage_backup">管理备份</string>
     <string name="settings_chat_history_management">聊天记录管理</string>
@@ -950,7 +867,7 @@
     <string name="settings_enable_summary_desc">当上下文过长时自动生成对话总结，节省Token消耗</string>
     <string name="settings_enable_summary_by_message_count">按消息条数触发总结</string>
     <string name="settings_enable_summary_by_message_count_desc">当新消息数量达到阈值时触发总结</string>
-    <string name="settings_summary_message_count_threshold">消息条数阈值</string>
+    <string name="settings_summary_message_count_threshold">触发总结的消息数</string>
     <string name="settings_summary_message_count_threshold_subtitle">触发总结的新消息数量(1-20条)</string>
     <string name="settings_summary_custom_rules">自定义总结规则</string>
     <string name="settings_summary_custom_rules_desc">总结对话时发送的额外规则，留空为不添加</string>
@@ -1074,7 +991,7 @@
     <string name="tag_count_locked_status">已选择 %1$d / 上限 %2$d</string>
     
     <!-- Package Manager Screen -->
-    <string name="packages">包管理</string>
+    <string name="packages">扩展管理</string>
     <string name="skills">技能</string>
     <string name="quick_plugin_creator_title">快速创作你的插件</string>
     <string name="quick_plugin_creator_desc">内置和市场都找不到想要的插件？创作你自己想要的！</string>
@@ -1160,7 +1077,7 @@
     <string name="back_to_list">返回列表</string>
     
     <!-- Language Settings -->
-    <string name="language_settings">语言设置</string>
+    <string name="language_settings">界面语言</string>
     <string name="language_settings_desc">更改应用界面显示语言</string>
     <string name="change_language">更改语言</string>
     <string name="select_language">选择语言</string>
@@ -1725,7 +1642,7 @@
     <string name="confirm_edit_and_resend_message">将删除此消息之后的所有消息，并把已编辑的内容作为新的提问重新发送。AI 写入磁盘的文件改动不会被撤销，需要你自行处理。此操作不可撤销，确定继续吗？</string>
     <string name="confirm_edit_and_resend_confirm">确认编辑并重发</string>
     <string name="confirm_revert_tool_calls_warning">被删除的轮次调用过工具，这些对话被删除后 AI 不再记得它们，重新回答时可能重复操作或误判已有文件，表现可能下降。</string>
-    <string name="workspace_attachment_attached">当前对话已附着工作区。</string>
+    <string name="workspace_attachment_attached">当前对话已附着工作区。以下是最新工作区信息，替代此前记录的工作区路径和环境，无需因此新开对话。工作区是默认工作目录，不是访问权限边界；区外操作仍须符合用户授权、工具审核和实际文件系统权限。</string>
     <string name="workspace_attachment_path">工作区路径：%1$s</string>
     <string name="workspace_attachment_environment">工作区环境：%1$s</string>
     <string name="multi_select">多选</string>
@@ -1895,8 +1812,6 @@
     <string name="ai_assistant">AI助手</string>
     <string name="send_message">发送消息</string>
     <string name="chat_with_pet">和宠物对话</string>
-    <string name="dragonbones_mode">DragonBones模式</string>
-    <string name="avatar_mode">虚拟形象模式</string>
     <string name="loading_failed">加载失败: %1$s</string>
     <string name="loading">正在加载...</string>
     <string name="chat_scroll_older">向上滑动查看更早的消息</string>
@@ -2119,7 +2034,7 @@
     <string name="tool_test_center_desc">测试AI工具的可用性和功能状态</string>
     <string name="tool_file_manager">文件管理器</string>
     <string name="tool_file_manager_desc">浏览和管理设备文件，支持多种操作</string>
-    <string name="tool_tts">文本转语音</string>
+    <string name="tool_tts">文字朗读</string>
     <string name="tool_tts_desc">将文本转换为语音，支持调整语速和音调</string>
     <string name="tts_title">文本转语音演示</string>
     <string name="tts_input_text">输入文本</string>
@@ -2173,7 +2088,7 @@
     <string name="ui_debugger_description">点击右下角的按钮启动悬浮窗进行UI调试</string>
     <string name="ui_debugger_launch_floating">启动悬浮窗</string>
     <string name="ui_debugger_start_float">启动悬浮窗</string>
-    <string name="tool_ffmpeg_toolbox">FFmpeg工具箱</string>
+    <string name="tool_ffmpeg_toolbox">FFmpeg 工具箱</string>
     <string name="tool_ffmpeg_toolbox_desc">强大的音视频处理工具，支持转换、裁剪、合并等功能</string>
     <string name="tool_stream_markdown_demo">流式Markdown演示</string>
     <string name="tool_stream_markdown_demo_desc">高性能流式Markdown渲染演示，支持实时字符流动效果</string>
@@ -2208,7 +2123,7 @@
     <string name="shell_executor_execute_failed">执行命令失败: %s</string>
     <string name="tool_log_viewer">日志查看器</string>
     <string name="tool_log_viewer_desc">实时捕获并查看系统和应用日志，支持过滤和搜索</string>
-    <string name="tool_sql_viewer">SQL 查看器</string>
+    <string name="tool_sql_viewer">SQL 工具</string>
     <string name="tool_sql_viewer_desc">查看应用数据库表并执行 SQL 命令</string>
     <string name="tool_token_config_desc">打开 API 密钥获取与配置页面，便于快速完成模型接入</string>
     <string name="screen_title_sql_viewer">SQL 查看器</string>
@@ -2630,7 +2545,7 @@
     <string name="logcat_no_logs">暂无日志数据</string>
     <string name="logcat_permission_required">需要读取日志权限</string>
     <string name="logcat_logs_saved">日志已保存到 %s</string>
-    <string name="logcat_export_title">应用日志导出</string>
+    <string name="logcat_export_title">应用日志</string>
     <string name="logcat_management">应用日志管理</string>
     <string name="logcat_description">您可以将应用运行期间的所有内部日志导出到一个文件，用于调试和问题分析。</string>
     <string name="logcat_save_to_file">保存日志到文件</string>
@@ -2957,7 +2872,6 @@
     <string name="functional_model_config_title">功能模型配置设置</string>
     <string name="functional_model_config_desc">为不同功能设置单独的模型配置，使每个功能都能使用最适合的API设置。</string>
     <string name="manage_all_model_configs">管理所有模型配置</string>
-    <string name="manage_model_configs_desc">管理模型配置</string>
     <string name="reset_all_functions_to_default">重置所有功能至默认配置</string>
     <string name="current_config_label">当前配置: %1$s</string>
     <string name="default_config">默认配置</string>
@@ -2986,7 +2900,6 @@
     <string name="function_type_file_binding">文件绑定处理</string>
     <string name="function_type_ui_controller">UI控制器</string>
     <string name="function_type_translation">翻译功能</string>
-    <string name="function_type_grep">Grep检索</string>
     <string name="function_type_role_response_planner">群组规划</string>
     <string name="function_type_permission_reviewer">权限审批</string>
     <string name="function_type_permission_risk_scorer">审核风险评分</string>
@@ -3002,9 +2915,8 @@
     <string name="function_desc_file_binding">处理文件内容的智能绑定与混合，提供更精确的代码处理能力。建议使用快速的廉价模型如Gemini Flash，不建议使用DeepSeek R1</string>
     <string name="function_desc_ui_controller">用于UI界面的自动遍历与操作，对应的 UI 控制器模型仅在用户明确要求使用“智能体”控制时才会启用，例如可选择 autoglm 等专用模型。</string>
     <string name="function_desc_translation">提供多语言翻译功能，支持文本内容的语言转换。建议使用支持多语言的模型。</string>
-    <string name="function_desc_grep">用于grep_context的检索规划与结果筛选（多轮grep_code）</string>
     <string name="function_desc_role_response_planner">用于在群组中动态决定本轮发言顺序与跳过策略，支持多轮讨论</string>
-    <string name="function_desc_permission_reviewer">用于“自动审核”档位独立审查工具调用。审批代理只能使用内部结果提交工具，不能执行被审核操作；失败、超时或无有效结果时将转由你确认。</string>
+    <string name="function_desc_permission_reviewer">用于“自动审核”档位独立审查工具调用。审批代理不能执行被审核操作；失败、超时或无有效结果时，操作不执行，原因直接返回给 AI，不弹出人工审批。</string>
     <string name="function_desc_permission_risk_scorer">用于“自动审核”快速档的异步风险评分：派发工具时用一个轻量模型判断当前这组操作的风险高低。用便宜、响应快的模型就够。保持默认配置时跟随“权限审批”的模型。</string>
     <string name="function_desc_image_recognition">用于图像内容识别和分析，调用read_file工具读取图片时支持intent参数进行深度理解。建议使用支持视觉的多模态模型。</string>
     <string name="function_desc_audio_recognition">用于音频内容识别和分析，调用read_file工具读取音频时可使用intent参数进行深度理解（如转写/总结/识别说话内容）。建议使用支持音频输入或高质量转写的模型。</string>
@@ -3155,6 +3067,7 @@
     <string name="thinking_type_mode">mode</string>
     <string name="thinking_budget_tokens">%1$d 个 Token</string>
     <string name="thinking_strength_auto">自动</string>
+    <string name="thinking_strength_turns_on_hint">思考模式已关闭，调整档位会自动开启。</string>
     <string name="thinking_quality">思考程度</string>
     <string name="thinking_quality_desc">仅在思考模式下生效。GPT-5.6 系列使用 5 档，其它模型保持原有 4 档；数值越高思考越深。</string>
     <string name="thinking_quality_level_low">低</string>
@@ -3237,7 +3150,7 @@
 
     <!-- Workspace Attachment Processor (AI工具响应) -->
     <string name="workspace_unknown_error">未知错误</string>
-    <string name="workspace_suggestion_search_first">对于用户意图，建议先使用 grep_context（基于意图搜索相关文件）和 grep_code（搜索特定代码模式）工具去了解项目当前情况，再进行修改。</string>
+    <string name="workspace_suggestion_search_first">修改前，建议先使用 grep_code 搜索相关代码，再用 read_file_part 读取上下文，了解项目当前情况。</string>
     <string name="workspace_suggestion_separate_files">请将HTML, CSS, 和 JavaScript 代码分别存放到独立的文件中。</string>
     <string name="workspace_suggestion_create_folders">如果项目较为复杂，可以考虑新建js文件夹和css文件夹并创建多个文件。</string>
     <string name="workspace_no_suggestions">暂无建议</string>
@@ -3424,6 +3337,8 @@
     <string name="manage_group">管理分组</string>
     <string name="create_subfolder">新建子文件夹</string>
     <string name="move_to_folder">移动到文件夹…</string>
+    <string name="move_to_folder_title">移动到文件夹</string>
+    <string name="moved_to_folder">已移到「%1$s」</string>
     <string name="folder_root">根目录</string>
     <string name="rename_group">重命名分组</string>
     <string name="delete_group">删除分组</string>
@@ -3462,7 +3377,7 @@
     <string name="settings_user_preferences_subtitle">编辑和预览 user.md</string>
     <string name="settings_language_subtitle">界面语言切换</string>
     <string name="settings_theme_subtitle">主题和外观定制</string>
-    <string name="layout_adjustment">布局调整</string>
+    <string name="layout_adjustment">界面布局</string>
     <string name="layout_adjustment_subtitle">调整界面元素位置和边距</string>
     <string name="settings_model_params_subtitle">模型参数和API配置</string>
     <string name="settings_functional_model_subtitle">功能模型专项配置</string>
@@ -3474,9 +3389,9 @@
     <string name="screen_title_external_http_chat_settings">外部 HTTP 调用</string>
     <string name="settings_system_prompts_subtitle">系统和模型提示词</string>
     <string name="settings_functional_prompts_subtitle">功能专用提示词模板</string>
-    <string name="settings_context_length">上下文长度</string>
+    <string name="settings_context_length">对话上下文预算</string>
     <string name="settings_context_length_subtitle">模型记忆对话长度(k tokens)</string>
-    <string name="settings_max_context_length">最大上下文长度</string>
+    <string name="settings_max_context_length">模型上下文上限</string>
     <string name="settings_max_context_length_subtitle">模型API支持的最大上下文长度(k tokens)</string>
     <string name="settings_summary_threshold">上下文使用比例阈值</string>
     <string name="settings_summary_threshold_subtitle">当上下文使用超过此比例时触发总结(0.1-0.95)</string>
@@ -3504,10 +3419,15 @@
     <string name="global_text_letter_spacing_desc">调整 AI 回复中 Markdown 正文的字间距</string>
     <string name="global_text_paragraph_spacing">AI Markdown 段间距</string>
     <string name="global_text_paragraph_spacing_desc">调整 AI 回复中 Markdown 段落之间额外增加的间距</string>
+    <string name="toned_icon_style">彩色小图标样式</string>
+    <string name="toned_icon_style_desc">AI 回复正文里带颜色的小图标怎么显示。气泡用了图片、玻璃或中灰色时，小圆底或描边更容易看清</string>
+    <string name="toned_icon_style_plain">直接显示</string>
+    <string name="toned_icon_style_dot">小圆底</string>
+    <string name="toned_icon_style_halo">描边</string>
     <string name="layout_adjustment_preview_title">AI Markdown 预览</string>
     <string name="layout_adjustment_preview_desc">下方示例会展示当前已保存的 AI Markdown 行距、字距与段间距效果。前三段之间的留白会直接反映段间距设置。</string>
     <string name="layout_adjustment_preview_plain_text">这是一段普通文本预览。你可以观察字与字之间的距离，以及每一行之间的疏密变化。</string>
-    <string name="layout_adjustment_preview_markdown">第一段预览：用来观察正文行距与字距。\n\n第二段预览：这一段专门用来观察段落之间的留白。\n\n第三段预览：如果你调整了段间距，这里和上一段之间的距离会立即变化。\n\n- AI Markdown 列表项一\n- AI Markdown 列表项二</string>
+    <string name="layout_adjustment_preview_markdown">第一段预览：用来观察正文行距与字距。\n\n第二段预览：这一段专门用来观察段落之间的留白。\n\n第三段预览：如果你调整了段间距，这里和上一段之间的距离会立即变化。\n\n- AI Markdown 列表项一\n- AI Markdown 列表项二\n\n构建 :icon[check]{tone=success} 通过，:icon[warning]{tone=warning} 3 条警告，:icon[time] 用时 2 分钟</string>
     <string name="current_value">当前值</string>
     <string name="closer_to_edge">靠近边缘</string>
     <string name="farther_from_edge">远离边缘</string>
@@ -3529,7 +3449,7 @@
     <string name="settings_external_http_chat">外部 HTTP 调用</string>
     <string name="settings_external_http_chat_subtitle">监听 0.0.0.0 的 HTTP 聊天接口、端口和 Bearer Token</string>
     <string name="settings_data_backup_subtitle">聊天记录备份管理</string>
-    <string name="settings_token_usage_stats">Token使用统计</string>
+    <string name="settings_token_usage_stats">用量与费用</string>
     <string name="settings_function_label">功能</string>
     <string name="settings_model_label">模型</string>
     <string name="settings_no_token_records">暂无功能模块的Token使用记录。</string>
@@ -3538,8 +3458,9 @@
     <string name="settings_usage_summary">使用统计</string>
     <string name="settings_total_chats">对话</string>
     <string name="settings_total_messages">消息</string>
-    <string name="settings_total_tokens">总Token数</string>
-    <string name="settings_total_cost">总费用</string>
+    <string name="settings_total_tokens">总 Token</string>
+    <string name="settings_total_cost">估算费用</string>
+    <string name="token_stats_cost_estimate_hint">按模型定价估算，不代表实际账单</string>
     <string name="settings_total_requests">总请求次数</string>
     <string name="settings_model_usage_distribution">模型使用分布</string>
     <string name="settings_model_details">模型详情</string>
@@ -3576,9 +3497,9 @@
     <string name="settings_reset">重置</string>
     <string name="settings_token_stats_reset_failed">重置统计失败，请重试</string>
     <string name="settings_edit_pricing">编辑定价</string>
-    <string name="settings_input_tokens">输入Token</string>
-    <string name="settings_output_tokens">输出Token</string>
-    <string name="settings_cached_tokens_label">缓存Token</string>
+    <string name="settings_input_tokens">输入 Token</string>
+    <string name="settings_output_tokens">输出 Token</string>
+    <string name="settings_cached_tokens_label">缓存 Token</string>
     <string name="settings_price_format">¥%.2f/1M</string>
     <string name="settings_cost">费用</string>
 
@@ -4089,7 +4010,7 @@
     <string name="api_endpoint_placeholder">例如: https://api.openai.com/v1/chat/completions</string>
     <string name="actual_request_url">实际请求地址: %s</string>
     <string name="endpoint_completion_hint">提示: 如果您输入的是基础URL，系统将自动补全路径。如需禁用，请在URL末尾添加#号。</string>
-    <string name="api_key">API密钥</string>
+    <string name="api_key">API 密钥</string>
     <string name="api_key_placeholder_default">使用默认Key, 可直接输入</string>
     <string name="api_key_placeholder_custom">输入API密钥</string>
     <string name="model_name">模型名称</string>
@@ -4100,7 +4021,7 @@
     <string name="get_models_list_failed">获取模型列表失败: %s</string>
     <string name="default_config_no_models_list">使用默认配置时无法获取模型列表</string>
     <string name="fill_endpoint_and_key">请先填写API端点和密钥</string>
-    <string name="api_provider">API提供商</string>
+    <string name="api_provider">API 提供商</string>
     <string name="select_api_provider">点击选择API提供商</string>
     <string name="select">选择</string>
     <string name="default_config_model_restriction">使用默认配置时，只能使用deepseek-v4-flash模型</string>
@@ -4130,7 +4051,7 @@
     <string name="enable_google_search_desc">启用后，Gemini 将使用 Google 搜索来增强回答（可能产生额外费用）</string>
     <string name="enable_claude_1h_prompt_cache">启用 Claude 1 小时提示缓存</string>
     <string name="enable_claude_1h_prompt_cache_desc">启用后，Claude 和 Claude 兼容供应商的提示缓存 TTL 将使用 1 小时</string>
-    <string name="enable_tool_call">模型支持ToolCall</string>
+    <string name="enable_tool_call">原生 ToolCall</string>
     <string name="enable_tool_call_desc">关闭时，会使用软件内工具调用机制，也可以完成工具调用。开启后，将会使用API的专用接口进行原生工具调用（需要模型支持）</string>
     <string name="enable_deepseek_reasoning">启用 DeepSeek 推理模式</string>
     <string name="enable_deepseek_reasoning_desc">启用后，&lt;think&gt;标签内的内容将作为reasoning_content发送给DeepSeek模型，用于支持DeepSeek-R1等推理模型的工具调用</string>
@@ -4416,6 +4337,7 @@
     <string name="waifu_custom_prompt_desc">自定义 Waifu 模式附加提示词。</string>
     <string name="waifu_custom_prompt_placeholder">例如：回复简短自然，不要卖萌，不要加语气词，不要写动作描写。</string>
     <string name="waifu_custom_prompt_tip">这段内容会作为 Waifu 模式的额外规则拼接到系统提示词中。</string>
+    <string name="waifu_section_expression">表情与自拍</string>
     <string name="enable_emoticons">启用表情包</string>
     <string name="emoticons_desc">在对话中插入情绪状态标签，增强表达效果</string>
     <string name="available_emoticons">可用表情：crying, like_you, happy, surprised, miss_you, speechless, angry, confused, sad</string>
@@ -5505,7 +5427,7 @@
     <string name="permission_level_allow_description">这些工具将自动运行。</string>
     <string name="permission_level_allow_default_hint">子代理协作工具（spawn_agent 等）默认就允许，没有单独的开关。想让它们换档位，就在其他分组里用 + 添加。</string>
     <string name="permission_level_auto_review">自动审核</string>
-    <string name="permission_level_auto_review_description">可确认位于当前工作区内的操作直接放行；其余原本需要询问的操作交给隔离的独立代理审批，失败、超时或无有效结果时转回由你确认。单工具永久允许或拒绝始终优先。此模式不是系统沙箱。</string>
+    <string name="permission_level_auto_review_description">可确认位于当前工作区内的操作直接放行；其余需要审核的操作交给独立代理批准或拒绝。审核失败、超时或无有效结果时，操作不执行，原因返回给 AI，由 AI 重试或向你说明配置问题。单工具规则优先，此模式不是系统沙箱。</string>
     <string name="permission_level_forbid">禁止</string>
     <string name="permission_level_forbid_description">这些工具永远不会运行。</string>
     <string name="permission_level_ask">询问</string>
@@ -5515,10 +5437,17 @@
     <string name="permission_stop_forbid_description">所有工具都不会运行。</string>
     <string name="permission_stop_ask_description">每次调用工具前都弹窗问你。</string>
     <string name="permission_stop_auto_review_strict_description">工作区内可确认安全的操作直接放行；其余交给审批代理，每次调用都重新判断。最安全，也最慢。</string>
-    <string name="permission_stop_auto_review_fast_description">和严格档一样，另外用一个轻量模型异步评估当前这组操作；结论是低风险时，后面的调用直接放行。它只会减少审核次数，不会自己拒绝操作，也没有系统级沙箱。</string>
-    <string name="permission_stop_allow_description">所有工具直接运行，不再询问。</string>
+    <string name="permission_stop_auto_review_fast_description">在严格审核的基础上，复用近期的低风险判断，减少重复审核。审批代理仍可批准或拒绝；审核失败时不执行操作，将原因返回给 AI，由 AI 重试或向你说明配置问题。</string>
+    <string name="permission_stop_full_access">完全访问权限</string>
+    <string name="permission_stop_allow_description">警告：默认跳过工具审批，AI 可直接修改或删除文件、执行命令及访问网络，可能造成数据丢失或泄露。仍受系统权限和单独工具规则限制。</string>
     <string name="add_tool">添加工具</string>
     <string name="no_tools_in_group">此组中未添加任何工具。</string>
+    <string name="tool_permission_count">%1$d 个</string>
+    <string name="tool_permission_show_all">查看全部 %1$d 个</string>
+    <string name="tool_permission_total">共 %1$d 个工具</string>
+    <string name="tool_permission_default_count">%1$d 个工具默认允许</string>
+    <string name="tool_permission_builtin_group">内置工具</string>
+    <string name="tool_permission_no_match">没有匹配的工具</string>
     <string name="remove_tool">移除</string>
     <string name="select_tools">选择工具</string>
     <string name="search_tools">搜索</string>
@@ -5537,7 +5466,7 @@
     <!-- 聊天组件硬编码字符串 -->
     <string name="reply">回复</string>
     <string name="image">图片</string>
-    <string name="image_expired">图片 (已过期)</string>
+    <string name="image_expired">图片不可用</string>
     <string name="chat_viewed_images">已查看 %1$d 张图像</string>
     <string name="copy_content">复制内容</string>
     <string name="user_reply_instruction">用户正在回复你之前的这条消息：</string>
@@ -5634,14 +5563,14 @@
     <string name="agent_profile_builtin_permission_reviewer_description">独立审查工具调用并给出一次性放行或拒绝决定。</string>
     <string name="permission_review_task_title">权限审核：%1$s</string>
     <string name="permission_review_submitted">权限审核决定已提交。</string>
-    <string name="permission_review_fallback_invalid">自动审核连续返回了无效结果，已转由你确认。</string>
-    <string name="permission_review_fallback_timeout">自动审核超时，已转由你确认。</string>
-    <string name="permission_review_fallback_error">自动审核运行失败，已转由你确认。</string>
+    <string name="permission_review_fallback_invalid">自动审核返回了无效结果，操作未执行，原因已返回给 AI。</string>
+    <string name="permission_review_fallback_timeout">自动审核超时，操作未执行，原因已返回给 AI。</string>
+    <string name="permission_review_fallback_error">自动审核运行失败，操作未执行，原因已返回给 AI。</string>
     <string name="permission_review_status_allowed">已允许</string>
     <string name="permission_review_status_denied">已拒绝</string>
-    <string name="permission_review_status_invalid">输出无效，已转人工</string>
+    <string name="permission_review_status_invalid">输出无效，操作未执行</string>
     <string name="permission_review_status_timeout_or_cancelled">审核超时或已取消</string>
-    <string name="permission_review_status_error">审核失败，已转人工</string>
+    <string name="permission_review_status_error">审核失败，操作未执行</string>
     <string name="functional_config_permission_reviewer_test_invalid">模型已连接，但未按审批协议调用结果工具。</string>
     <string name="functional_config_permission_reviewer_test_success">审批协议测试成功：outcome=%1$s，risk=%2$s，authorization=%3$s</string>
     <string name="functional_config_risk_scorer_test_invalid">模型已连接，但没有按要求只回答 high 或 low。</string>
@@ -5852,6 +5781,11 @@
     <string name="attachment_camera">拍照</string>
     <string name="attachment_memory">记忆</string>
     <string name="attachment_file">文件</string>
+    <string name="functional_model_reselect">请重新选择模型</string>
+    <string name="functional_model_notice_title">部分功能未配置可用模型</string>
+    <string name="functional_model_notice_more">%1$s 等 %2$d 项功能</string>
+    <string name="functional_model_notice_configure">去配置</string>
+    <string name="functional_model_selection_unavailable">所选模型已删除或不可用，请在功能模型配置中重新选择；不会自动切换模型。</string>
     <string name="attachment_screen_content">屏幕内容</string>
     <string name="attachment_notifications">当前通知</string>
     <string name="attachment_location">当前位置</string>
@@ -5923,11 +5857,11 @@
     <string name="enable_navigation_animation_description">开启后，同时启用手机侧边栏与页面切换的增强动画效果。关闭后使用简洁的导航过渡。</string>
     <string name="start_with_new_chat">启动时新建空白聊天</string>
     <string name="start_with_new_chat_description">开启后，每次启动应用都会进入一个新的空白聊天界面，不再自动打开上一次聊天。</string>
-    <string name="software_identity_title">软件标识</string>
-    <string name="software_identity_description">更改侧边栏顶部显示的软件标识。</string>
     <string name="software_identity_option_operit">Operit Ry</string>
-    <string name="software_identity_option_lingshu">灵枢 AI</string>
     <string name="reset_all_display_settings">重置所有显示设置</string>
+    <string name="reset_display_settings_confirm">会把本页的显示与执行设置恢复为默认值，包括全局用户名、头像、Root 执行模式和自定义 su 命令。</string>
+    <string name="reset_display_settings_action">重置</string>
+    <string name="reset_display_settings_done">已恢复默认设置</string>
     <string name="ui_accessibility_mode">无障碍适配模式</string>
     <string name="ui_accessibility_mode_description">为 TalkBack 等无障碍用户优化 UI 自动化行为，优先给出可朗读的操作步骤，谨慎执行自动点击。</string>
     <string name="experimental_virtual_display">实验性虚拟屏幕</string>
@@ -6467,7 +6401,6 @@
     <string name="toolreg_share_file_desc">分享文件: %1$s%2$s</string>
     <string name="toolreg_grep_code_with_file_pattern_desc">在 %1$s 中搜索代码: 「%2$s」%3$s (文件类型: %4$s)</string>
     <string name="toolreg_grep_code_desc">在 %1$s 中搜索代码: 「%2$s」%3$s</string>
-    <string name="toolreg_grep_context_desc">在 %1$s 中基于意图搜索相关文件: 「%2$s」%3$s</string>
     <string name="toolreg_download_file_desc">下载文件: %1$s -&gt; %2$s%3$s</string>
     <string name="toolreg_index_suffix">, 索引: %1$s</string>
     <string name="toolreg_click_element_resourceid_desc">点击元素 [资源ID: %1$s%2$s]</string>
@@ -6986,9 +6919,6 @@
     <string name="theme_avatar_description">说明：左侧的用户头像是角色卡专属设置，为空时将使用右侧的全局用户头像。全局用户头像在所有角色卡中共享使用。</string>
     <string name="functional_config_model_count">%1$d个模型</string>
     <string name="functional_config_test_title_generation_user_text">我想规划一次三天的东京旅行，包括交通、住宿和美食推荐。</string>
-    <string name="functional_config_test_grep_intent">找到包含问候语的片段。</string>
-    <string name="functional_config_test_grep_display_path">&lt;测试&gt;</string>
-    <string name="functional_config_test_grep_candidates_digest">#1 [file: example.txt]\n你好世界\n#2 [file: main.kt]\nfun main() {}</string>
     <string name="functional_config_test_ui_controller_prompt">当前 UI 状态: [Button(label="确定", bounds="[0,0][100,50]")]\n任务目标: 点击确定。\n执行历史: []</string>
     <string name="functional_config_test_memory_prompt">对话内容:\n用户: 连接测试问题。\n助手: 连接测试回答。</string>
     <string name="tool_permission_instruction_title">使用说明</string>
@@ -7551,9 +7481,9 @@
     <string name="skill_error_import_failed">导入失败: %1$s</string>
 
     <!-- Context Summary Settings -->
-    <string name="context_summary_note">文件读取限制与文本结果截断已改为固定系统常量。此页可直接调整当前绑定模型配置的上下文与总结参数，以及历史图片和音视频保留回合数。</string>
+    <string name="context_summary_note">这里设置新对话的默认预算，已有对话不受影响。点击聊天顶部的上下文用量可调整当前对话；模型容量在模型配置中设置。</string>
     <string name="context_summary_current_model_config">当前绑定模型配置：%1$s</string>
-    <string name="context_summary_bound_config_description">此页面的上下文与总结设置会直接写回当前对话绑定的模型配置。</string>
+    <string name="context_summary_bound_config_description">下方仅编辑总结格式与规则，所有对话共用；不会改变模型容量或对话预算。</string>
     <string name="context_validation_error_positive_number">%1$s 必须是大于 0 的有效数字</string>
     <string name="context_validation_error_positive_integer">%1$s 必须是大于 0 的有效整数</string>
     <string name="context_validation_error_non_negative_integer">%1$s 必须是大于等于 0 的有效整数</string>
@@ -7600,7 +7530,7 @@
     <string name="visit_web_wait_time_value">%1$d 秒</string>
     <string name="enable_enter_to_send">回车发送</string>
     <string name="enable_enter_to_send_description">开启后，聊天输入框按回车会直接发送，键盘发送键也会显示为发送。</string>
-    <string name="tool_collapse_mode_title">折叠工具</string>
+    <string name="tool_collapse_mode_title">工具记录折叠</string>
     <string name="tool_collapse_mode_desc">设置消息中工具调用分组的默认折叠范围</string>
     <string name="tool_collapse_mode_read_only">折叠多个只读工具</string>
     <string name="tool_collapse_mode_all">折叠多个任意工具</string>
@@ -7978,7 +7908,7 @@
     <!-- OpenAIVoiceProvider -->
     <string name="openai_tts_error_url_not_set">OpenAI TTS URL 未设置，请填写完整接口地址（例如 https://xxx/v1/audio/speech）。</string>
     <string name="openai_tts_error_url_invalid_scheme">OpenAI TTS URL 必须以 http:// 或 https:// 开头。</string>
-    <string name="openai_tts_error_url_invalid_path">OpenAI TTS URL 必须包含 /v1/audio/speech（请填写完整到 audio/speech）。</string>
+    <string name="openai_tts_error_url_invalid_path">语音地址应以 /audio/speech 结尾。可填写服务根地址或 /v1，应用会补全；自定义路径请填写完整地址。</string>
     <string name="openai_tts_error_api_key_not_set">API Key 未设置，请在设置中填写。</string>
     <string name="openai_tts_error_model_not_set">OpenAI TTS model 未设置，请在设置中填写（例如 tts-1）。</string>
     <string name="openai_tts_error_voice_not_set">OpenAI TTS voice 未设置，请在设置中填写（例如 alloy）。</string>
@@ -8810,13 +8740,14 @@
     <string name="tool_errors_week">近 7 天</string>
     <string name="tool_errors_fortnight">近 14 天</string>
     <string name="tool_errors_month">近 30 天</string>
-    <string name="tool_repairs_title">工具调用修复</string>
+    <string name="tool_repairs_title">工具调用修复记录</string>
     <string name="tool_repairs_scope">记录工具执行前的自动路由修复，不代表执行成功。</string>
     <string name="tool_repairs_total">共 %1$d 条修复记录</string>
     <string name="tool_repairs_empty">暂无工具调用修复记录</string>
     <string name="tool_repairs_line_range">按行号读取，自动转为分段读取工具</string>
     <string name="tool_repairs_separator">将终端工具名中重复的冒号修正为单冒号</string>
     <string name="tool_repairs_timeout">将终端 timeout 参数统一为 timeoutMs</string>
+    <string name="tool_repairs_proxy_yield">将终端等待时长移入工具参数</string>
     <string name="tool_repairs_package">移除与目标工具包一致的重复 package_name</string>
     <string name="tool_repairs_flattened_proxy">从 params 文本中还原出被并入的 tool_name</string>
     <string name="tool_repairs_memory_argument">将记忆工具误写的 new_text 参数改为 content</string>
@@ -8850,7 +8781,7 @@
     <string name="floating_voice_answering">正在回答…</string>
     <string name="floating_voice_starting">正在启动语音…</string>
     <string name="screen_ocr_capturing">正在截取屏幕…</string>
-    <string name="model_protocol_title">协议处理</string>
+    <string name="model_protocol_title">API 协议</string>
     <string name="model_protocol_desc">仅应用到当前模型，默认继承提供商配置。</string>
     <string name="model_protocol_inherit">继承提供商</string>
     <string name="model_protocol_chat">Chat Completions（标准）</string>
@@ -8861,7 +8792,7 @@
     <string name="model_protocol_deepseek">DeepSeek（思考参数与回传）</string>
     <string name="model_protocol_kimi">Kimi（思考参数与回传）</string>
     <string name="model_protocol_mimo">MiMo（思考参数与回传）</string>
-    <string name="model_protocol_endpoint">此模型的端点（可选）</string>
+    <string name="model_protocol_endpoint">此模型的 API 地址（可选）</string>
     <string name="model_protocol_endpoint_desc">留空使用提供商地址，并按协议转换标准路径；非标准地址可在此单独填写。</string>
     <string name="model_protocol_auto_configure">自动配置协议</string>
     <string name="model_protocol_auto_desc">按提供商和模型匹配本地目录，不联网刷新。更新匹配模型的协议，保留手填端点；未匹配的设置不变。</string>
@@ -9039,6 +8970,74 @@
     <string name="resource_download_failed_generic">下载失败，请重试</string>
     <string name="plugin_terminal_resource_required">需要先下载 Ubuntu 终端环境（约 64 MB）</string>
     <string name="terminal_task_start_desc">启动终端任务：%1$s</string>
+    <string name="shell_task_poll_desc">查看 Shell 任务：%1$s</string>
+    <string name="shell_status_running">Shell 仍在运行</string>
+    <string name="shell_status_cancelling">Shell 正在停止并清理</string>
+    <string name="shell_status_completed">Shell 执行完成</string>
+    <string name="shell_status_failed">Shell 执行失败</string>
+    <string name="shell_status_timed_out">Shell 执行超时</string>
+    <string name="shell_status_cancelled">Shell 已取消</string>
+    <string name="shell_status_unknown">Shell 已结束，结果未知</string>
+    <string name="shell_task_cancel_desc">取消 Shell 任务：%1$s</string>
     <string name="terminal_task_poll_desc">查看终端任务：%1$s</string>
     <string name="terminal_task_cancel_desc">取消终端任务：%1$s</string>
+    <string name="composer_predictions">智能输入预测（Composer Predictions）</string>
+    <string name="composer_predictions_description">AI 回复完成后，自动预测下一条可能发送的消息。双击灰色文字即可采纳，输入或添加附件时隐藏。开启后会使用当前聊天模型额外调用 API，可能产生费用或消耗账户额度。支持 Codex 登录和 Zen Free 等文本模型；插件提供商暂不支持。</string>
+    <string name="composer_prediction_adopt">采纳预测消息</string>
+    <string name="token_stats_category_composer_prediction">输入预测</string>
+    <string name="voice_dictation_cannot_keep_up">识别速度跟不上录音，请分短一些录制后重试。</string>
+    <string name="permission_review_failed_result">自动审核未完成，操作未执行</string>
+    <string name="chat_context_budget">对话上下文预算</string>
+    <string name="chat_context_budget_hint">例如 300K、400K、500K。实际使用不超过模型容量。</string>
+    <string name="chat_context_max_hint">开启后跟随当前模型的最大容量；关闭后可以自己设定预算。</string>
+    <string name="chat_context_compact_at">自动压缩触发量（可选）</string>
+    <string name="chat_context_compact_hint">留空由软件决定；如填 300K，则在接近该值时整理。软件会预留回复空间，必要时提前整理。</string>
+    <string name="chat_context_current">当前对话上下文</string>
+    <string name="chat_context_capacity">当前模型上限：%1$sK</string>
+    <string name="chat_context_model_hint">填写接口支持的上下文上限。同一配置中的模型共用此值；对话预算在聊天中单独调整。</string>
+    <string name="chat_context_defaults">新对话默认设置</string>
+    <string name="chat_context_advanced">总结格式设置</string>
+    <string name="chat_context_auto_compact">自动压缩上下文</string>
+    <string name="chat_context_auto_compact_hint">默认开启，接近预算时自动总结较早内容。关闭后，长对话可能超出模型容量。</string>
+    <string name="chat_context_saved">已保存，下次请求生效</string>
+    <string name="chat_context_save_failed">上下文设置保存失败，请重试</string>
+    <string name="chat_shortcuts">聊天指令 · 点击执行，发送仍是普通消息</string>
+    <string name="chat_shortcut_compact">压缩上下文</string>
+    <string name="chat_shortcut_autocompact">自动压缩阈值 · 例如 /autocompact 300K，auto 恢复自动</string>
+    <string name="chat_shortcut_context">调整当前对话预算 · 例如 /context 400K</string>
+    <string name="chat_shortcut_max">模型最大上下文 · /max on 开启，off 恢复自定义预算</string>
+    <string name="chat_shortcut_invalid">参数无效，请按示例填写；仍可作为普通消息发送</string>
+    <string name="chat_shortcut_busy">请等当前回复结束后再压缩</string>
+    <string name="chat_context_legacy_turns">保留旧规则：每 %1$d 轮自动压缩</string>
+    <string name="storage_title">存储管理</string>
+    <string name="settings_search_hint">搜索设置</string>
+    <string name="settings_search_empty">没有找到相关设置</string>
+    <string name="settings_search_results">找到 %1$d 项</string>
+    <string name="storage_subtitle">查看占用、清理预览缓存、管理下载组件</string>
+    <string name="storage_data_total">应用数据占用</string>
+    <string name="storage_calculating">正在统计…</string>
+    <string name="storage_refresh">重新统计</string>
+    <string name="storage_last_measured">上次统计：%1$s · 10 分钟内复用，可手动刷新</string>
+    <string name="storage_scan_progress">已扫描 %1$d 个文件 · 已统计 %2$s</string>
+    <string name="storage_scanning_category">正在扫描：%1$s</string>
+    <string name="storage_stop_scan">停止统计</string>
+    <string name="storage_scan_stopped">统计已停止，未替换上次完整结果。可以手动重新统计。</string>
+    <string name="storage_scan_timeout">本次统计耗时过长，已停止；未替换上次完整结果。可稍后重试。</string>
+    <string name="storage_scope">统计应用私有目录中的文件大小，不含安装包、公共下载目录和用户工作区。与系统设置显示的占用可能有差异。</string>
+    <string name="storage_failed">操作未完成，请重试。已显示的统计可能不是最新结果。</string>
+    <string name="storage_partial">部分目录无法读取，显示的是已统计到的大小。</string>
+    <string name="storage_media">聊天媒体</string>
+    <string name="storage_media_hint">供历史消息使用的图片、音频和视频。不再因数量上限或重启而自动删除，也不会随预览缓存一起清理。</string>
+    <string name="storage_components">模型与组件</string>
+    <string name="storage_components_hint">包括下载的模型、模板和终端环境。组件管理可删除下载资源；已安装的终端环境及其中的个人文件仅统计，不会被删除。</string>
+    <string name="storage_databases">数据库</string>
+    <string name="storage_databases_hint">聊天记录和记忆库等结构化数据。可进入历史记录管理；删除前建议先备份，数据库占用不一定立即缩小。</string>
+    <string name="chat_image_loading">图片加载中…</string>
+    <string name="storage_preview_cache">图片预览缓存</string>
+    <string name="storage_preview_hint">用于加速图片显示，可重新加载。清理后首次查看图片可能稍慢。</string>
+    <string name="storage_other">其他文件</string>
+    <string name="storage_other_hint">设置、插件、附件源文件、日志及临时文件等。为避免误删聊天和工作文件，不提供一键清空。</string>
+    <string name="storage_clear_preview">清理预览缓存</string>
+    <string name="storage_clear_preview_confirm">仅清理可重新加载的图片预览缓存，保留聊天媒体、聊天记录、模型和工作文件。</string>
+    <string name="storage_cache_cleared">预览缓存已清理，正在显示的图片可能重新生成少量缓存。</string>
 </resources>

@@ -255,13 +255,20 @@ class CodexOAuthClient(
             "refresh_token" to refreshToken,
             "client_id" to CodexOAuthProtocol.CLIENT_ID,
         ).toFormBody()
-        return executeTokenRequest(
-            Request.Builder()
-                .url(endpoint("/oauth/token"))
-                .post(body)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .build()
-        )
+        val response = executeRawRequest(Request.Builder()
+            .url(endpoint("/oauth/token"))
+            .post(body)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .build())
+        com.ai.assistance.operit.util.AppLogger.i("CodexAuthManager", "refresh HTTP status=${response.code}")
+        if (response.code !in 200..299) {
+            val json = runCatching { JSONObject(response.body) }.getOrNull()
+            val error = json?.opt("error")
+            val code = if (error is JSONObject) error.optString("code") else error as? String
+            throw CodexRefreshRejectedException(response.code, response.code in setOf(400, 401) &&
+                code in setOf("invalid_grant", "refresh_token_expired", "refresh_token_reused", "refresh_token_revoked"))
+        }
+        return parseTokenResponse(response.body)
     }
 
     suspend fun revokeToken(token: String, tokenTypeHint: String) {
@@ -281,6 +288,10 @@ class CodexOAuthClient(
 
     private suspend fun executeTokenRequest(request: Request): CodexOAuthTokenResponse {
         val responseBody = executeRequest(request)
+        return parseTokenResponse(responseBody)
+    }
+
+    private fun parseTokenResponse(responseBody: String): CodexOAuthTokenResponse {
         val json = JSONObject(responseBody)
         return CodexOAuthTokenResponse(
             idToken = json.optString("id_token", "").takeIf { it.isNotBlank() },

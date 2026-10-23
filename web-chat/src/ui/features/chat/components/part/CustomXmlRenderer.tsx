@@ -25,7 +25,6 @@ const EXPAND_THINKING_PROCESS_STORAGE_KEY = 'expand_thinking_process_default';
 const READ_ONLY_GROUPABLE_TOOL_NAMES = new Set([
   'list_files',
   'grep_code',
-  'grep_context',
   'read_file',
   'read_file_part',
   'read_file_full',

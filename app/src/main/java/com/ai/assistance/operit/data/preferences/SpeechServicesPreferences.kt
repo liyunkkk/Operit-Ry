@@ -224,6 +224,7 @@ class SpeechServicesPreferences(private val context: Context) {
             prefs[STT_SERVICE_TYPE] = serviceType.name
 
             when (serviceType) {
+                SpeechServiceFactory.SpeechServiceType.SHERPA_ONNX,
                 SpeechServiceFactory.SpeechServiceType.SHERPA_NCNN -> {
                 }
                 SpeechServiceFactory.SpeechServiceType.OPENAI_STT -> {

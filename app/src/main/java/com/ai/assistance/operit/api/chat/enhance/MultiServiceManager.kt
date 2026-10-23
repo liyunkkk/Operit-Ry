@@ -14,6 +14,9 @@ import com.ai.assistance.operit.data.model.ModelParameter
 import com.ai.assistance.operit.data.model.forSelectedModel
 import com.ai.assistance.operit.data.model.getModelByIndex
 import com.ai.assistance.operit.data.model.getValidModelIndex
+import com.ai.assistance.operit.data.model.getModelList
+import com.ai.assistance.operit.R
+import com.ai.assistance.operit.data.preferences.resolveModelIndex
 import com.ai.assistance.operit.data.model.multimodalCapabilitiesForModel
 import com.ai.assistance.operit.data.preferences.FunctionalConfigManager
 import com.ai.assistance.operit.data.preferences.ModelConfigManager
@@ -141,16 +144,35 @@ class MultiServiceManager(private val context: Context) {
         }
     }
 
-    private suspend fun getOrCreateServiceForFunctionLocked(functionType: FunctionType): ManagedService {
-        serviceInstances[functionType]?.let {
-            return it
-        }
+    /** A fresh provider, never entered into foreground caches or shared cancellation state.
+     * Registry-backed throttles and the factory's usage ledger still apply.
+     * The caller owns cancellation and must close this lease in finally.
+     */
+    suspend fun acquireIsolatedService(
+        modelConfig: ModelConfigData,
+        modelParameters: List<ModelParameter<*>>,
+    ): ServiceLease {
+        val service = createServiceFromConfig(modelConfig, 0, allowPluginProviders = false)
+        return ServiceLease(
+            closeAction = { service.release() },
+            service = service,
+            modelConfig = modelConfig,
+            modelIndex = 0,
+            modelParameters = modelParameters.toList(),
+        )
+    }
 
+    private suspend fun getOrCreateServiceForFunctionLocked(functionType: FunctionType): ManagedService {
         val configMapping = functionalConfigManager.getEffectiveConfigMappingForFunction(functionType)
         val config = modelConfigManager.getModelConfigFlow(configMapping.configId).first()
-
-        val actualModelIndex = getValidModelIndex(config.modelName, configMapping.modelIndex)
+        val actualModelIndex = configMapping.resolveModelIndex(config.modelName).modelIndex
+        requireAvailableSelection(config, actualModelIndex)
         val selectedModelConfig = config.forSelectedModel(actualModelIndex)
+        serviceInstances[functionType]?.let {
+            if (it.modelConfig == selectedModelConfig && it.modelIndex == actualModelIndex) return it
+            serviceInstances.remove(functionType)
+            retireManagedServiceLocked(it)
+        }
         val baseService = createServiceFromConfig(config, actualModelIndex)
         val service =
             if (functionType == FunctionType.CHAT) {
@@ -182,12 +204,16 @@ class MultiServiceManager(private val context: Context) {
     }
 
     private suspend fun getOrCreateServiceForConfigLocked(configId: String, modelIndex: Int): ManagedService {
-        val normalizedIndex = modelIndex.coerceAtLeast(0)
+        val normalizedIndex = modelIndex
         val cacheKey = "$configId#$normalizedIndex"
-        customServiceInstances[cacheKey]?.let { return it }
-
         val config = modelConfigManager.getModelConfigFlow(configId).first()
-        val actualModelIndex = getValidModelIndex(config.modelName, normalizedIndex)
+        requireAvailableSelection(config, normalizedIndex)
+        val actualModelIndex = normalizedIndex
+        customServiceInstances[cacheKey]?.let {
+            if (it.modelConfig == config.forSelectedModel(actualModelIndex)) return it
+            customServiceInstances.remove(cacheKey)
+            retireManagedServiceLocked(it)
+        }
         val service = createServiceFromConfig(config, actualModelIndex)
         val managedService = ManagedService(
             service = service,
@@ -208,7 +234,7 @@ class MultiServiceManager(private val context: Context) {
     suspend fun getDefaultService(): AIService {
         ensureInitialized()
         return serviceMutex.withLock {
-            (defaultService ?: getOrCreateServiceForFunctionLocked(FunctionType.CHAT)).service
+            getOrCreateServiceForFunctionLocked(FunctionType.CHAT).service
         }
     }
 
@@ -342,7 +368,11 @@ class MultiServiceManager(private val context: Context) {
     }
 
     /** 根据配置创建AIService实例 */
-    private suspend fun createServiceFromConfig(config: ModelConfigData, modelIndex: Int): AIService {
+    private suspend fun createServiceFromConfig(
+        config: ModelConfigData,
+        modelIndex: Int,
+        allowPluginProviders: Boolean = true,
+    ): AIService {
         // 使用公共函数计算有效索引
         val actualIndex = getValidModelIndex(config.modelName, modelIndex)
         
@@ -363,7 +393,9 @@ class MultiServiceManager(private val context: Context) {
         val rawService = AIServiceFactory.createService(
             config = configWithSelectedModel,
             modelConfigManager = modelConfigManager,
-            context = context
+            context = context,
+            allowPluginProviders = allowPluginProviders,
+            useSnapshotApiKeys = !allowPluginProviders,
         )
 
         val requestLimitPerMinute = config.requestLimitPerMinute.coerceAtLeast(0)
@@ -420,11 +452,27 @@ class MultiServiceManager(private val context: Context) {
      */
     suspend fun getModelConfigForFunction(functionType: FunctionType): ModelConfigData {
         ensureInitialized()
-        val configMapping = functionalConfigManager.getConfigMappingForFunction(functionType)
-        return modelConfigManager
-            .getModelConfigFlow(configMapping.configId)
-            .first()
-            .forSelectedModel(configMapping.modelIndex)
+        val mapping = functionalConfigManager.getEffectiveConfigMappingForFunction(functionType)
+        val config = modelConfigManager.getModelConfigFlow(mapping.configId).first()
+        val index = mapping.resolveModelIndex(config.modelName).modelIndex
+        requireAvailableSelection(config, index)
+        return config.forSelectedModel(index)
+    }
+
+    private suspend fun requireAvailableSelection(config: ModelConfigData, modelIndex: Int) {
+        val unnamedPlugin = config.modelName.isBlank() && modelIndex == 0 &&
+            com.ai.assistance.operit.plugins.toolpkg.ToolPkgAiProviderRegistry.get(config.apiProviderTypeId) != null
+        check(config.id in modelConfigManager.configListFlow.first() &&
+            (modelIndex in getModelList(config.modelName).indices || unnamedPlugin)) {
+            context.getString(R.string.functional_model_selection_unavailable)
+        }
+    }
+
+    suspend fun getSelectedModelConfigForConfig(configId: String, modelIndex: Int): ModelConfigData {
+        ensureInitialized()
+        val config = modelConfigManager.getModelConfigFlow(configId).first()
+        requireAvailableSelection(config, modelIndex)
+        return config.forSelectedModel(modelIndex)
     }
 
     /** 获取指定配置ID的模型配置 */

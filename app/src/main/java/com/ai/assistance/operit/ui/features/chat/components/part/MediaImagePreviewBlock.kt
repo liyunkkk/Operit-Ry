@@ -337,11 +337,7 @@ private fun decodeImageLinkBitmap(
     maxPixels: Long,
     maxDimension: Int,
 ): Bitmap? {
-    // 图片池是会话级缓存：进程重启、LRU 淘汰之后，旧消息里只剩下 id。
-    // 链接带了源路径时，只要源文件还在就重新入池，让这条记录自己恢复。
-    link.sourcePath?.let { ImagePoolManager.ensureImageFromSource(link.id, it) }
-
-    val imageData = ImagePoolManager.getImage(link.id) ?: return null
+    val imageData = ImagePoolManager.resolveImage(link.id, link.sourcePath) ?: return null
     return try {
         ImageBitmapLimiter.decodeDownsampledBitmap(
             Base64.decode(imageData.base64, Base64.DEFAULT),

@@ -41,3 +41,4 @@ plan_mode
 reading_companion
 memory_review.js
 phone_control.js
+dynamic_ui.js

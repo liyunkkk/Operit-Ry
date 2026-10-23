@@ -57,6 +57,7 @@ import com.ai.assistance.operit.ui.main.navigation.ScreenRouteViewModelStoreOwne
 import com.ai.assistance.operit.ui.main.navigation.retainedRouteKeysOnContentAttach
 import com.ai.assistance.operit.ui.main.screens.Screen
 import com.ai.assistance.operit.ui.theme.resolveContrastingTextColor
+import com.ai.assistance.operit.ui.theme.rainyAppBarFill
 import com.ai.assistance.operit.ui.common.composedsl.ToolPkgComposeDslToolScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -198,9 +199,7 @@ fun AppContent(
                     )
                     .value
 
-    // A custom app bar colour is a fill that the theme's onPrimary was never measured against: the
-    // shipped label is #FFF0F5, which measures 1.10:1 on a white app bar. While no custom colour is
-    // in play nothing changes, so the theme keeps drawing its own soft tone there.
+    // Default chrome uses a pale surface with dark text; explicit toolbar colors still win.
     val customAppBarFill =
             resolveAppBarFill(useCustomAppBarColor, toolbarTransparent, customAppBarColor)
     val appBarContentColor =
@@ -208,7 +207,10 @@ fun AppContent(
                     customAppBarFill = customAppBarFill,
                     forceContentColor = forceAppBarContentColor,
                     contentColorMode = appBarContentColorMode,
-                    themeOnPrimary = MaterialTheme.colorScheme.onPrimary,
+                    themeContentColor = MaterialTheme.colorScheme.onSurface,
+                    defaultAppBarFill =
+                            if (toolbarTransparent) null
+                            else MaterialTheme.colorScheme.rainyAppBarFill,
                 )
 
     // 获取聊天历史管理器
@@ -367,7 +369,7 @@ fun AppContent(
                         when {
                             toolbarTransparent -> Color.Transparent
                             useCustomAppBarColor && customAppBarColor != null -> Color(customAppBarColor)
-                            else -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.rainyAppBarFill
                         },
                         titleContentColor = appBarContentColor,
                         navigationIconContentColor = appBarContentColor,
@@ -757,26 +759,30 @@ fun AppContent(
 }
 
 /**
- * The app bar's label colour. A custom app bar colour is a fill that the theme never measured its
- * own label against, so the label is answered for that fill, with the user's forced tone honoured
- * while it is visible. With no custom colour the theme's own tone is kept exactly as it is, which is
- * what the shipped (soft) app bar relies on.
+ * Keep the theme's default ink, but measure forced text against any opaque fill. Transparent
+ * toolbars cannot infer the image behind them, so they retain the user's chosen text tone.
  */
 internal fun resolveAppBarContentColor(
     customAppBarFill: Color?,
     forceContentColor: Boolean,
     contentColorMode: String,
-    themeOnPrimary: Color,
+    themeContentColor: Color,
+    defaultAppBarFill: Color? = null,
 ): Color {
     if (customAppBarFill == null) {
         return if (forceContentColor) {
+            if (defaultAppBarFill != null &&
+                contentColorMode != UserPreferencesManager.ON_COLOR_MODE_AUTO
+            ) {
+                return resolveContrastingTextColor(defaultAppBarFill, contentColorMode)
+            }
             when (contentColorMode) {
                 UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_LIGHT -> Color.White
                 UserPreferencesManager.APP_BAR_CONTENT_COLOR_MODE_DARK -> Color.Black
-                else -> themeOnPrimary
+                else -> themeContentColor
             }
         } else {
-            themeOnPrimary
+            themeContentColor
         }
     }
     return resolveContrastingTextColor(
@@ -786,7 +792,7 @@ internal fun resolveAppBarContentColor(
 }
 
 /**
- * The fill the app bar actually draws, or `null` when it draws the theme's own primary. This is the
+ * The fill the app bar actually draws, or `null` when it draws the theme's own surface. This is the
  * same precedence the bar's `containerColor` uses, so the label is answered for the color that is
  * really behind it.
  */

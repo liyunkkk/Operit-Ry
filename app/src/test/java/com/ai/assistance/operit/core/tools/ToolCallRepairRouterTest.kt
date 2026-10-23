@@ -8,6 +8,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ToolCallRepairRouterTest {
+    @Test fun misplacedTerminalYieldIsMovedOnlyWhenUnambiguous() {
+        for (value in listOf("0", "30000")) {
+            val original = call("package_proxy", "tool_name" to "super_admin:terminal",
+                "params" to """{"command":"echo ok"}""", "yieldMs" to value)
+            val repair = ToolCallRepairRouter.route(original)!!
+            assertTrue(repair.rules.contains(ToolCallRepairRouter.TERMINAL_PROXY_YIELD))
+            assertFalse(repair.invocation.tool.parameters.any { it.name == "yieldMs" })
+            assertEquals(value.toInt(), JSONObject(repair.invocation.tool.parameters.single { it.name=="params" }.value).getInt("yieldMs"))
+            assertNull(ToolCallRepairRouter.route(repair.invocation))
+        }
+        for (value in listOf("-1", "30001", "1.5", "abc")) {
+            assertNull(ToolCallRepairRouter.route(call("package_proxy", "tool_name" to "super_admin:terminal",
+                "params" to """{"command":"echo ok"}""", "yieldMs" to value)))
+        }
+        assertNull(ToolCallRepairRouter.route(call("package_proxy", "tool_name" to "super_admin:terminal",
+            "params" to """{"yieldMs":5}""", "yieldMs" to "10")))
+        assertNull(ToolCallRepairRouter.route(call("package_proxy", "tool_name" to "other:terminal",
+            "params" to "{}", "yieldMs" to "10")))
+        assertNull(ToolCallRepairRouter.route(call("package_proxy", "tool_name" to "super_admin:terminal",
+            "params" to "{}", "yieldMs" to "10", "yieldMs" to "10")))
+        val same = ToolCallRepairRouter.route(call("package_proxy", "tool_name" to "super_admin:terminal",
+            "params" to """{"yieldMs":10}""", "yieldMs" to "10"))!!
+        assertFalse(same.invocation.tool.parameters.any { it.name=="yieldMs" })
+    }
     @Test fun terminalSecondsCompatibilityConvertsAndChecksCanonicalConflict() {
         for (seconds in listOf(3,60,90,300)) {
             val result = ToolCallRepairRouter.route(call("super_admin:terminal","timeout" to "$seconds"))!!.invocation

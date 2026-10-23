@@ -4,7 +4,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager
 import com.ai.assistance.operit.data.preferences.UserPreferencesManager.Companion.ON_COLOR_MODE_AUTO
@@ -49,6 +48,10 @@ fun rememberAppThemeStyle(): AppThemeStyle {
             preferencesManager.onColorMode.collectAsState(
                     initial = initialSnapshot?.onColorMode ?: ON_COLOR_MODE_AUTO
             )
+    val enforceColorContrast by
+            preferencesManager.enforceColorContrast.collectAsState(
+                    initial = initialSnapshot?.enforceColorContrast ?: false
+            )
 
     // 获取字体设置
     val useCustomFont by preferencesManager.useCustomFont.collectAsState(initial = false)
@@ -79,21 +82,15 @@ fun rememberAppThemeStyle(): AppThemeStyle {
             }
 
     // Rainy is the product default. System settings only choose light or dark mode.
-    var colorScheme = rainyBaseColorScheme(darkTheme)
-
-    // 应用自定义颜色和文本颜色
-    if (useCustomColors) {
-        customPrimaryColor?.let { primaryArgb ->
-            val primary = Color(primaryArgb)
-            val secondary = customSecondaryColor?.let { Color(it) } ?: colorScheme.secondary
-
-            colorScheme = if (darkTheme) {
-                generateDarkColorScheme(primary, secondary, onColorMode)
-                    } else {
-                generateLightColorScheme(primary, secondary, onColorMode)
-                    }
-        }
-    }
+    val colorScheme =
+            resolveRainyColorScheme(
+                    darkTheme = darkTheme,
+                    useCustomColors = useCustomColors,
+                    customPrimaryColor = customPrimaryColor,
+                    customSecondaryColor = customSecondaryColor,
+                    onColorMode = onColorMode,
+                    enforceContrast = enforceColorContrast,
+            )
 
     return AppThemeStyle(colorScheme, customTypography, darkTheme)
 }

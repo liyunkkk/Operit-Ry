@@ -285,9 +285,18 @@ const progress = await Tools.System.terminal.poll({ runId: task.runId, yieldMs: 
 
 结果包含 `runId`、`sessionId`、`status`、`output`、`outputMode`、`outputTruncated`、
 `timedOut` 和可选的 `terminationReason`。`queued`/`running` 表示尚未完成；
-`completed` 表示回到提示符，并非验证了 Shell 的真实退出码；`cancelling` 表示正在收尾。
+`completed` 表示命令结束，成功与否检查 `exitCode`：0 为成功、非零为失败、null 为未知。
+本地自动化 Bash 在原会话通过控制标记回传命令码；人工/SSH 会话未启用该协议时仍可能为 null。
+`sessionExitCode` 单独表示会话进程的退出码，不等于命令码，未执行的排队命令不会继承它。
+`cancelling` 表示正在收尾。`screen` 是当前终端画面快照，供查看进度条和全屏程序；
+它可能包含先前命令的显示内容，与 `output` 日志分开，每次替换，不追加。
 查询返回最近 12000 字符的尾部快照（`outputMode=tail_snapshot`），不是增量，
 不要将多次查询结果直接拼接。需要完整大日志时，在命令中重定向到文件。
+
+自动化命令经原 Bash 的 `builtin eval` 执行，不创建子 Shell，也不覆盖 `PROMPT_COMMAND`、
+`EXIT` 或 `DEBUG` trap；目录、变量和函数保持持久。`DEBUG`/`ERR` trap 能观察到协议增加的
+eval 和回传函数调用。直接 `exit`、`exec` 或 `set -e` 退出可能无法回传命令码，此时依会话关闭
+处理；未知码不推断为 0。`cmd &` 的命令码只表示后台启动结果，不表示后台任务已成功完成。
 
 每项任务最多缓存 64000 字符，最多保留 32 项任务；容量不足时只淘汰已结束记录，
 不会自动杀掉运行中任务。应用退出后运行记录不持久保存，旧 ID 失效时不要自动重跑命令。

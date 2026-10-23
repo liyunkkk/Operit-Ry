@@ -107,6 +107,31 @@ class AndroidShellExecutor {
             return CommandResult(false, "", reason, -1)
         }
 
+        internal fun managedShellLauncher(): ManagedShellLauncher {
+            val ctx = context ?: error("Context not initialized")
+            val level = getPreferredPermissionLevelCached() ?: AndroidPermissionLevel.STANDARD
+            if (level == AndroidPermissionLevel.ROOT) {
+                // Old root availability probes can wait indefinitely for su authorization.
+                // The managed process itself verifies uid before entering the GO handshake.
+                return com.ai.assistance.operit.core.tools.system.shell.RootShellExecutor(ctx).managedLauncher()
+            }
+            val executor = ShellExecutorFactory.getExecutor(ctx, level)
+            val permission = executor.hasPermission()
+            val available = executor.isAvailable()
+            check(available && permission.granted) {
+                buildStrictUnavailableReason(level, available, permission)
+            }
+            return when (executor) {
+                is com.ai.assistance.operit.core.tools.system.shell.StandardShellExecutor ->
+                    ManagedShellLauncher { script ->
+                        LocalManagedShellProcess(ProcessBuilder("/system/bin/sh", "-c", script).start())
+                    }
+                is com.ai.assistance.operit.core.tools.system.shell.DebuggerShellExecutor ->
+                    executor.managedLauncher()
+                else -> error("$level does not support managed Android shell tasks.")
+            }
+        }
+
         suspend fun startShellProcess(command: String): ShellProcess {
             val ctx = context ?: throw IllegalStateException("Context not initialized")
 

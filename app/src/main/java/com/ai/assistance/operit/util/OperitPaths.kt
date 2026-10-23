@@ -111,9 +111,10 @@ object OperitPaths {
     fun rawSnapshotExcludedFilesTopLevelDirNames(): Set<String> {
         return setOf(
             SHERPA_NCNN_MODELS_DIR_NAME,
+            // Replaceable downloads are reacquired on demand after a restore.
+            "local_voice_models",
+            "downloaded_resources",
             VECTOR_INDEX_DIR_NAME,
-            IMAGE_POOL_DIR_NAME,
-            MEDIA_POOL_DIR_NAME,
             SKILL_REPO_ZIP_POOL_DIR_NAME,
             // Raw snapshot 在全局门闩内先排空并 checkpoint，因此不重复打包 spool；
             // restore 在同一门闩内验证清理，避免旧事件污染恢复 DB。

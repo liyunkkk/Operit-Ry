@@ -189,7 +189,9 @@ class MemoryLearningActions(
                 val content = stripInvisibleCharacters(arg("content"))
                 stagedSkillCreate(stagedChanges,name)?.let { created ->
                     LearnedSkillRepository.validatePath(path)
-                    check(readVersion("$name/$path")=="draft") {
+                    val newCompanion = action == "skill_write" && path != "SKILL.md" &&
+                        !created.files.containsKey(path)
+                    check(newCompanion || readVersion("$name/$path")=="draft") {
                         skillReadRequired(name,path)
                     }
                     val before = if(path=="SKILL.md") created.body else created.files[path].orEmpty()
@@ -277,7 +279,11 @@ internal fun skillActionBlock(action: String, path: String): String? = when {
 private fun validateDraftBody(body: String) {
     require(body.length in LearnedSkillRepository.MIN_SKILL_BODY_CHARS..LearnedSkillRepository.MAX_SKILL_BODY_CHARS) {
         "Skill body has ${body.length} characters; expected ${LearnedSkillRepository.MIN_SKILL_BODY_CHARS}-" +
-            "${LearnedSkillRepository.MAX_SKILL_BODY_CHARS}. Keep a concise main procedure; move longer material " +
+            "${LearnedSkillRepository.MAX_SKILL_BODY_CHARS}. " +
+            (if (body.length > LearnedSkillRepository.MAX_SKILL_BODY_CHARS)
+                "Over by ${body.length - LearnedSkillRepository.MAX_SKILL_BODY_CHARS}; aim for at most 5000 characters on retry. "
+             else "Add enough detail to reach the minimum. ") +
+            "Keep a concise main procedure; move longer material " +
             "to companion files with skill_write after skill_create. YAML frontmatter is added automatically."
     }
 }

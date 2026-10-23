@@ -18,6 +18,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.ComposerPredictionTextField
+import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberComposerPredictionTransformation
 import com.ai.assistance.operit.R
 import com.ai.assistance.operit.ui.features.chat.components.style.input.common.rememberMentionVisualTransformation
 
@@ -26,11 +28,17 @@ fun FullscreenInputDialog(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    composerPrediction: String? = null,
+    onAcceptPrediction: (String) -> TextFieldValue? = { null },
 ) {
     val mentionVisualTransformation =
         rememberMentionVisualTransformation(MaterialTheme.typography.bodyLarge)
-    var editorValue by remember { mutableStateOf(value) }
+    var editorValue by remember(value) { mutableStateOf(value) }
+    val composerTransformation = rememberComposerPredictionTransformation(
+        editorValue, composerPrediction,
+        mentionVisualTransformation,
+    )
 
     fun finishEditing() {
         onValueChange(editorValue)
@@ -87,10 +95,21 @@ fun FullscreenInputDialog(
                 HorizontalDivider()
 
                 // Input Area
-                TextField(
+                ComposerPredictionTextField(
                     value = editorValue,
-                    onValueChange = { editorValue = it },
-                    visualTransformation = mentionVisualTransformation,
+                    prediction = composerPrediction,
+                    outlined = false,
+                    onAcceptPrediction = { expected ->
+                        val adopted = onAcceptPrediction(expected)
+                        if (adopted != null) editorValue = adopted
+                        adopted != null
+                    },
+                    onValueChange = {
+                        editorValue = it
+                        // Keep the shared draft current for prediction validation and speech input.
+                        onValueChange(it)
+                    },
+                    visualTransformation = composerTransformation,
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f),

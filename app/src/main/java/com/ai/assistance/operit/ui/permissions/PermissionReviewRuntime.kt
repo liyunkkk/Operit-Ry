@@ -366,6 +366,9 @@ object PermissionReviewEventRepository {
                     // Rewrite immediately so older builds cannot leave sensitive summaries or stale
                     // in-progress/override flags on disk until the next review event.
                     persistLocked()
+                    // Reviews recorded before the per-chat archive existed move into it, so they
+                    // stay under their tool calls once newer reviews push them out of this list.
+                    PermissionReviewArchive.record(appContext, _events.value.map(::archivedCopy))
                 }
             }
         } finally {
@@ -381,13 +384,24 @@ object PermissionReviewEventRepository {
             _events.value = (retained + event).takeLast(MAX_EVENTS)
             persistLocked()
         }
+        applicationContext?.let { PermissionReviewArchive.record(it, listOf(archivedCopy(event))) }
     }
 
     fun update(id: String, transform: (PermissionReviewEvent) -> PermissionReviewEvent) {
         ensureStoredEventsLoaded()
-        synchronized(lock) {
-            _events.value = _events.value.map { event -> if (event.id == id) transform(event) else event }
-            persistLocked()
+        val changed =
+            synchronized(lock) {
+                var changed: PermissionReviewEvent? = null
+                _events.value =
+                    _events.value.map { event ->
+                        if (event.id == id) transform(event).also { changed = it } else event
+                    }
+                persistLocked()
+                changed
+            }
+        val context = applicationContext
+        if (changed != null && context != null) {
+            PermissionReviewArchive.record(context, listOf(archivedCopy(changed)))
         }
     }
 
@@ -467,27 +481,36 @@ object PermissionReviewEventRepository {
 
     private fun persistLocked() {
         val context = applicationContext ?: return
-        val sanitized =
-            _events.value.map { event ->
-                event.copy(
-                    action =
-                        event.action.copy(
-                            command = null,
-                            cwd = null,
-                            paths = emptyList(),
-                            networkTarget = null,
-                            justification = null,
-                            parameters = emptyList(),
-                            summary = "${event.action.toolName} (${event.action.kind})",
-                        ),
-                    rationale = null,
-                )
-            }
+        val sanitized = _events.value.map(::sanitizedForDisk)
         context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(EVENTS_KEY, json.encodeToString(sanitized))
             .apply()
     }
+
+    /** What may be written to disk: no command, path, parameter or reviewer text. */
+    private fun sanitizedForDisk(event: PermissionReviewEvent): PermissionReviewEvent =
+        event.copy(
+            action =
+                event.action.copy(
+                    command = null,
+                    cwd = null,
+                    paths = emptyList(),
+                    networkTarget = null,
+                    justification = null,
+                    parameters = emptyList(),
+                    summary = "${event.action.toolName} (${event.action.kind})",
+                ),
+            rationale = null,
+        )
+
+    /** The archive keeps the outcome only; a one-time override is live state that ends with the turn. */
+    private fun archivedCopy(event: PermissionReviewEvent): PermissionReviewEvent =
+        sanitizedForDisk(event).copy(
+            exactOverrideRecorded = false,
+            exactOverrideState = null,
+            exactOverrideExpiresAt = null,
+        )
 }
 
 data class PermissionReviewExactOverride(

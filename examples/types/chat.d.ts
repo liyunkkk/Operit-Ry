@@ -58,7 +58,6 @@ export namespace Chat {
         | 'MEMORY'
         | 'UI_CONTROLLER'
         | 'TRANSLATION'
-        | 'GREP'
         | 'ROLE_RESPONSE_PLANNER'
         | 'IMAGE_RECOGNITION'
         | 'AUDIO_RECOGNITION'

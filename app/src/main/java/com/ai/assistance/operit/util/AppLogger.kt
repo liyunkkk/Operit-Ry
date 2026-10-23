@@ -264,18 +264,17 @@ object AppLogger {
     /** Call from a background export path, never block the UI waiting for storage. */
     fun flushFileLogs(timeoutMs: Long = 5000): Boolean = fileQueue.flush(timeoutMs)
 
-    private fun resetLogFileSync() {
-        try {
-            val appContext: Context = OperitApplication.instance.applicationContext
-            val dir = File(appContext.filesDir, LOG_DIR_NAME)
-            val file = File(dir, LOG_FILE_NAME)
-            if (file.exists()) {
-                file.delete()
-            }
+    fun flushFileLogsWithResult(timeoutMs: Long = 5000): LogFlushResult = fileQueue.flushResult(timeoutMs)
+
+    private fun resetLogFileSync(): Boolean {
+        return try {
+            val file = resolveLogFile() ?: return false
+            if (file.exists() && !file.delete()) return false
             logFile = null
             packageLogFile = null
+            true
         } catch (e: Throwable) {
-            // Ignore errors during reset to avoid crashing on startup
+            false
         }
     }
 
@@ -304,7 +303,7 @@ object AppLogger {
             records.forEach { record ->
                 if (record.reset) {
                     closeWriters()
-                    resetLogFileSync()
+                    if (!resetLogFileSync()) batchFailed = true
                 } else writeToFileSync(record)
             }
             if (dropped > 0) writeToFileSync(Record(WARN, "OperitAppLogger",

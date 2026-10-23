@@ -146,25 +146,6 @@ export namespace Files {
     }): Promise<GrepResultData>;
 
     /**
-     * Search for relevant content based on intent/context understanding
-     * Supports two modes:
-     * 1) Directory mode: when path is a directory, finds most relevant files
-     * 2) File mode: when path is a file, finds most relevant code segments within that file
-     * Uses semantic relevance scoring
-     * @param path - Directory or file path
-     * @param intent - Intent or context description string
-     * @param options - Search options
-     * @param options.file_pattern - File filter pattern for directory mode (e.g., "*.kt"), default "*"
-     * @param options.max_results - Maximum number of items to return, default 10
-     * @param options.environment - Execution environment ("android" or "linux"), default "android"
-     */
-    function grepContext(path: string, intent: string, options?: {
-        file_pattern?: string;
-        max_results?: number;
-        environment?: FileEnvironment;
-    }): Promise<GrepResultData>;
-
-    /**
      * Get information about a file
      * @param path - File path
      * @param environment - Execution environment ("android" or "linux"), default "android"

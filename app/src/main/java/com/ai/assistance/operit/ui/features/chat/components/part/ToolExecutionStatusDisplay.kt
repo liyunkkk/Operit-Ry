@@ -72,6 +72,7 @@ import com.ai.assistance.operit.ui.features.chat.components.agentBadgeSeed
 import com.ai.assistance.operit.ui.features.chat.components.subagentAgentIdentity
 import com.ai.assistance.operit.ui.features.chat.components.subagentInterruptionHintRes
 import com.ai.assistance.operit.ui.permissions.PermissionReviewEventRepository
+import com.ai.assistance.operit.ui.permissions.PermissionReviewArchive
 import com.ai.assistance.operit.ui.permissions.PermissionReviewEvent
 import com.ai.assistance.operit.ui.permissions.PermissionReviewAuthorization
 import com.ai.assistance.operit.ui.theme.stoppedAttention
@@ -273,13 +274,21 @@ internal fun ToolExecutionStatusDisplay(
         }
     val currentChatId by chatCore.currentChatId.collectAsState(initial = null)
     val reviewEvents by PermissionReviewEventRepository.events.collectAsState()
+    // Older reviews leave the shared list as other chats add theirs; the chat's own archive keeps them.
+    val archivedReviews by
+        remember(context, currentChatId) {
+                currentChatId?.let { PermissionReviewArchive.observe(context, it) }
+                    ?: kotlinx.coroutines.flow.MutableStateFlow<List<PermissionReviewEvent>?>(null)
+            }
+            .collectAsState()
     val reviewEvent =
-        remember(reviewEvents, currentChatId, timingScopeId, invocationIndex) {
-            reviewEvents.lastOrNull { event ->
+        remember(reviewEvents, archivedReviews, currentChatId, timingScopeId, invocationIndex) {
+            val matches = { event: PermissionReviewEvent ->
                 event.parentChatId == currentChatId &&
                     event.timingScopeId == timingScopeId &&
                     event.invocationIndex == invocationIndex
             }
+            reviewEvents.lastOrNull(matches) ?: archivedReviews?.lastOrNull(matches)
         }
     val liveExecutionCandidate =
         timingScopeId
@@ -451,6 +460,10 @@ private fun PermissionReviewLifecycleDisplay(
         overrideNowMs = System.currentTimeMillis()
     }
     val overrideState = event.effectiveExactOverrideState(overrideNowMs)
+    // An archived review belongs to a turn that is long over; only one still in the live list can
+    // take a one-time approval.
+    val liveEvents by PermissionReviewEventRepository.events.collectAsState()
+    val canApproveOnce = remember(liveEvents, event.id) { liveEvents.any { it.id == event.id } }
     val lifecycle =
         when (event.status) {
             PermissionReviewStatus.IN_PROGRESS ->
@@ -643,7 +656,7 @@ private fun PermissionReviewLifecycleDisplay(
                                 modifier = Modifier.padding(vertical = 12.dp),
                                 style = MaterialTheme.typography.bodySmall,
                             )
-                        } else {
+                        } else if (canApproveOnce) {
                             Button(
                                 enabled =
                                     overrideState == null ||
@@ -843,6 +856,13 @@ internal fun ToolExecutionResultDisplay(
     // 已经换过的文本再走一次是幂等的。
     val displayedResult = remember(context, result, isSuccess) {
         if (isSuccess) result else permissionDenialDisplayText(context, result)
+    }
+    val shellState = remember(toolName, displayedResult, isSuccess) {
+        if (isSuccess) shellResultState(toolName, displayedResult) else null
+    }
+    if (shellState != null) {
+        ShellTaskResultDisplay(toolName, displayedResult, shellState, modifier, summaryPrefix, enableDialog)
+        return
     }
     val fileDiff = remember(toolName, displayedResult, isSuccess) {
         parseFileDiffResult(toolName, displayedResult, isSuccess)

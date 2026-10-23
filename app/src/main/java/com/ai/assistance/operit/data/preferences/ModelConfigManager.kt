@@ -198,6 +198,13 @@ class ModelConfigManager(
         val changed = prefixCapabilities(loadConfigFromDataStore(config.id)) != prefixCapabilities(config)
         val configKey = stringPreferencesKey("config_${config.id}")
         configDataStore.edit { preferences ->
+            preferences[configKey]?.let { raw ->
+                val old = json.decodeFromString<ModelConfigData>(raw)
+                if (old.modelName != config.modelName) {
+                    FunctionalConfigManager(context)
+                        .pinModelBindingsBeforeConfigChange(config.id, old.modelName)
+                }
+            }
             preferences[configKey] = json.encodeToString(config)
         }
         if (changed) LearningPromptSnapshotRepository.markChanged(context, "settings")
@@ -361,6 +368,10 @@ class ModelConfigManager(
                     }
 
             val newConfig = transform(current)
+            if (current.modelName != newConfig.modelName) {
+                FunctionalConfigManager(context)
+                    .pinModelBindingsBeforeConfigChange(configId, current.modelName)
+            }
             prefixChanged = prefixCapabilities(current) != prefixCapabilities(newConfig)
             preferences[configKey] = json.encodeToString(newConfig)
             updated = newConfig
@@ -500,6 +511,11 @@ class ModelConfigManager(
         }
 
         configDataStore.edit { preferences ->
+            preferences[stringPreferencesKey("config_${configId}")]?.let { raw ->
+                FunctionalConfigManager(context).pinModelBindingsBeforeConfigChange(
+                    configId, json.decodeFromString<ModelConfigData>(raw).modelName,
+                )
+            }
             // 从列表中移除
             val currentList = readConfigListFromPrefs(preferences).toMutableList()
             currentList.remove(configId)
@@ -1071,6 +1087,7 @@ class ModelConfigManager(
 
             // 保存/更新配置
             for (config in dedupedBackupConfigs) {
+                pinBindingsBeforeImportedConfig(preferences, config)
                 preferences[stringPreferencesKey("config_${config.id}")] =
                     json.encodeToString(config)
                 if (config.id in currentIdSet) {
@@ -1176,6 +1193,7 @@ class ModelConfigManager(
                     continue
                 }
 
+                pinBindingsBeforeImportedConfig(preferences, config)
                 preferences[stringPreferencesKey("config_${config.id}")] =
                     json.encodeToString(config)
 
@@ -1195,6 +1213,17 @@ class ModelConfigManager(
 
         if (newCount + updatedCount > 0) LearningPromptSnapshotRepository.markChanged(context, "settings")
         return Triple(newCount, updatedCount, skippedCount)
+    }
+
+    private suspend fun pinBindingsBeforeImportedConfig(
+        preferences: Preferences,
+        config: ModelConfigData,
+    ) {
+        val raw = preferences[stringPreferencesKey("config_${config.id}")] ?: return
+        val old = json.decodeFromString<ModelConfigData>(raw)
+        if (old.modelName != config.modelName) {
+            FunctionalConfigManager(context).pinModelBindingsBeforeConfigChange(config.id, old.modelName)
+        }
     }
 }
 

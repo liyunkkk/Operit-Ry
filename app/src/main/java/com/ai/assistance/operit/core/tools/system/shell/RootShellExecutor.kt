@@ -474,6 +474,19 @@ class RootShellExecutor(private val context: Context) : ShellExecutor {
                 }
             }
 
+    internal fun managedLauncher(): com.ai.assistance.operit.core.tools.system.ManagedShellLauncher {
+        applyExecutionModePreferenceOverride()
+        // Capture the configured su invocation. Never cancel the shared libsu main shell.
+        val su = buildSuInteractiveCommand().toList()
+        return object : com.ai.assistance.operit.core.tools.system.ManagedShellLauncher {
+            override fun prepareCommand(command: String) = extractActualCommand(command)
+            override fun launch(script: String): com.ai.assistance.operit.core.tools.system.ManagedShellProcess =
+                com.ai.assistance.operit.core.tools.system.LocalManagedShellProcess(
+                    ProcessBuilder(su + listOf("-c", "[ \"\$(/system/bin/id -u)\" = 0 ] || exit 126\n$script")).start()
+                )
+        }
+    }
+
     override suspend fun startProcess(command: String): ShellProcess {
         applyExecutionModePreferenceOverride()
 

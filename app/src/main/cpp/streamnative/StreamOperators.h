@@ -16,5 +16,7 @@ MarkdownSession* createMarkdownInlineSession();
 void destroyMarkdownSession(MarkdownSession* session);
 
 std::vector<Segment> markdownSessionPush(MarkdownSession* session, const jchar* chars, int len);
+// End of input: characters buffered while a plugin was still TRYING are emitted as plain text.
+std::vector<Segment> markdownSessionFinish(MarkdownSession* session);
 
 } // namespace streamnative

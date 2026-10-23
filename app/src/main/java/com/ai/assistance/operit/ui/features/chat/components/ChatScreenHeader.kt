@@ -372,6 +372,7 @@ fun ChatScreenHeader(
             maxWindowSizeInK = maxWindowSizeInK,
             costChatId = currentChatId,
             loadCost = actualViewModel::estimateConversationCost,
+            onEditContext = { actualViewModel.openContextEditor() },
         )
     }
 }
@@ -385,6 +386,7 @@ private fun TokenUsageRing(
     costChatId: String?,
     loadCost: suspend (String) -> com.ai.assistance.operit.data.stats.ChatCostEstimate,
     modifier: Modifier = Modifier,
+    onEditContext: (() -> Unit)? = null,
 ) {
     // 统计信息
     val maxWindowSize = (maxWindowSizeInK * 1024).toLong().coerceAtLeast(0L)
@@ -478,6 +480,12 @@ private fun TokenUsageRing(
                 onClick = {},
                 enabled = false
             )
+            if (onEditContext != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.chat_context_current)) },
+                    onClick = { setShowDetailedStats(false); onEditContext() },
+                )
+            }
 
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.input_tokens, inputTokenCount)) },

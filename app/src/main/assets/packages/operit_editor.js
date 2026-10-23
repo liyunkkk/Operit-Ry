@@ -155,14 +155,13 @@
 【上下文总结模块（Context Summary）】
 1) 用途：
 - 控制会话上下文窗口与“何时触发总结”，用于降低上下文膨胀导致的丢信息、跑偏或响应不稳定。
-- 只有当前对话功能模型（CHAT）所绑定配置里的上下文总结参数，会在实际对话中生效。
+- 模型配置管理容量；预算、Max 与压缩规则分别保存在每个聊天中。
 2) 核心机制说明：
-- 软件内有一个 max 开关，即 `enable_max_context_mode`。
-- 开启时使用 `max_context_length`，关闭时使用 `context_length`，目标是为用户节约 token，并按场景动态决定使用长度。
-- `enable_summary` 控制是否自动总结；当上下文超过 `summary_token_threshold * 当前可用上下文长度` 时，会触发总结。
+- Max 使用当前模型容量；关闭后恢复当前聊天的自定义预算。
+- 自动压缩默认由软件预留回复空间并计算触发量；用户可以在当前聊天中调整。
 3) 建议排查顺序：
-- 先用 `get_context_summary_config` 看当前功能绑定配置的上下文总结参数。
-- 再用 `set_context_summary_config` 设置上下文总结参数（可传入参数覆盖默认值）。
+- 先用 `get_context_summary_config` 查看当前功能绑定模型的容量。
+- `set_context_summary_config` 现在仅设置模型容量，必须提供 max_context_length；对话预算、Max 与压缩规则请在聊天中设置。
 - 若仍异常，再结合具体模型能力与业务负载做细调。
 
 【TTS/STT 语音服务配置】
@@ -393,14 +392,13 @@
 [Context summary module]
 1) Purpose:
 - Controls context window behavior and summary-trigger conditions to reduce context bloat, drift, and unstable long-chat responses.
-- Only context-summary settings on the config currently bound to CHAT are effective in real conversation.
+- Model capacity belongs to the model configuration; budget, Max and compaction belong to each conversation.
 2) Core mechanism:
-- There is a max switch in the app: `enable_max_context_mode`.
-- When enabled, it uses `max_context_length`; when disabled, it uses `context_length`, so context length can be chosen dynamically to save tokens.
-- `enable_summary` controls automatic summarization. When context exceeds `summary_token_threshold * current available context length`, summarization is triggered.
+- Max uses the current model capacity; disabling it restores the conversation budget.
+- Automatic compaction reserves reply space; its threshold can be customized per conversation.
 3) Recommended troubleshooting flow:
-- Use `get_context_summary_config` to inspect current context-summary fields for a function.
-- Use `set_context_summary_config` to set context-summary fields (you can override default values via params).
+- Use `get_context_summary_config` to inspect the bound model capacity.
+- `set_context_summary_config` only updates model capacity and requires max_context_length. Edit conversation policy in the chat settings.
 - If issues remain, fine-tune based on real model capability and workload.
 
 [TTS/STT speech-service configuration]
@@ -1203,66 +1201,12 @@
           required: false
         },
         {
-          name: "context_length"
-          description: {
-            zh: "可选，上下文长度倍率"
-            en: "Optional context length multiplier"
-          }
-          type: number
-          required: false
-        },
-        {
           name: "max_context_length"
           description: {
-            zh: "可选，最大上下文长度倍率"
-            en: "Optional max context length multiplier"
+            zh: "模型容量上限，单位 K token"
+            en: "Model context capacity in K tokens"
           }
           type: number
-          required: false
-        },
-        {
-          name: "enable_max_context_mode"
-          description: {
-            zh: "可选，是否启用最大上下文模式"
-            en: "Optional max-context mode switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "summary_token_threshold"
-          description: {
-            zh: "可选，总结触发阈值"
-            en: "Optional summary trigger threshold"
-          }
-          type: number
-          required: false
-        },
-        {
-          name: "enable_summary"
-          description: {
-            zh: "可选，是否启用总结"
-            en: "Optional summary switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "enable_summary_by_message_count"
-          description: {
-            zh: "可选，是否按消息数触发总结"
-            en: "Optional summary-by-message-count switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "summary_message_count_threshold"
-          description: {
-            zh: "可选，按消息数总结的阈值"
-            en: "Optional message-count threshold for summary"
-          }
-          type: integer
           required: false
         },
         {
@@ -1590,66 +1534,12 @@
           required: false
         },
         {
-          name: "context_length"
-          description: {
-            zh: "可选，上下文长度倍率"
-            en: "Optional context length multiplier"
-          }
-          type: number
-          required: false
-        },
-        {
           name: "max_context_length"
           description: {
-            zh: "可选，最大上下文长度倍率"
-            en: "Optional max context length multiplier"
+            zh: "模型容量上限，单位 K token"
+            en: "Model context capacity in K tokens"
           }
           type: number
-          required: false
-        },
-        {
-          name: "enable_max_context_mode"
-          description: {
-            zh: "可选，是否启用最大上下文模式"
-            en: "Optional max-context mode switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "summary_token_threshold"
-          description: {
-            zh: "可选，总结触发阈值"
-            en: "Optional summary trigger threshold"
-          }
-          type: number
-          required: false
-        },
-        {
-          name: "enable_summary"
-          description: {
-            zh: "可选，是否启用总结"
-            en: "Optional summary switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "enable_summary_by_message_count"
-          description: {
-            zh: "可选，是否按消息数触发总结"
-            en: "Optional summary-by-message-count switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "summary_message_count_threshold"
-          description: {
-            zh: "可选，按消息数总结的阈值"
-            en: "Optional message-count threshold for summary"
-          }
-          type: integer
           required: false
         },
         {
@@ -1818,8 +1708,8 @@
     {
       name: "get_context_summary_config"
       description: {
-        zh: '''获取某个功能当前绑定模型配置中的上下文总结参数。'''
-        en: '''Get context-summary settings from the model config bound to a function.'''
+        zh: '''读取功能绑定模型的容量上限（K token）。聊天预算、Max 与压缩策略请在当前聊天设置中查看。'''
+        en: '''Read model capacity in K tokens. Conversation budget, Max and compaction settings are managed in the current chat.'''
       }
       parameters: [
         {
@@ -1836,8 +1726,8 @@
     {
       name: "set_context_summary_config"
       description: {
-        zh: '''为某个功能绑定配置设置上下文总结参数（可选覆盖默认值）。'''
-        en: '''Set context-summary settings for a function binding (optional overrides supported).'''
+        zh: '''设置功能绑定模型的容量上限（K token），必须明确提供容量；不修改聊天预算、Max 或压缩规则。'''
+        en: '''Set model capacity in K tokens; an explicit capacity is required. Does not change conversation budget, Max or compaction.'''
       }
       parameters: [
         {
@@ -1850,68 +1740,14 @@
           required: false
         },
         {
-          name: "context_length"
-          description: {
-            zh: "可选，基础上下文长度"
-            en: "Optional base context length"
-          }
-          type: number
-          required: false
-        },
-        {
           name: "max_context_length"
           description: {
-            zh: "可选，最大上下文长度"
-            en: "Optional max context length"
+            zh: "必填，模型容量上限，单位 K token"
+            en: "Required model context capacity in K tokens"
           }
           type: number
-          required: false
+          required: true
         },
-        {
-          name: "enable_max_context_mode"
-          description: {
-            zh: "可选，是否启用最大上下文模式"
-            en: "Optional max-context-mode switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "summary_token_threshold"
-          description: {
-            zh: "可选，总结触发 token 阈值（0~1）"
-            en: "Optional token-ratio threshold for summary trigger (0~1)"
-          }
-          type: number
-          required: false
-        },
-        {
-          name: "enable_summary"
-          description: {
-            zh: "可选，是否启用上下文总结"
-            en: "Optional context-summary switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "enable_summary_by_message_count"
-          description: {
-            zh: "可选，是否启用按消息条数触发总结"
-            en: "Optional message-count summary trigger switch"
-          }
-          type: boolean
-          required: false
-        },
-        {
-          name: "summary_message_count_threshold"
-          description: {
-            zh: "可选，按消息条数触发总结阈值"
-            en: "Optional message-count threshold for summary trigger"
-          }
-          type: integer
-          required: false
-        }
       ]
     },
     {
@@ -3152,7 +2988,7 @@ description: one-line summary of what this skill does
             }
             const result = await Tools.SoftwareSettings.getFunctionModelConfig(functionType);
             const config = result?.config ?? {};
-            const { contextLength: _contextLength, maxContextLength: _maxContextLength, enableMaxContextMode: _enableMaxContextMode, summaryTokenThreshold: _summaryTokenThreshold, enableSummary: _enableSummary, enableSummaryByMessageCount: _enableSummaryByMessageCount, summaryMessageCountThreshold: _summaryMessageCountThreshold, ...configWithoutContextSummary } = config;
+            const { contextLength: _contextLength, enableMaxContextMode: _enableMaxContextMode, summaryTokenThreshold: _summaryTokenThreshold, enableSummary: _enableSummary, enableSummaryByMessageCount: _enableSummaryByMessageCount, summaryMessageCountThreshold: _summaryMessageCountThreshold, ...configWithoutContextSummary } = config;
             const filteredResult = {
                 ...result,
                 config: configWithoutContextSummary
@@ -3174,15 +3010,7 @@ description: one-line summary of what this skill does
         return error instanceof Error ? error.message : "Unknown error";
     }
     function pick_context_summary_fields(config) {
-        return {
-            context_length: config?.contextLength,
-            max_context_length: config?.maxContextLength,
-            enable_max_context_mode: config?.enableMaxContextMode,
-            summary_token_threshold: config?.summaryTokenThreshold,
-            enable_summary: config?.enableSummary,
-            enable_summary_by_message_count: config?.enableSummaryByMessageCount,
-            summary_message_count_threshold: config?.summaryMessageCountThreshold
-        };
+        return { max_context_length: config?.maxContextLength };
     }
     async function get_context_summary_config(params) {
         try {
@@ -3206,7 +3034,7 @@ description: one-line summary of what this skill does
             }
             complete({
                 success: true,
-                message: `Context summary config fetched for ${functionType}.`,
+                message: `Model context capacity fetched for ${functionType}.`,
                 data: {
                     function_type: functionType,
                     config_id: result.configId ?? config.id ?? "",
@@ -3228,6 +3056,13 @@ description: one-line summary of what this skill does
     }
     async function set_context_summary_config(params) {
         try {
+            const retiredFields = ["context_length", "enable_max_context_mode", "summary_token_threshold",
+                "enable_summary", "enable_summary_by_message_count", "summary_message_count_threshold"];
+            const supplied = params;
+            const retired = retiredFields.find(name => supplied?.[name] !== undefined);
+            if (retired) {
+                throw new Error(`${retired} is now a per-conversation setting. Use the current chat context settings.`);
+            }
             const functionType = (params?.function_type ?? "CHAT").trim().toUpperCase();
             if (!functionType) {
                 complete({
@@ -3246,39 +3081,15 @@ description: one-line summary of what this skill does
                 });
                 return;
             }
-            const defaultUpdates = {
-                context_length: 48,
-                max_context_length: 128,
-                enable_max_context_mode: true,
-                summary_token_threshold: 0.7,
-                enable_summary: true,
-                enable_summary_by_message_count: true,
-                summary_message_count_threshold: 16
-            };
-            const updates = {
-                ...defaultUpdates,
-                ...(params?.context_length === undefined ? {} : { context_length: params.context_length }),
-                ...(params?.max_context_length === undefined
-                    ? {}
-                    : { max_context_length: params.max_context_length }),
-                ...(params?.enable_max_context_mode === undefined
-                    ? {}
-                    : { enable_max_context_mode: params.enable_max_context_mode }),
-                ...(params?.summary_token_threshold === undefined
-                    ? {}
-                    : { summary_token_threshold: params.summary_token_threshold }),
-                ...(params?.enable_summary === undefined ? {} : { enable_summary: params.enable_summary }),
-                ...(params?.enable_summary_by_message_count === undefined
-                    ? {}
-                    : { enable_summary_by_message_count: params.enable_summary_by_message_count }),
-                ...(params?.summary_message_count_threshold === undefined
-                    ? {}
-                    : { summary_message_count_threshold: params.summary_message_count_threshold })
-            };
+            const capacity = params?.max_context_length;
+            if (typeof capacity !== "number" || !Number.isFinite(capacity) || capacity <= 0 || capacity > 1000000) {
+                throw new Error("max_context_length is required: provide the model context capacity in K tokens.");
+            }
+            const updates = { max_context_length: capacity };
             const updateResult = (await Tools.SoftwareSettings.updateModelConfig(configId, updates));
             complete({
                 success: true,
-                message: `Context summary config updated for ${functionType}.`,
+                message: `Model context capacity updated for ${functionType}.`,
                 data: {
                     function_type: functionType,
                     config_id: configId,

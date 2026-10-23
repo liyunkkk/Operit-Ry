@@ -6,6 +6,7 @@ data class ThemePreferenceSnapshot(
     val themeMode: String,
     val useSystemTheme: Boolean,
     val useCustomColors: Boolean,
+    val enforceColorContrast: Boolean = false,
     val customPrimaryColor: Int? = null,
     val customSecondaryColor: Int? = null,
     val onColorMode: String,

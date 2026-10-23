@@ -57,6 +57,22 @@ internal object ToolCallRepairRules {
                 call.arguments.any { it.name == "start_line" || it.name == "end_line" })
                 call.copy(targetName = "read_file_part") else null
         },
+        ToolCallRepairRule(ToolCallRepairRouter.TERMINAL_PROXY_YIELD) { call ->
+            if (call.targetName != "super_admin:terminal") return@ToolCallRepairRule null
+            val outer = call.proxyParameters ?: return@ToolCallRepairRule null
+            val misplaced = outer.singleOrNull { it.name == "yieldMs" } ?: return@ToolCallRepairRule null
+            val value = misplaced.value.toLongOrNull()?.takeIf { it in 0..30_000 }
+                ?: return@ToolCallRepairRule null
+            val existing = call.arguments.filter { it.name == "yieldMs" }
+            if (existing.size > 1 || existing.any {
+                (it.value as? JsonPrimitive)?.content?.toLongOrNull() != value
+            }) return@ToolCallRepairRule null
+            call.copy(
+                proxyParameters = outer.filterNot { it.name == "yieldMs" },
+                arguments = if (existing.isNotEmpty()) call.arguments else
+                    call.arguments + ToolRepairArgument("yieldMs", JsonPrimitive(value)),
+            )
+        },
         ToolCallRepairRule(ToolCallRepairRouter.TERMINAL_TIMEOUT) { call ->
             if (call.targetName != "super_admin:terminal") return@ToolCallRepairRule null
             val alias = call.arguments.singleOrNull { it.name == "timeout" }
