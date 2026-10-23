@@ -24,6 +24,19 @@ internal object AntigravityModelRouting {
         "gpt-oss-120b" to "gpt-oss-120b",
     )
 
+    val defaultModels = listOf(
+        "gemini-3.7-flash" to "Gemini 3.7 Flash",
+        "gemini-3.6-flash" to "Gemini 3.6 Flash",
+        "gemini-3.5-flash" to "Gemini 3.5 Flash",
+        "gemini-3.1-pro" to "Gemini 3.1 Pro",
+        "gemini-3.1-flash-image" to "Gemini 3.1 Flash Image",
+        "gemini-3-flash" to "Gemini 3 Flash",
+        "gemini-2.5-pro" to "Gemini 2.5 Pro",
+        "gemini-2.5-flash" to "Gemini 2.5 Flash",
+        "claude-opus-4-6" to "Claude Opus 4.6",
+        "claude-sonnet-4-6" to "Claude Sonnet 4.6",
+        "gpt-oss-120b" to "GPT-OSS 120B",
+    )
     fun runtimeModelId(publicModelId: String): String {
         val normalized = publicModelId.trim()
         return runtimeModelIds[normalized] ?: normalized

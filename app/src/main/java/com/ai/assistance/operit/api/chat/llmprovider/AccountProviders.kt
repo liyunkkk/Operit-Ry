@@ -214,25 +214,62 @@ class AntigravityTransport(private val manager: ProviderAccountManager, private 
         "-${java.security.SecureRandom().nextLong().and(0x7FFFFFFFFFFFFFFFL) % 9_000_000_000_000_000_000L}"
     companion object {
         internal fun parseModels(root: JSONObject): List<ModelOption> {
-            val models = root.optJSONObject("models") ?: throw IOException("Antigravity models are missing")
-            val ids = linkedSetOf<String>()
-            val sorts = root.optJSONArray("agentModelSorts") ?: JSONArray()
+            val optionsById = linkedMapOf<String, ModelOption>()
+            fun addEntry(sourceId: String, entry: JSONObject?) {
+                val id = entry?.optString("modelName").orEmpty()
+                    .ifBlank { entry?.optString("id").orEmpty() }
+                    .ifBlank { sourceId }
+                    .removePrefix("models/")
+                    .trim()
+                if (id.isBlank() || optionsById.containsKey(id)) return
+                val name = entry?.optString("displayName").orEmpty().ifBlank { id }
+                optionsById[id] = ModelOption(id = id, name = name)
+            }
+
+            when (val rawModels = root.opt("models")) {
+                is JSONObject -> {
+                    val keys = rawModels.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        addEntry(key, rawModels.optJSONObject(key))
+                    }
+                }
+                is org.json.JSONArray -> {
+                    for (i in 0 until rawModels.length()) {
+                        addEntry("", rawModels.optJSONObject(i))
+                    }
+                }
+            }
+
+            // 补充 flash / 图像 / sorts 中的特定 ID（兼容纯字符串形式）
+            val sorts = root.optJSONArray("agentModelSorts") ?: org.json.JSONArray()
             for (sort in 0 until sorts.length()) {
                 val groups = sorts.optJSONObject(sort)?.optJSONArray("groups") ?: continue
                 for (i in 0 until groups.length()) {
                     val values = groups.optJSONObject(i)?.optJSONArray("modelIds") ?: continue
-                    for (j in 0 until values.length()) ids.add(values.getString(j))
+                    for (j in 0 until values.length()) {
+                        val id = values.optString(j).removePrefix("models/").trim()
+                        if (id.isNotBlank() && !optionsById.containsKey(id)) {
+                            optionsById[id] = ModelOption(id = id, name = id)
+                        }
+                    }
                 }
             }
             val flash = root.optJSONObject("tieredModelIds")?.optJSONArray("flash")
-            if (flash != null) for (i in 0 until flash.length()) ids.add(flash.getString(i))
-            val images = root.optJSONArray("imageGenerationModelIds")
-            if (images != null && (0 until images.length()).any { images.optString(it) == "gemini-3.1-flash-image" }) {
-                ids.add("gemini-3.1-flash-image")
+            if (flash != null) {
+                for (i in 0 until flash.length()) {
+                    val id = flash.optString(i).removePrefix("models/").trim()
+                    if (id.isNotBlank() && !optionsById.containsKey(id)) {
+                        optionsById[id] = ModelOption(id = id, name = id)
+                    }
+                }
             }
-            return ids.mapNotNull { id ->
-                models.optJSONObject(id)?.let { ModelOption(id, it.optString("displayName").ifBlank { id }) }
-            }.also { if (it.isEmpty()) throw IOException("No Antigravity agent models available") }
+
+            val result = optionsById.values.toList()
+            if (result.isNotEmpty()) return result
+
+            // 兜底策略：若服务端未返回任何模型，回退到 11 个核心默认模型
+            return AntigravityModelRouting.defaultModels.map { (id, name) -> ModelOption(id = id, name = name) }
         }
 
         internal fun compile(input: JSONObject, model: String, session: String,
